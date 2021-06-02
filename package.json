@@ -1,0 +1,28 @@
+{
+  "name": "website",
+  "private": "true",
+  "version": "0.0.1",
+  "description": "The public website of EasyEyes project.",
+  "scripts": {
+    "format": "prettier --write \"**/*.{js,json,md,html,css}\"",
+    "prepare": "husky install"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/EasyEyes/website.git"
+  },
+  "author": "",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/EasyEyes/website/issues"
+  },
+  "homepage": "https://github.com/EasyEyes/website#readme",
+  "devDependencies": {
+    "husky": "^6.0.0",
+    "lint-staged": "^11.0.0",
+    "prettier": "^2.3.0"
+  },
+  "lint-staged": {
+    "*.{js,json,md,html,css}": "prettier --write"
+  }
+}
