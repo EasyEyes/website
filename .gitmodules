@@ -1,0 +1,3 @@
+[submodule "public/remote-calibrator/RemoteCalibrator"]
+	path = public/remote-calibrator/RemoteCalibrator
+	url = https://github.com/EasyEyes/RemoteCalibrator.git

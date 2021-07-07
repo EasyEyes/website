@@ -1,0 +1,28 @@
+#rc-demo {
+  width: 100%;
+  max-width: 720px;
+  margin: 0 auto 5rem;
+}
+
+#rc-demo .demo-warning {
+  font-size: 0.9rem;
+  margin: 0 0 2rem;
+  color: #999;
+}
+
+#rc-panel-results * {
+  color: #999;
+}
+
+#rc-panel-results .rc-results-title {
+  font-weight: 700;
+  font-size: 1.2rem;
+}
+
+#rc-panel-results .rc-result {
+  font-family: "Ubuntu Mono", monospace;
+  font-weight: 400;
+  font-size: 0.9rem;
+  margin: 0;
+  line-height: 170%;
+}

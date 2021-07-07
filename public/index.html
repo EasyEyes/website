@@ -15,35 +15,111 @@
       name="keywords"
       content="measure, calibration, psychology, psychophysics"
     />
-    <meta name="author" content="Denis Pelli" />
-    <title>EasyEyes</title>
-  </head>
-  <body>
-    <h1>EasyEyes</h1>
-    <div id="main-description">
-      <p>
-        The open-source EasyEyes web app, for use by anyone, will calibrate any
-        display and the viewing distance for online vision testing, including
-        the basic visual measurements of acuity, crowding, and contrast
-        sensitivity of diverse populations, small and large. Currently, we have
-        a working prototype with limited features and no documentation.
-      </p>
-      <a
-        href="https://github.com/EasyEyes/RemoteCalibrator"
-        target="_blank"
-        noopener
-        noreferrer
-        >GitHub</a
-      >
-    </div>
 
-    <div id="author">
-      <p>
-        Denis Pelli on June 2, 2021<br />Professor of Psychology & Neural
-        Science, New York University<br /><a href="mailto:denis.pelli@nyu.edu"
-          >denis.pelli@nyu.edu</a
-        >
-      </p>
-    </div>
+    <!-- External -->
+
+    <script
+      src="https://code.jquery.com/jquery-3.6.0.slim.min.js"
+      integrity="sha256-u7e5khyithlIdTpu22PHhENmPcRdFiHRjhAuHcs05RI="
+      crossorigin="anonymous"
+    ></script>
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css"
+      integrity="sha384-EVSTQN3/azprG1Anm3QDgpJLIm9Nao0Yz1ztcQTwFspd3yD65VohhpuuCOmLASjC"
+      crossorigin="anonymous"
+    />
+    <script
+      src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/js/bootstrap.min.js"
+      integrity="sha384-cVKIPhGWiC2Al4u+LWgxfKTRIcfu0JTxR+EQDz/bgldoEyl4H0zUF0QKbrJ0EcQF"
+      crossorigin="anonymous"
+    ></script>
+
+    <!-- Internal -->
+
+    <link rel="stylesheet" href="uni.css" />
+
+    <meta name="author" content="Denis Pelli" />
+    <link rel="apple-touch-icon" href="media/apple-touch-icon-default.png" />
+    <link
+      rel="shortcut icon"
+      href="media/favicon-default.ico"
+      type="image/x-icon"
+    />
+    <title>EasyEyes</title>
+
+    <style>
+      .description {
+        font-size: 1.5rem;
+        line-height: 170%;
+        color: #666;
+        margin: 5rem 0;
+      }
+    </style>
+  </head>
+
+  <body>
+    <nav class="navbar navbar-expand-sm navbar-light bg-white">
+      <a class="navbar-brand" href="."
+        ><img
+          class="easyeyes-logo"
+          src="media/easyeyes-default.svg"
+          alt="EasyEyes"
+          width="80px"
+          height="80px"
+      /></a>
+      <button
+        class="navbar-toggler"
+        type="button"
+        data-bs-toggle="collapse"
+        data-bs-target="#navbarNav"
+        aria-controls="navbarNav"
+        aria-expanded="false"
+        aria-label="Toggle navigation"
+      >
+        <span class="navbar-toggler-icon"></span>
+      </button>
+      <div class="collapse navbar-collapse" id="navbarNav">
+        <ul class="navbar-nav">
+          <li class="nav-item active">
+            <a class="nav-link active" href=".">Home</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="remote-calibrator/">Calibrator</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="virtual-keypad/">Keypad</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="https://github.com/EasyEyes">GitHub</a>
+          </li>
+        </ul>
+      </div>
+    </nav>
+
+    <main>
+      <div id="main-description">
+        <p class="description">
+          The open-source <b>EasyEyes</b> web app, for use by anyone, will
+          calibrate any display and the viewing distance for online vision
+          testing, including the basic visual measurements of acuity, crowding,
+          and contrast sensitivity of diverse populations, small and large.
+          Currently, we have a working prototype with limited features and
+          documentation.
+        </p>
+      </div>
+
+      <div id="author">
+        <p>
+          <b>Denis Pelli</b><br />Professor of Psychology & Neural Science, New
+          York University<br />denis.pelli AT nyu DOT edu
+        </p>
+
+        <p>
+          <b>Peiling Jiang</b><br />Research Assistant, New York University<br />goodjpl
+          AT nyu DOT edu
+        </p>
+      </div>
+    </main>
   </body>
 </html>
