@@ -4,6 +4,7 @@
   "version": "0.0.1",
   "description": "The public website of EasyEyes project.",
   "scripts": {
+    "fetch": "git submodule foreach git pull",
     "format": "prettier --write \"**/*.{js,json,md,html,css}\"",
     "prepare": "husky install"
   },
