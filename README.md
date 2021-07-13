@@ -4,12 +4,6 @@
 
 The public website of EasyEyes project.
 
-🚨 This repository contains submodules, please use the following command to clone it.
-
-```shell
-git clone --recurse-submodules https://github.com/EasyEyes/website.git
-```
-
 Install the pre-commit auto formatter before development.
 
 ```shell
