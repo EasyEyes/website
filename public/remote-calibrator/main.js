@@ -36,6 +36,9 @@ RemoteCalibrator.panel(
     },
     {
       name: "trackDistance",
+      options: {
+        showNearPoint: true,
+      },
       callbackTrack: (data) => {
         addTitle();
         if (!distanceMsg)
