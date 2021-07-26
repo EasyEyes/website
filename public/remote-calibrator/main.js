@@ -45,7 +45,7 @@ RemoteCalibrator.panel(
           distanceMsg = printMessage("The dynamic viewing distance is cm at .");
         printMessage(
           `The dynamic viewing distance is ${
-            data.value.distanceCM
+            data.value.viewingDistanceCM
           }cm at ${parseTimestamp(data.timestamp)}. The near point is at [${
             data.value.nearPointCM.x
           }cm, ${
