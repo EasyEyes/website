@@ -175,9 +175,9 @@
       };
       let ondata_callback = (data) => {
         const displayPort = document.getElementById("qrcode-demo");
-        diplayPort.innerText += data.response + ", ";
+        displayPort.innerText += data.response + ", ";
         if (displayPort.innerText.length % 40 == 0) {
-          diplayPort.innerText += "\n";
+          displayPort.innerText += "\n";
         }
         console.log(data);
       };
