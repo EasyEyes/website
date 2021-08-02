@@ -174,7 +174,8 @@
         targetElementId: "qrcode-demo", // id of the the div where messages should be displayed
       };
       let ondata_callback = (data) => {
-        document.getElementById("display").innerText += data.response + ", ";
+        document.getElementById("qrcode-demo").innerText +=
+          data.response + ", ";
         console.log(data);
       };
       var receiver = new virtualKeypad.Receiver(
