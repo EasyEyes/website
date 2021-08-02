@@ -167,6 +167,7 @@
       </section>
     </main>
     <script>
+      var receivedData = [];
       let keypad_options = {
         // Specify a 'keypadUrl' field if you really need to redirect to a keypad hosted elsewhere
         alphabet: [..."CDHKNORSVZ".split(""), "ESC", "SPACE"], // Set of symbols to display; array perfered
@@ -174,12 +175,13 @@
         targetElementId: "qrcode-demo", // id of the the div where messages should be displayed
       };
       let ondata_callback = (data) => {
+        receivedData.push(data.response);
         const displayPort = document.getElementById("qrcode-demo");
         displayPort.innerText += data.response + ", ";
-        if (displayPort.innerText.length % 40 == 0) {
+        if (receivedData.length % 30 == 0) {
           displayPort.innerText += "\n";
         }
-        console.log(data);
+        console.log(receivedData);
       };
       var receiver = new virtualKeypad.Receiver(
         keypad_options,
