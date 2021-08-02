@@ -37,6 +37,9 @@
       crossorigin="anonymous"
     ></script>
 
+    <!-- Virtual keypad -->
+    <script src="https://cdn.jsdelivr.net/npm/virtual-keypad@latest/dist/main.min.js"></script>
+
     <link rel="stylesheet" href="../uni.css" />
     <link rel="stylesheet" href="main.css" />
 
@@ -121,11 +124,11 @@
       </section>
       <section>
         <div id="qrcode-demo">
-          <iframe
+          <!-- <iframe
             src="https://www.keypad.website/receiver"
             frameborder="0"
             id="qrcode-demo-iframe"
-          ></iframe>
+          ></iframe> -->
         </div>
       </section>
       <section id="start">
@@ -163,5 +166,21 @@
         </p>
       </section>
     </main>
+    <script>
+      let keypad_options = {
+        // Specify a 'keypadUrl' field if you really need to redirect to a keypad hosted elsewhere
+        alphabet: [..."CDHKNORSVZ".split(""), "ESC", "SPACE"], // Set of symbols to display; array perfered
+        font: "Sloan", // Supported font, in which to display letters
+        targetElementId: "qrcode-demo", // id of the the div where messages should be displayed
+      };
+      let ondata_callback = (data) => {
+        document.getElementById("display").innerText += data.response + ", ";
+        console.log(data);
+      };
+      var receiver = new virtualKeypad.Receiver(
+        keypad_options,
+        ondata_callback
+      );
+    </script>
   </body>
 </html>
