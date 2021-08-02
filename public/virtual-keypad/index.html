@@ -93,16 +93,73 @@
     <main>
       <div id="header">
         <h1>Virtual Keypad<span style="color: #4380ff">.</span></h1>
-        <p class="description">
-          Calibrate and Track for remote psychophysics experiments.
-        </p>
+        <p class="description">Respond from any distance.</p>
       </div>
 
-      <div id="qrcode-demo"></div>
-
       <section>
+        <h2>
+          <span style="color: #4380ff">Participants</span> use their mobile
+          device as a keypad.
+        </h2>
+        <p>
+          Scanning the QR code takes the user to a keypad, fitted with the
+          appropriate buttons and ready to send responses back to the experiment
+          application.
+        </p>
+      </section>
+      <section>
+        <h2>
+          <span style="color: #4380ff">Experimenters</span> customize the
+          receiver.
+        </h2>
+        <p>
+          Open communication between the <code>Receiver</code> and
+          <code>Keypad</code>
+          allows for runtime adjustment of keys, eg updating the response domain
+          between trials.
+        </p>
+      </section>
+      <section>
+        <div id="qrcode-demo">
+          <iframe
+            src="https://www.keypad.website/receiver"
+            frameborder="0"
+          ></iframe>
+        </div>
+      </section>
+      <section id="start">
         <h2>Getting Started</h2>
-        <p>Getting started!</p>
+        <a href="https://github.com/EasyEyes/virtual-keypad"
+          ><img
+            alt="GitHub stars"
+            src="https://img.shields.io/github/stars/EasyEyes/virtual-keypad?style=flat-square"
+        /></a>
+        <a href="https://npmjs.org/package/virtual-keypad"
+          ><img
+            alt="npm version"
+            src="https://img.shields.io/npm/v/virtual-keypad.svg?style=flat-square"
+        /></a>
+        <a href="https://github.com/EasyEyes/virtual-keypad/blob/main/LICENSE"
+          ><img
+            alt="GitHub license"
+            src="https://img.shields.io/github/license/EasyEyes/virtual-keypad?style=flat-square"
+        /></a>
+        <a href="https://www.jsdelivr.com/package/npm/virtual-keypad"
+          ><img
+            alt="jsdelivr"
+            src="https://data.jsdelivr.com/v1/package/npm/virtual-keypad/badge"
+        /></a>
+        <p>
+          From within an online experiment (such as one created using
+          <a href="https://github.com/psychopy/psychojs">PsychoJS</a>
+          or <a href="https://lab.js.org">LabJS</a>), initiate a
+          <code>Receiver</code> to provide the participant with a unique qr
+          code.
+        </p>
+        <p>
+          Use this <code>Receiver</code> object throughout the experiment to
+          update keypad parameters or provide messages to the participant.
+        </p>
       </section>
     </main>
   </body>
