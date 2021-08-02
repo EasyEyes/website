@@ -94,16 +94,46 @@
       <div id="header">
         <h1>Virtual Keypad<span style="color: #4380ff">.</span></h1>
         <p class="description">
-          Calibrate and Track for remote psychophysics experiments.
+          Use your mobile device to respond from any distance.
         </p>
       </div>
 
-      <div id="qrcode-demo"></div>
-
       <section>
-        <h2>Getting Started</h2>
-        <p>Getting started!</p>
+        <h2>
+          Participants use their mobile device as a
+          <span style="color: #4380ff">keypad</span>.
+        </h2>
+        <p>
+          Scanning the QR code takes the user to a keypad, fitted with the
+          appropriate buttons and ready to send responses back to the experiment
+          application.
+        </p>
       </section>
+      <section>
+        <h2>
+          Experimenters customize the
+          <span style="color: #4380ff">receiver</span>.
+        </h2>
+        <p>
+          From within an online experiment (such as one created using
+          <a href="https://github.com/psychopy/psychojs">PsychoJS</a>
+          or <a href="https://lab.js.org">LabJS</a>), initiate a
+          <a href="https://github.com/EasyEyes/virtual-keypad"
+            >virtual-keypad</a
+          >
+          <code>Receiver</code> provide the participant with a unique qr code.
+          Open communication between the <code>Receiver</code> and
+          <code>Keypad</code>
+          allows for runtime adjustment of keys, eg updating the response domain
+          between trials.
+        </p>
+      </section>
+      <div id="qrcode-demo">
+        <iframe
+          src="https://www.keypad.website/receiver"
+          frameborder="0"
+        ></iframe>
+      </div>
     </main>
   </body>
 </html>
