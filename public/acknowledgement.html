@@ -75,9 +75,8 @@
         text-indent: -1.5rem;
       }
 
-      .citations .note,
       .citations .note * {
-        color: #999;
+        color: #333;
       }
     </style>
   </head>
@@ -117,11 +116,13 @@
           <li class="nav-item">
             <a class="nav-link" href="https://github.com/EasyEyes">GitHub</a>
           </li>
-          <li class="nav-item active">
-            <a class="nav-link active" href="references.html">References</a>
-          </li>
           <li class="nav-item">
-            <a class="nav-link" href="acknowledgement.html">Acknowledgement</a>
+            <a class="nav-link" href="references.html">References</a>
+          </li>
+          <li class="nav-item active">
+            <a class="nav-link active" href="acknowledgement.html"
+              >Acknowledgement</a
+            >
           </li>
         </ul>
       </div>
@@ -129,17 +130,35 @@
 
     <main>
       <div class="citations">
-        <p>
-          Li, Q., Joo, S. J., Yeatman, J. D., & Reinecke, K. (2020). Controlling
-          for participants’ viewing distance in large-scale, psychophysical
-          online experiments using a virtual chinrest. Scientific reports,
-          10(1), 1-11.
+        <p class="note">
+          EasyEyes is open source, and builds on contributions from many
+          colleagues whom we thank here. The credit card trick for measuring
+          screen size and the blind spot detection for measuring viewing
+          distance were both suggested by Li et al. (2020). Offering to use a
+          USB connector instead of a credit card was suggested by Ajay
+          Subramanian. The gaze tracking is based on the open-source WebGazer.js
+          package from Papoutsaki et al. (2016). WebGazer and our head tracking
+          are both built on Google's open-source FaceMesh software (Kartynnik et
+          al., 2019). The EasyEyes icon is a block print by Cassandra Hussey,
+          used with permission. Other dependencies of our software can be found
+          in the package configuration file in the corresponding repositories on
+          GitHub.
+        </p>
+        <p class="note">
+          As we were wrapping up our development of Remote Calibrator, we
+          realized that
+          <a href="https://twitter.com/ThomasPronk123" target="_blank"
+            >Thomas Pronk</a
+          >
+          also made a demonstrative project showing integrating WebGazer into
+          <a href="https://github.com/psychopy/psychojs" target="_blank"
+            >PsychoJS</a
+          >. We would love to acknowledge his work here as well.
         </p>
         <p>
-          Papoutsaki, A., Sangkloy, P., Laskey, J., Daskalova, N., Huang, J., &
-          Hays, J. (2016). Webgazer: Scalable webcam eye tracking using user
-          interactions. In Proceedings of the Twenty-Fifth International Joint
-          Conference on Artificial Intelligence-IJCAI 2016.
+          Pronk, T. (2020). Demo of Eye-Tracking via Webcam in PsychoJS (Version
+          2) [Computer software]. Retrieved from
+          https://gitlab.pavlovia.org/tpronk/demo_eye_tracking2/.
         </p>
       </div>
     </main>
