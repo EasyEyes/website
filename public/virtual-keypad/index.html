@@ -179,6 +179,8 @@
       </section>
     </main>
     <script>
+      document.getElementById("sloan").checked = true;
+
       var receivedData = [];
       let keypad_options = {
         // Specify a 'keypadUrl' field if you really need to redirect to a keypad hosted elsewhere
@@ -199,7 +201,7 @@
         keypad_options,
         ondata_callback
       );
-
+      // Handle form submission of new alphabet
       const newAlphabetSubmitted = (event) => {
         let alphabetString = document.getElementById("alphabet-input").value;
         // https://css-tricks.com/snippets/javascript/strip-whitespace-from-string/
@@ -216,27 +218,33 @@
 
         const alphabet = alphabetString.split(",");
         try {
-          receiver.updateAlphabet(alphabet);
+          receiver.updateAlphabet(alphabet); // TODO verify updateAlphabet works
           document.getElementById("alphabet-input").value = ""; // Reset text field?
         } catch (error) {
           console.error(error);
           alert("Error updating alphabet. Sorry for the inconvenience!");
         }
       };
+
+      // Handle form submission of new font
       const newFontSelected = (font) => {
         try {
-          receiver.updateFont(font);
+          receiver.updateFont(font); // TODO verify updateFont works
         } catch (error) {
           console.error(error);
           alert("Error updating font. Sorry for the inconvenience!");
         }
       };
-      document.getElementById("sloan").addEventListener("click", () => {
-        newFontSelected("Sloan");
-      });
-      document.getElementById("pelli").addEventListener("click", () => {
-        newFontSelected("Pelli");
-      });
+
+      // Assign font button handlers
+      const fontButtons = document.getElementsByName("font-select");
+      for (let i = 0; i < fontButtons.length; i++) {
+        const selectedFont = fontButtons[i].value;
+        fontButtons[i].onclick = () => {
+          newFontSelected(selectedFont);
+        };
+      }
+      // Assign alphabet from handler
       document
         .getElementById("demo-parameters-form")
         .addEventListener("submit", newAlphabetSubmitted);
