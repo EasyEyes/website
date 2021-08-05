@@ -128,12 +128,19 @@
         </p>
       </section>
       <section>
-        <div id="qrcode-demo">
-          <!-- <iframe
-            src="https://www.keypad.website/receiver"
-            frameborder="0"
-            id="qrcode-demo-iframe"
-          ></iframe> -->
+        <div id="demo-widget">
+          <form id="demo-parameters-form">
+            <!-- FONT -->
+            <input type="radio" id="sloan" name="font-select" value="Sloan" />
+            <label for="sloan">Sloan</label> <br />
+            <input type="radio" id="pelli" name="font-select" value="Pelli" />
+            <label for="pelli">Pelli</label> <br />
+            <!-- ALPHABET -->
+            <label for="alphabet-input">Alphabet (comma separated)</label><br />
+            <input type="text" id="alphabet-input" name="alphabet-input" />
+            <input type="submit" value="Submit" />
+          </form>
+          <div id="qrcode-demo"></div>
         </div>
       </section>
       <section id="start">
@@ -192,6 +199,47 @@
         keypad_options,
         ondata_callback
       );
+
+      const newAlphabetSubmitted = (event) => {
+        let alphabetString = document.getElementById("alphabet-input").value;
+        // https://css-tricks.com/snippets/javascript/strip-whitespace-from-string/
+        alphabetString = alphabetString.trim().replace(/\s+/g, "");
+
+        if (document.getElementById("sloan").checked) {
+          // Sloan font
+          alphabetString = alphabetString.toUpperCase();
+        } else {
+          // Pelli font
+          // Pelli font only supports numbers
+          alphabetString.replace(/[^0-9,]/g, "");
+        }
+
+        const alphabet = alphabetString.split(",");
+        try {
+          receiver.updateAlphabet(alphabet);
+          document.getElementById("alphabet-input").value = ""; // Reset text field?
+        } catch (error) {
+          console.error(error);
+          alert("Error updating alphabet. Sorry for the inconvenience!");
+        }
+      };
+      const newFontSelected = (font) => {
+        try {
+          receiver.updateFont(font);
+        } catch (error) {
+          console.error(error);
+          alert("Error updating font. Sorry for the inconvenience!");
+        }
+      };
+      document.getElementById("sloan").addEventListener("click", () => {
+        newFontSelected("Sloan");
+      });
+      document.getElementById("pelli").addEventListener("click", () => {
+        newFontSelected("Pelli");
+      });
+      document
+        .getElementById("demo-parameters-form")
+        .addEventListener("submit", newAlphabetSubmitted);
     </script>
   </body>
 </html>
