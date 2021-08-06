@@ -69,3 +69,17 @@ section h2 {
 section p {
   margin-top: 1rem;
 }
+
+/* -------------------------------------------------------------------------- */
+
+footer {
+  margin: 5rem auto 3rem;
+  text-align: center;
+  /* border-top: 1px solid #eee; */
+}
+
+footer p {
+  margin-top: 1rem;
+  color: #999;
+  font-size: 0.875rem;
+}
