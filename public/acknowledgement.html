@@ -131,34 +131,27 @@
     <main>
       <div class="citations">
         <p class="note">
-          EasyEyes is open source, and builds on contributions from many
-          colleagues whom we thank here. The credit card trick for measuring
-          screen size and the blind spot detection for measuring viewing
-          distance were both suggested by Li et al. (2020). Offering to use a
-          USB connector instead of a credit card was suggested by Ajay
-          Subramanian. The gaze tracking is based on the open-source WebGazer.js
-          package from Papoutsaki et al. (2016). WebGazer and our head tracking
-          are both built on Google's open-source FaceMesh software (Kartynnik et
-          al., 2019). The EasyEyes icon is a block print by Cassandra Hussey,
-          used with permission. Other dependencies of our software can be found
-          in the package configuration file in the corresponding repositories on
-          GitHub.
+          The EasyEyes gaze tracker uses the open-source WebGazer.js package
+          from Papoutsaki et al. (2016). WebGazer and the EasyEyes head tracker
+          both use Google's open-source FaceMesh software (Kartynnik et al.,
+          2019). Other dependencies of each EasyEyes module can be found in its
+          package configuration file in its GitHub repository. The EasyEyes icon
+          is a block print by Cassandra Hussey, used with permission.
         </p>
         <p class="note">
-          As we were wrapping up our development of Remote Calibrator, we
-          realized that
+          As we were wrapping up our development of the EasyEyes Remote
+          Calibrator, we learned of
           <a href="https://twitter.com/ThomasPronk123" target="_blank"
             >Thomas Pronk</a
+          >'s project
+          <a href="https://gitlab.pavlovia.org/tpronk/demo_eye_tracking2/"
+            ><em>Eye tracking via a webcam, version 2</em></a
           >
-          also made a demonstrative project showing integrating WebGazer into
-          <a href="https://github.com/psychopy/psychojs" target="_blank"
-            >PsychoJS</a
-          >. We would love to acknowledge his work here as well.
-        </p>
-        <p>
-          Pronk, T. (2020). Demo of Eye-Tracking via Webcam in PsychoJS (Version
-          2) [Computer software]. Retrieved from
-          https://gitlab.pavlovia.org/tpronk/demo_eye_tracking2/.
+          that also integrates WebGazer into PsychoJS. The EasyEyes version
+          offers a more stable customized build of WebGazer, including several
+          new features like customized framerate and predicting at the reaction,
+          which is modified to work with other EasyEyes modules and packaged to
+          easily add to any existing experiment pipeline.
         </p>
       </div>
     </main>
