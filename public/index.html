@@ -7,7 +7,7 @@
     <meta
       name="description"
       content="The open-source EasyEyes web app is meant to help anyone
-      testing vision online. EasyEyes measures screen size once and uses the
+      test vision online. EasyEyes measures screen size once and uses the
       webcam to track head and gaze continuously. It also allows use of a
       smartphone to emulate a wireless keypad. Currently, we have a working
       prototype with limited documentation. We are using it with PsychoPy.
@@ -56,7 +56,10 @@
 
     <link rel="stylesheet" href="uni.css" />
 
-    <meta name="author" content="Denis Pelli" />
+    <meta
+      name="author"
+      content="Denis Pelli, Peiling Jiang, Augustin Burchell"
+    />
     <link rel="apple-touch-icon" href="media/apple-touch-icon-default.png" />
     <link
       rel="shortcut icon"
@@ -66,11 +69,35 @@
     <title>EasyEyes</title>
 
     <style>
+      #main-description {
+        margin: 5rem 0 3rem;
+      }
+
+      h1 {
+        margin-bottom: 2rem;
+      }
+
+      .headline-next {
+        font-weight: 200;
+      }
+
       .description {
         font-size: 1.5rem;
         line-height: 170%;
         color: #666;
-        margin: 4.5rem 0;
+      }
+
+      .citations {
+        margin-top: 2rem;
+      }
+
+      .citations h6 {
+        font-weight: 700;
+      }
+
+      .citations p {
+        padding-left: 1.5rem;
+        text-indent: -1.5rem;
       }
     </style>
   </head>
@@ -124,14 +151,23 @@
 
     <main>
       <div id="main-description">
+        <h1>EasyEyes <span class="headline-next">for Online Testing</span></h1>
         <p class="description">
-          The open-source <b>EasyEyes</b> web app is meant to help anyone
-          testing vision online. EasyEyes measures screen size once and uses the
-          webcam to track head and gaze continuously. It also allows use of a
+          Welcome! The open-source EasyEyes web app is meant to help anyone test
+          vision online. EasyEyes measures screen size once and uses the webcam
+          to track head and gaze continuously. It also allows use of a
           smartphone to emulate a wireless keypad. Currently, we have a working
           prototype with limited documentation. We are using it with PsychoPy.
           You are welcome to use it with any online testing software.
         </p>
+        <div class="citations">
+          <h6>Cite us!</h6>
+          <p>
+            Jiang, P., Burchell, A., Pelli, D. (2021). EasyEyes aids online
+            testing by emulating a wireless keyboard and tracking viewing
+            distance. The 43rd European Conference on Visual Perception, online.
+          </p>
+        </div>
       </div>
 
       <div id="author">
@@ -150,5 +186,9 @@
         </p>
       </div>
     </main>
+
+    <footer>
+      <p>EasyEyes Team 2021</p>
+    </footer>
   </body>
 </html>
