@@ -105,33 +105,13 @@
     <main>
       <div id="header">
         <h1>Virtual Keypad<span style="color: #4380ff">.</span></h1>
-        <p class="description">Respond from any distance.</p>
+        <p class="description">
+          Use your smartphone as a keypad to respond from any distance. Just
+          point your smartphone camera at the QR code below, and click the
+          pop-up window that appears on your smartphone.
+        </p>
       </div>
-
-      <section>
-        <h2>
-          <span style="color: #4380ff">Participants</span> use their mobile
-          device as a keypad.
-        </h2>
-        <p>
-          Scanning the QR code takes the user to a keypad, fitted with the
-          appropriate buttons and ready to send responses back to the experiment
-          application.
-        </p>
-      </section>
-      <section>
-        <h2>
-          <span style="color: #4380ff">Experimenters</span> customize the
-          receiver.
-        </h2>
-        <p>
-          Open communication between the <code>Receiver</code> and
-          <code>Keypad</code>
-          allows for runtime adjustment of keys, eg updating the response domain
-          between trials.
-        </p>
-      </section>
-      <section>
+      <section id="demo-section">
         <div id="demo-widget">
           <form id="demo-parameters-form">
             <!-- FONT -->
@@ -147,18 +127,20 @@
           <div id="qrcode-demo"></div>
         </div>
       </section>
-      <section id="start">
-        <h2>Getting Started</h2>
+      <section id="for-programmers">
+        <h2>Programmers</h2>
         <p>
           From within an online experiment (such as one created using
           <a href="https://github.com/psychopy/psychojs">PsychoJS</a>
-          or <a href="https://lab.js.org">LabJS</a>), initiate a
+          or <a href="https://lab.js.org">LabJS</a>), initiate an appropriate
           <code>Receiver</code> to provide the participant with a unique qr
           code.
-        </p>
-        <p>
+          <br />
           Use this <code>Receiver</code> object throughout the experiment to
-          update keypad parameters or provide messages to the participant.
+          update keypad parameters or provide messages to the participant --
+          bidirectional communication between the <code>Receiver</code> and
+          <code>Keypad</code> allows for trial-by-trial adjustment of font and
+          alphabet.
         </p>
       </section>
     </main>
