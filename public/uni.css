@@ -42,21 +42,23 @@ main {
 /* -------------------------------------------------------------------------- */
 
 #header {
-  margin-top: 3rem;
-  width: 80%;
+  margin-top: 5rem;
+  /* width: 80%; */
   /* padding-bottom: 1rem; */
   /* border-bottom: solid 1px #ccc; */
 }
 
 #header h1 {
   color: #333;
+  margin-bottom: 2rem;
   /* color: #FF9A00; */
-  font-size: 3rem;
-  font-weight: 700;
+  /* font-size: 3rem; */
+  /* font-weight: 700; */
 }
 
 #header .description {
   font-size: 1.5rem;
+  line-height: 170%;
   color: #666;
 }
 
