@@ -1,0 +1,5 @@
+[build]
+publish = "docs/"
+
+[[plugins]]
+package = "@netlify/plugin-lighthouse"
