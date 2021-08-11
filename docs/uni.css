@@ -17,6 +17,18 @@ body {
   padding: 0;
 }
 
+p {
+  font-size: 1.2rem;
+  line-height: 170%;
+}
+
+@media screen and (min-width: 960px) {
+  .columns-on-large-screen {
+    column-count: 2;
+    column-gap: 3rem;
+  }
+}
+
 .navbar {
   padding-left: 3rem;
   padding-right: 3rem;
@@ -35,8 +47,8 @@ body {
 main {
   margin: 0 auto;
   padding-bottom: 5rem;
-  width: 80%;
-  max-width: 1440px;
+  width: 90%;
+  max-width: 960px;
 }
 
 /* -------------------------------------------------------------------------- */
