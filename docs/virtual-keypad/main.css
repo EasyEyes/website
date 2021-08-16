@@ -3,3 +3,21 @@
   max-width: 720px;
   margin: 3rem 0;
 }
+
+.main-text {
+  font-weight: 400;
+  font-size: 1.5rem;
+  line-height: 170%;
+  color: #666;
+}
+
+select,
+select *,
+#alphabet-input,
+#alphabet-submit {
+  font-size: 1.2rem;
+}
+
+#font-select {
+  padding: 0.25rem 1rem;
+}

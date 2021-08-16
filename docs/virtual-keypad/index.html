@@ -115,14 +115,22 @@
         <div id="demo-widget">
           <form id="demo-parameters-form">
             <!-- FONT -->
-            <input type="radio" id="sloan" name="font-select" value="Sloan" />
+            <!-- <input type="radio" id="sloan" name="font-select" value="Sloan" />
             <label for="sloan">Sloan</label> <br />
             <input type="radio" id="pelli" name="font-select" value="Pelli" />
-            <label for="pelli">Pelli</label> <br />
+            <label for="pelli">Pelli</label> <br /> -->
+            <p class="main-text" style="margin-bottom: 5px">Font</p>
+            <select id="font-select" name="font-select" id="font-select">
+              <option value="Sloan" selected>Sloan</option>
+              <option value="Pelli">Pelli</option>
+            </select>
             <!-- ALPHABET -->
-            <label for="alphabet-input">Alphabet (comma separated)</label><br />
+            <p class="main-text" style="margin-bottom: 5px">
+              Alphabet (comma separated)
+            </p>
+            <!-- <label for="alphabet-input">Alphabet (comma separated)</label><br /> -->
             <input type="text" id="alphabet-input" name="alphabet-input" />
-            <input type="submit" value="Submit" />
+            <input type="submit" id="alphabet-submit" value="Submit" />
           </form>
           <div id="qrcode-demo"></div>
         </div>
@@ -168,7 +176,7 @@
     </footer>
 
     <script>
-      document.getElementById("sloan").checked = true;
+      // document.getElementById("sloan").checked = true;
 
       var receivedData = [];
       let keypad_options = {
@@ -196,7 +204,7 @@
         // https://css-tricks.com/snippets/javascript/strip-whitespace-from-string/
         alphabetString = alphabetString.trim().replace(/\s+/g, "");
 
-        if (document.getElementById("sloan").checked) {
+        if (document.querySelector("#font-select").value === "Sloan") {
           // Sloan font
           alphabetString = alphabetString.toUpperCase();
         } else {
@@ -226,13 +234,16 @@
       };
 
       // Assign font button handlers
-      const fontButtons = document.getElementsByName("font-select");
-      for (let i = 0; i < fontButtons.length; i++) {
-        const selectedFont = fontButtons[i].value;
-        fontButtons[i].onclick = () => {
-          newFontSelected(selectedFont);
-        };
-      }
+      // const fontButtons = document.getElementsByName("font-select");
+      // for (let i = 0; i < fontButtons.length; i++) {
+      //   const selectedFont = fontButtons[i].value;
+      //   fontButtons[i].onclick = () => {
+      //     newFontSelected(selectedFont);
+      //   };
+      // }
+      document.querySelector("#font-select").onchange = (e) => {
+        newFontSelected(document.querySelector("#font-select").value);
+      };
       // Assign alphabet from handler
       document
         .getElementById("demo-parameters-form")
