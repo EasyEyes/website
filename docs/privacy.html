@@ -51,6 +51,7 @@
       integrity="sha384-cVKIPhGWiC2Al4u+LWgxfKTRIcfu0JTxR+EQDz/bgldoEyl4H0zUF0QKbrJ0EcQF"
       crossorigin="anonymous"
     ></script>
+    <script src="https://cdn.jsdelivr.net/npm/showdown@latest/dist/showdown.min.js"></script>
 
     <!-- Internal -->
 
@@ -66,27 +67,35 @@
       href="media/favicon-default.ico"
       type="image/x-icon"
     />
-    <title>EasyEyes</title>
+    <title>EasyEyes | Privacy</title>
 
     <style>
-      #main-description {
-        margin: 5rem 0 2rem;
+      .citations {
+        margin-top: 5rem;
       }
 
-      h1 {
+      .citations h1 {
         margin-bottom: 2rem;
       }
 
-      .description {
-        font-size: 1.5rem;
-        line-height: 170%;
-        color: #666;
+      .citations h2 {
+        font-size: 1.6rem;
+        margin-top: 2rem;
       }
 
-      /* .citations p {
-        padding-left: 1.5rem;
-        text-indent: -1.5rem;
-      } */
+      .citations p *,
+      .citations ul * {
+        font-size: 1.2rem;
+        color: #333;
+      }
+
+      .citations ul {
+        list-style-type: circle;
+      }
+
+      .citations a {
+        color: #666;
+      }
     </style>
   </head>
 
@@ -113,8 +122,8 @@
       </button>
       <div class="collapse navbar-collapse" id="navbarNav">
         <ul class="navbar-nav">
-          <li class="nav-item active">
-            <a class="nav-link active" href=".">Home</a>
+          <li class="nav-item">
+            <a class="nav-link" href=".">Home</a>
           </li>
           <li class="nav-item">
             <a class="nav-link" href="remote-calibrator/">Calibrator</a>
@@ -127,8 +136,8 @@
               >Acknowledgements</a
             >
           </li>
-          <li class="nav-item">
-            <a class="nav-link" href="privacy.html">Privacy</a>
+          <li class="nav-item active">
+            <a class="nav-link active" href="privacy.html">Privacy</a>
           </li>
           <li class="nav-item">
             <a class="nav-link" href="references.html">References</a>
@@ -141,47 +150,44 @@
     </nav>
 
     <main>
-      <div id="main-description">
-        <h1>EasyEyes <span class="headline-next">for Online Testing</span></h1>
-        <p class="description">
-          Welcome! The open-source EasyEyes web app is meant to help anyone test
-          vision online. EasyEyes measures screen size, and, with consent, uses
-          the webcam of the participant's computer to track the participant's
-          head and gaze positions. EasyEyes also enables use of any smartphone
-          to emulate a wireless keypad, to allow testing at long viewing
-          distances. We are using it with PsychoPy. You are welcome to use it
-          with any online testing software.
-        </p>
-        <p class="description">If you use it, please cite us.</p>
-        <p>
-          Jiang, P., Burchell, A., Pelli, D. G. (2021). EasyEyes aids online
-          testing by emulating a wireless keyboard and tracking viewing
-          distance. The 43rd European Conference on Visual Perception, online.
-          August 22-27, 2021. <em>Perception</em>.
-        </p>
-        <p class="description">Enjoy!</p>
-        <p class="description">The EasyEyes Team</p>
-      </div>
-
-      <div id="author">
-        <p>
-          <b>Denis Pelli</b><br />Professor of Psychology & Neural Science, New
-          York University<br />denis.pelli AT nyu DOT edu
-        </p>
-        <p>
-          <b>Peiling Jiang</b><br />Research Assistant, New York University<br />goodjpl
-          AT nyu DOT edu
-        </p>
-        <p>
-          <b>Augustin Burchell</b><br />
-          Research Assistant, New York University<br />
-          augustin DOT burchell AT gmail DOT com
-        </p>
+      <div id="citations" class="citations">
+        <h1>EasyEyes Privacy Policy</h1>
       </div>
     </main>
 
     <footer>
       <p>EasyEyes Team 2021</p>
     </footer>
+
+    <script>
+      const converter = new showdown.Converter();
+      const text = `
+We respect the privacy of every user and visitor, including researchers, programmers, and participants. Our privacy policy applies to:
+- Our website, which can be visited through [EasyEyes.app](EasyEyes.app) and [EasyEyes.js.org](EasyEyes.js.org)
+- Our open-source packages and projects, available at [github.com/EasyEyes](github.com/EasyEyes)
+
+This policy is subject to change at any time without notice.
+
+## When you visit our website
+Our efforts to raise support for EasyEyes depend on demonstrating that our software is used, so we use Google Analytics to collect website usage data, including page hits, interactions, visiting time and duration, type of device, browser used, and demographics. We retain only aggregate data, stripped of any personally identifying details, to document usage and help us serve our users. Our website is served by GitHub Pages and Netlify, and we provide links to their privacy policies below.
+
+## When you add our package to your experiment
+We use NPM to publish our package and jsDelivr as the recommended CDN service. We provide links to their privacy policies below. Both of them may collect usage data, but the EasyEyes team can see only the anonymous monthly or weekly hit count.
+
+## When you use our package as a participant
+We do not collect any personally-identifiable data about participants. Some functions of EasyEyes Remote Calibrator request your permission to use your computer’s webcam during the experiment to track head and gaze position. The webcam images are immediately processed locally and reduced to non-personally-identifiable estimates of head and gaze position. Each image exists for only a fraction of a second, is not stored, and never leaves your computer.
+
+## Statements
+Here are the Privacy Statements of the services that we use:
+- [GitHub Pages](https://docs.github.com/en/github/site-policy/github-privacy-statement)
+- [Netlify](https://www.netlify.com/privacy/)
+- [Google Analytics](https://policies.google.com/privacy)
+- [NPM](https://docs.npmjs.com/policies/privacy)
+- [jsDelivr](https://www.jsdelivr.com/terms/privacy-policy-jsdelivr-net)
+
+Updated August 23, 2021.`;
+      document.querySelector("#citations").innerHTML +=
+        converter.makeHtml(text);
+    </script>
   </body>
 </html>
