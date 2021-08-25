@@ -58,11 +58,10 @@ RemoteCalibrator.panel(
   ],
   "#rc-panel-holder",
   {
-    nextButton: "You're done",
     _demoActivateAll: true, // Only for this demo
   },
   () => {
-    party.confetti(document.querySelector(".rc-panel-step-finish"), {
+    party.confetti(document.querySelector(".rc-panel-next-button"), {
       count: party.variation.range(40, 60),
     });
   }
