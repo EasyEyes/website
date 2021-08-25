@@ -15,7 +15,7 @@ RemoteCalibrator.panel(
         addTitle();
         printMessage(
           `Screen size is ${
-            data.value.screenDiagonalIN
+            data.value.screenDiagonalIn
           }in, measured at ${parseTimestamp(data.timestamp)}.`
         );
       }, // If multiple, make a list
@@ -45,11 +45,11 @@ RemoteCalibrator.panel(
           distanceMsg = printMessage("The dynamic viewing distance is cm at .");
         printMessage(
           `The dynamic viewing distance is ${
-            data.value.viewingDistanceCM
+            data.value.viewingDistanceCm
           }cm at ${parseTimestamp(data.timestamp)}. The near point is at [${
-            data.value.nearPointCM.x
+            data.value.nearPointCm.x
           }cm, ${
-            data.value.nearPointCM.y
+            data.value.nearPointCm.y
           }cm] compared to the center of the screen.`,
           distanceMsg
         );
