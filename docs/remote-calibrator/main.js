@@ -22,6 +22,9 @@ RemoteCalibrator.panel(
     },
     {
       name: "trackGaze",
+      options: {
+        calibrationCount: 1,
+      },
       callback: (data) => {
         addTitle();
         if (!gazeMsg)
