@@ -1,0 +1,28 @@
+#rc-demo {
+  width: 100%;
+  max-width: 720px;
+  margin: 0 auto 7rem;
+}
+
+#rc-demo .demo-warning {
+  font-size: 0.9rem;
+  margin: 0 0 2rem;
+  color: #999;
+}
+
+#rc-panel-results * {
+  color: #333;
+}
+
+#rc-panel-results .rc-results-title {
+  font-weight: 700;
+  font-size: 2.5rem;
+  margin-bottom: 1rem;
+}
+
+#rc-panel-results .rc-result {
+  font-weight: 400;
+  font-size: 1.5rem;
+  margin: 0;
+  line-height: 170%;
+}
