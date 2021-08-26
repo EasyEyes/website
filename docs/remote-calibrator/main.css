@@ -11,18 +11,17 @@
 }
 
 #rc-panel-results * {
-  color: #999;
+  color: #333;
 }
 
 #rc-panel-results .rc-results-title {
   font-weight: 700;
-  font-size: 1.2rem;
+  font-size: 2.5rem;
 }
 
 #rc-panel-results .rc-result {
-  font-family: "Ubuntu Mono", monospace;
   font-weight: 400;
-  font-size: 0.9rem;
+  font-size: 1.5rem;
   margin: 0;
   line-height: 170%;
 }

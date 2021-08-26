@@ -14,15 +14,30 @@ RemoteCalibrator.panel(
       callback: (data) => {
         addTitle();
         printMessage(
-          `Screen size is ${
-            data.value.screenDiagonalIn
-          }in, measured at ${parseTimestamp(data.timestamp)}.`
+          `Screen size is ${data.value.screenWidthCm} x ${data.value.screenHeightCm}cm.`
         );
       }, // If multiple, make a list
     },
     {
+      name: "trackDistance",
+      options: {
+        showVideo: false,
+        nearPoint: false,
+      },
+      callbackTrack: (data) => {
+        addTitle();
+        if (!distanceMsg)
+          distanceMsg = printMessage("The dynamic viewing distance is cm at .");
+        printMessage(
+          `Viewing distance is ${data.value.viewingDistanceCm}cm.`,
+          distanceMsg
+        );
+      },
+    },
+    {
       name: "trackGaze",
       options: {
+        showVideo: false,
         calibrationCount: 1,
       },
       callback: (data) => {
@@ -30,31 +45,8 @@ RemoteCalibrator.panel(
         if (!gazeMsg)
           gazeMsg = printMessage("The gaze position is [ px, px] at .");
         printMessage(
-          `The gaze position is [${data.value.x}px, ${
-            data.value.y
-          }px] at ${parseTimestamp(data.timestamp)}.`,
+          `Gaze is at (${data.value.x}, ${data.value.y})px.`,
           gazeMsg
-        );
-      },
-    },
-    {
-      name: "trackDistance",
-      options: {
-        showNearPoint: true,
-      },
-      callbackTrack: (data) => {
-        addTitle();
-        if (!distanceMsg)
-          distanceMsg = printMessage("The dynamic viewing distance is cm at .");
-        printMessage(
-          `The dynamic viewing distance is ${
-            data.value.viewingDistanceCm
-          }cm at ${parseTimestamp(data.timestamp)}. The near point is at [${
-            data.value.nearPointCm.x
-          }cm, ${
-            data.value.nearPointCm.y
-          }cm] compared to the center of the screen.`,
-          distanceMsg
         );
       },
     },
@@ -73,8 +65,7 @@ RemoteCalibrator.panel(
 const addTitle = () => {
   // panelHolder.style.marginBottom = '3rem'
   if (titleAdded) return;
-  resultsElement.innerHTML +=
-    '<h3 class="rc-results-title">Results from the Calibrator</h3>';
+  resultsElement.innerHTML += '<h3 class="rc-results-title">Results</h3>';
   titleAdded = true;
 };
 
