@@ -11,10 +11,15 @@ RemoteCalibrator.panel(
   [
     {
       name: "screenSize",
+      options: {
+        decimalPlace: 1,
+      },
       callback: (data) => {
         addTitle();
         printMessage(
-          `Screen size is ${data.value.screenWidthCm} x ${data.value.screenHeightCm} cm.`
+          `Screen size is ${data.value.screenWidthCm.toFixed(
+            1
+          )} x ${data.value.screenHeightCm.toFixed(1)} cm.`
         );
       }, // If multiple, make a list
     },
@@ -23,15 +28,16 @@ RemoteCalibrator.panel(
       options: {
         showVideo: false,
         nearPoint: false,
+        decimalPlace: 1,
       },
       callbackTrack: (data) => {
         addTitle();
         if (!distanceMsg)
           distanceMsg = printMessage(
-            `Viewing distance is ${data.value.viewingDistanceCm} cm.`
+            `Viewing distance is ${data.value.viewingDistanceCm.toFixed(1)} cm.`
           );
         printMessage(
-          `Viewing distance is ${data.value.viewingDistanceCm} cm.`,
+          `Viewing distance is ${data.value.viewingDistanceCm.toFixed(1)} cm.`,
           distanceMsg
         );
       },
@@ -41,6 +47,7 @@ RemoteCalibrator.panel(
       options: {
         showVideo: false,
         calibrationCount: 1,
+        decimalPlace: 0,
       },
       callback: (data) => {
         addTitle();
