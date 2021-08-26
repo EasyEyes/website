@@ -14,7 +14,7 @@ RemoteCalibrator.panel(
       callback: (data) => {
         addTitle();
         printMessage(
-          `Screen size is ${data.value.screenWidthCm} x ${data.value.screenHeightCm}cm.`
+          `Screen size is ${data.value.screenWidthCm} x ${data.value.screenHeightCm} cm.`
         );
       }, // If multiple, make a list
     },
@@ -27,9 +27,11 @@ RemoteCalibrator.panel(
       callbackTrack: (data) => {
         addTitle();
         if (!distanceMsg)
-          distanceMsg = printMessage("The dynamic viewing distance is cm at .");
+          distanceMsg = printMessage(
+            `Viewing distance is ${data.value.viewingDistanceCm} cm.`
+          );
         printMessage(
-          `Viewing distance is ${data.value.viewingDistanceCm}cm.`,
+          `Viewing distance is ${data.value.viewingDistanceCm} cm.`,
           distanceMsg
         );
       },
@@ -43,9 +45,11 @@ RemoteCalibrator.panel(
       callback: (data) => {
         addTitle();
         if (!gazeMsg)
-          gazeMsg = printMessage("The gaze position is [ px, px] at .");
+          gazeMsg = printMessage(
+            `Gaze is at (${data.value.x}, ${data.value.y}) px.`
+          );
         printMessage(
-          `Gaze is at (${data.value.x}, ${data.value.y})px.`,
+          `Gaze is at (${data.value.x}, ${data.value.y}) px.`,
           gazeMsg
         );
       },
