@@ -3,7 +3,10 @@
 
 const panelHolder = document.querySelector("#rc-panel-holder");
 const resultsElement = document.querySelector("#rc-panel-results");
-let resultsTitle, gazeMsg, distanceMsg;
+let resultsTitle,
+  screenMsg = null,
+  gazeMsg = null,
+  distanceMsg = null;
 let titleAdded = false; // "Results from the Calibrator" title
 
 RemoteCalibrator.init({ id: "session_demo" });
@@ -16,10 +19,11 @@ RemoteCalibrator.panel(
       },
       callback: (data) => {
         addTitle();
-        printMessage(
+        screenMsg = printMessage(
           `Screen size is ${data.value.screenWidthCm.toFixed(
             1
-          )} x ${data.value.screenHeightCm.toFixed(1)} cm.`
+          )} x ${data.value.screenHeightCm.toFixed(1)} cm.`,
+          screenMsg
         );
       }, // If multiple, make a list
     },
@@ -32,11 +36,7 @@ RemoteCalibrator.panel(
       },
       callbackTrack: (data) => {
         addTitle();
-        if (!distanceMsg)
-          distanceMsg = printMessage(
-            `Viewing distance is ${data.value.viewingDistanceCm.toFixed(1)} cm.`
-          );
-        printMessage(
+        distanceMsg = printMessage(
           `Viewing distance is ${data.value.viewingDistanceCm.toFixed(1)} cm.`,
           distanceMsg
         );
@@ -51,11 +51,7 @@ RemoteCalibrator.panel(
       },
       callback: (data) => {
         addTitle();
-        if (!gazeMsg)
-          gazeMsg = printMessage(
-            `Gaze is at (${data.value.x}, ${data.value.y}) px.`
-          );
-        printMessage(
+        gazeMsg = printMessage(
           `Gaze is at (${data.value.x}, ${data.value.y}) px.`,
           gazeMsg
         );
@@ -70,6 +66,11 @@ RemoteCalibrator.panel(
     party.confetti(document.querySelector(".rc-panel-next-button"), {
       count: party.variation.range(40, 60),
     });
+    setTimeout(() => {
+      RemoteCalibrator.endDistance();
+      RemoteCalibrator.endGaze();
+      RemoteCalibrator.resetPanel();
+    }, 100);
   }
 );
 
