@@ -5,6 +5,7 @@
   "description": "The public website of EasyEyes project.",
   "scripts": {
     "fetch": "git submodule foreach git pull",
+    "update": "cd docs/threshold && git add -A && git commit -m 'update' && git push && cd ../..",
     "format": "prettier --write \"**/*.{js,json,md,html,css}\"",
     "prepare": "husky install"
   },
