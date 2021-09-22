@@ -1,0 +1,3 @@
+[submodule "threshold"]
+	path = docs/threshold
+	url = https://github.com/EasyEyes/control-panel.git
