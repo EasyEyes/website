@@ -49,7 +49,7 @@ RemoteCalibrator.panel(
         calibrationCount: 1,
         decimalPlace: 0,
       },
-      callback: (data) => {
+      callbackTrack: (data) => {
         addTitle();
         gazeMsg = printMessage(
           `Gaze is at (${data.value.x}, ${data.value.y}) px.`,
