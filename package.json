@@ -5,7 +5,8 @@
   "description": "The public website of EasyEyes project.",
   "scripts": {
     "fetch": "git submodule foreach git pull",
-    "update": "cd docs/threshold && git add -A && git commit -m 'update' && git push && cd ../..",
+    "update:git": "git add -A && git commit -m 'update' && git push",
+    "update": "cd docs/threshold && npm run update:git && cd ../.. && npm run update:git",
     "format": "prettier --write \"**/*.{js,json,md,html,css}\"",
     "prepare": "husky install",
     "netlify": "git submodule update --init --recursive"
