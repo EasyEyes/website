@@ -37,7 +37,9 @@ RemoteCalibrator.panel(
       callbackTrack: (data) => {
         addTitle();
         distanceMsg = printMessage(
-          `Viewing distance is ${data.value.viewingDistanceCm.toFixed(1)} cm.`,
+          `Viewing distance is ${data.value.viewingDistanceCm.toFixed(
+            1
+          )} cm. Latency is ${data.value.latencyMs} ms.`,
           distanceMsg
         );
       },
@@ -52,7 +54,7 @@ RemoteCalibrator.panel(
       callbackTrack: (data) => {
         addTitle();
         gazeMsg = printMessage(
-          `Gaze is at (${data.value.x}, ${data.value.y}) px.`,
+          `Gaze is at (${data.value.x}, ${data.value.y}) px. Latency is ${data.value.latencyMs} ms.`,
           gazeMsg
         );
       },
