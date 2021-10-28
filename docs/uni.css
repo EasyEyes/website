@@ -68,10 +68,16 @@ main {
   /* font-weight: 700; */
 }
 
-#header .description {
+#header .description,
+#header .description a {
   font-size: 1.5rem;
   line-height: 170%;
   color: #666;
+}
+
+.description .highlight {
+  color: #555;
+  font-weight: 700;
 }
 
 .headline-next {
