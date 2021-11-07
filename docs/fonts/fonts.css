@@ -28,6 +28,11 @@
   font-family: "Auckland Optotype";
 }
 
+.interpol-font {
+  font-family: Interpol Sans Reg;
+  font-size: 3rem;
+}
+
 .download-link {
   display: inline;
   font-size: 1rem !important;
@@ -41,4 +46,9 @@
 
 .download-link:hover {
   background-color: #999;
+}
+
+.description code {
+  color: #999;
+  font-size: smaller;
 }
