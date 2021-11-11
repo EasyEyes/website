@@ -1,0 +1,54 @@
+@font-face {
+  font-family: "Sloan";
+  src: url("./resources/Sloan.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Pelli";
+  src: url("./resources/Pelli.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Auckland Optotype";
+  src: url("./resources/Auckland\ Optotype.woff2") format("woff2");
+}
+
+.sloan-font {
+  font-family: "Sloan";
+}
+
+.pelli-font {
+  line-height: 4rem;
+  font-size: 2.5rem;
+  font-family: "Pelli";
+}
+
+.auckland-font {
+  font-size: 2rem;
+  font-family: "Auckland Optotype";
+}
+
+.interpol-font {
+  font-family: Interpol Sans Reg;
+  font-size: 3rem;
+}
+
+.download-link {
+  display: inline;
+  font-size: 1rem !important;
+  padding: 0.5rem !important;
+  border-radius: 5px;
+  color: #fff !important;
+  background-color: #ccc;
+  text-decoration: none;
+  vertical-align: middle;
+}
+
+.download-link:hover {
+  background-color: #999;
+}
+
+.description code {
+  color: #999;
+  font-size: smaller;
+}
