@@ -18,7 +18,7 @@ unset UPDATE_DEPTH
 : ${UPDATE_DEPTH:=1}
 
 if [ $2 ]; then
-  $UPDATE_DEPTH = $2
+  UPDATE_DEPTH=$2
 fi
 
 # Functions

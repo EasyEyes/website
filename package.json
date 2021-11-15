@@ -5,6 +5,7 @@
   "description": "The public website of EasyEyes project.",
   "scripts": {
     "fetch": "git submodule foreach git pull",
+    "git": "sh git-update.sh",
     "update:git": "git add -A && git commit -m 'update' && git push",
     "update:sub": "cd docs/threshold && npm run update:git && cd ../..",
     "update": "run-s update:sub update:git",
