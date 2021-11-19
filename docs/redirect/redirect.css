@@ -1,0 +1,33 @@
+.redirect-message {
+  margin: 7rem auto;
+  width: fit-content;
+  text-align: left;
+}
+
+.redirect-message img {
+  width: 80px;
+  animation: breathing 1s ease-out infinite normal;
+}
+
+@keyframes breathing {
+  0% {
+    opacity: 0.8;
+  }
+
+  50% {
+    opacity: 1;
+  }
+
+  100% {
+    opacity: 0.8;
+  }
+}
+
+.redirect-message h1 {
+  margin-bottom: 0;
+}
+
+.redirect-message p {
+  margin: 0.2rem 0;
+  font-size: medium;
+}
