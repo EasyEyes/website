@@ -12,6 +12,7 @@
     "update:sub": "cd docs/threshold && npm run update:git && cd ../..",
     "update": "run-s update:sub update:git",
     "format": "prettier --write \"**/*.{js,json,md,html,css}\"",
+    "start": "cd docs/threshold && npm start",
     "netlify": "git submodule update --init --recursive && cd docs/threshold && npm run netlify"
   },
   "repository": {
@@ -25,9 +26,9 @@
   },
   "homepage": "https://github.com/EasyEyes/website#readme",
   "devDependencies": {
-    "eslint": "^8.2.0",
+    "eslint": "^8.3.0",
     "husky": "^7.0.4",
-    "lint-staged": "^12.0.3",
+    "lint-staged": "^12.1.2",
     "npm-run-all": "^4.1.5",
     "prettier": "^2.4.1"
   },
