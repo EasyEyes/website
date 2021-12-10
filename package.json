@@ -14,7 +14,7 @@
     "update": "run-s update:sub update:git",
     "format": "prettier --write \"**/*.{js,json,md,html,css}\"",
     "start": "cd docs/threshold && npm start",
-    "netlify": "git submodule update --init --recursive && cd docs/threshold && npm run netlify"
+    "netlify": "npm run pull && cd docs/threshold && npm run netlify"
   },
   "repository": {
     "type": "git",
