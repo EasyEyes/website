@@ -11,12 +11,12 @@ cd docs/threshold/threshold
 
 cd ..
 echo "${YELLOW}Pulling threshold${DEFAULT}"
-git pull origin # threshold
+git pull # threshold
 
 cd ..
 echo "${YELLOW}Pulling threshold-scientist${DEFAULT}"
-git pull origin # threshold-scientist
+git pull # threshold-scientist
 
 cd ..
 echo "${YELLOW}Pulling website${DEFAULT}"
-git pull origin # website
+git pull # website
