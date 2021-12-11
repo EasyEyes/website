@@ -10,6 +10,8 @@
     "git": "sh scripts/git-update.sh",
     "update:git": "git add -A && git commit -m 'update' && git push",
     "update:sub": "cd docs/threshold && npm run update:git && cd ../..",
+    "update:phrases": "cd docs/threshold/threshold && npm run phrases && cd ../../.. && npm run git 'update phrases' 2",
+    "update:glossary": "cd docs/threshold/threshold && npm run glossary && cd ../../.. && npm run git 'update phrases' 2",
     "update": "run-s update:sub update:git",
     "format": "prettier --write \"**/*.{js,json,md,html,css}\"",
     "start": "cd docs/threshold && npm start",
