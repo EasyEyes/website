@@ -15,7 +15,7 @@
     "update": "run-s update:sub update:git",
     "format": "prettier --write \"**/*.{js,json,md,html,css}\"",
     "start": "cd docs/threshold && npm start",
-    "netlify": "npm i && npm run pull && cd docs/threshold && npm run netlify"
+    "netlify": "cd docs/threshold && npm run netlify"
   },
   "repository": {
     "type": "git",
