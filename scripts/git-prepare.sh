@@ -1,9 +1,9 @@
-# cd docs/threshold/threshold
-cd docs/threshold/threshold/psychojs
+cd docs/threshold/threshold
+# cd docs/threshold/threshold/psychojs
 
-git checkout threshold-prod # psychojs
-npm i
-cd ..
+# git checkout threshold-prod # psychojs
+# npm i
+# cd ..
 
 git checkout main # threshold
 npm i
