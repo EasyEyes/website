@@ -50,7 +50,7 @@ npm run git "commit message" n
 
 `n` is the commit level - `0` means only **website**, `1` means only **website** and **threshold-scientist**, `2` means **website**, **threshold-scientist**, and **threshold**.
 
-## Local Development
+## Threshold Local Development
 
 ### Scientist Page
 
