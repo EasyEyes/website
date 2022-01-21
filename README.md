@@ -27,3 +27,45 @@ Install the pre-commit auto formatter before development.
 ```shell
 npm install
 ```
+
+## Setup
+
+```shell
+npm run setup
+```
+
+## Contribute
+
+Always pull from the GitHub before making any changes.
+
+```shell
+npm run pull
+```
+
+To commit at all levels, use
+
+```shell
+npm run git "commit message" n
+```
+
+`n` is the commit level - `0` means only **website**, `1` means only **website** and **threshold-scientist**, `2` means **website**, **threshold-scientist**, and **threshold**.
+
+## Local Development
+
+### Scientist Page
+
+```shell
+cd docs/threshold
+npm run start
+```
+
+### Participant Page
+
+```shell
+cd docs/threshold/threshold
+npm run build # Only needed once
+npm run examples # Needed every time changes made to the experiment tables
+npm run start -- --name=nameOfTheExperimentTable
+```
+
+You don't need to build before committing to GitHub, Netlify will do it for you during the deployment. An auto formatter (Prettier) will format your code during the commit (pre-commit hook).
