@@ -59,7 +59,7 @@ update_threshold() {
 
   # git status
   git add -A
-  git commit -m "threshold: $1"
+  git commit -m "$2: $1"
   git push
   cd ../../..
 }
@@ -72,7 +72,7 @@ update_threshold_scientist() {
 
   # git status
   git add -A
-  git commit -m "threshold-scientist: $1"
+  git commit -m "$2: $1"
   git push
   cd ../..
 }
@@ -82,7 +82,7 @@ update_website() {
   check
   # git status
   git add -A
-  git commit -m "website: $1"
+  git commit -m "$2: $1"
   git push
 }
 
@@ -90,16 +90,16 @@ update_website() {
 
 if [ $UPDATE_DEPTH = "1" ]; then
   echo "${YELLOW}>>> Update threshold-scientist AND website"
-  update_threshold_scientist "$1"
-  update_website "$1"
+  update_threshold_scientist "$1" "for threshold-scientist"
+  update_website "$1" "for threshold-scientist"
 
 elif [ $UPDATE_DEPTH = "0" ]; then
   echo "${YELLOW}>>> Update ONLY website"
-  update_website "$1"
+  update_website "$1" "for website"
 
 elif [ $UPDATE_DEPTH = "2" ]; then
   echo "${YELLOW}>>> Update threshold AND threshold-scientist AND website"
-  update_threshold "$1"
-  update_threshold_scientist "$1"
-  update_website "$1"
+  update_threshold "$1" "for threshold"
+  update_threshold_scientist "$1" "for threshold"
+  update_website "$1" "for threshold"
 fi
