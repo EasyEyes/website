@@ -95,12 +95,15 @@
       }
 
       .package-list h2 {
-        font-weight: 700;
+        margin-bottom: 1rem;
       }
 
       .package-list li {
         list-style: none;
-        text-indent: -1rem;
+        /* text-indent: -1rem; */
+        margin-bottom: 0.5rem;
+        padding-bottom: 0.15rem;
+        border-bottom: 1px solid #eee;
       }
 
       .package-list ul li::before {
@@ -116,13 +119,17 @@
       }
 
       .package-list .title {
-        font-weight: 600;
+        font-weight: 500;
       }
 
       .package-list ul li a {
         float: right;
         text-decoration: none;
         color: #666;
+      }
+
+      .package-list ul li a:hover {
+        text-decoration: underline;
       }
     </style>
   </head>
@@ -216,53 +223,10 @@
 
       <div class="package-list">
         <h2>
-          We want to thank all open-source packages and resources we use for
-          this project ❤️
+          Thanks to the developers of the open-source packages and resources
+          used in this project.
         </h2>
-        <ul>
-          <li class="package">
-            <span class="title">ESLint</span>
-            <a
-              href="https://eslint.org/"
-              target="_blank"
-              rel="noopener noreferrer"
-              >Link</a
-            >
-          </li>
-
-          <li class="package">
-            <span class="title">husky</span>
-            <a
-              href="https://github.com/typicode/husky"
-              target="_blank"
-              rel="noopener noreferrer"
-              >Link</a
-            >
-          </li>
-
-          <li class="package">
-            <span class="title">lint-staged</span>
-            <a
-              href="https://github.com/okonet/lint-staged"
-              target="_blank"
-              rel="noopener noreferrer"
-              >Link</a
-            >
-          </li>
-
-          <li class="sound">
-            <span class="title">Sound Jay</span> (page flip sound for Threshold
-            reading task)
-            <a
-              href="https://www.soundjay.com/page-flip-sounds-1.html"
-              target="_blank"
-              rel="noopener noreferrer"
-              >Link</a
-            >
-          </li>
-        </ul>
-
-        <p>(the full list to be updated soon...)</p>
+        <ul id="list-for-packages"></ul>
       </div>
     </main>
 
@@ -272,5 +236,103 @@
         EasyEyes team
       </p>
     </footer>
+
+    <script>
+      const packages = [
+        ["ESLint", "https://eslint.org/"],
+        ["husky", "https://github.com/typicode/husky"],
+        ["lint-staged", "https://github.com/okonet/lint-staged"],
+        [
+          "Sound Jay",
+          "https://www.soundjay.com/page-flip-sounds-1.html",
+          "sound",
+          "(page flip sound for Threshold reading task)",
+        ],
+        ["npm-run-all", "https://github.com/mysticatea/npm-run-all"],
+        ["Prettier", "https://prettier.io/"],
+        ["buffer", "https://github.com/feross/buffer"],
+        ["dataframe-js", "https://github.com/Gmousse/dataframe-js"],
+        ["Dropzone", "https://www.dropzone.dev/js/"],
+        ["JSZip", "https://stuk.github.io/jszip/"],
+        ["Papa Parse", "https://www.papaparse.com/"],
+        ["Bootstrap", "https://getbootstrap.com/"],
+        ["jQuery", "https://jquery.com/"],
+        ["jQuery UI", "https://jqueryui.com/"],
+        [
+          "clean-webpack-plugin",
+          "https://github.com/johnagan/clean-webpack-plugin",
+        ],
+        ["webpack", "https://webpack.js.org/"],
+        ["webpack-cli", "https://webpack.js.org/api/cli/"],
+        ["webpack-dev-server", "https://webpack.js.org/api/cli/#devserver"],
+        ["webpack-merge", "https://webpack.js.org/api/cli/#merge"],
+        ["css-loader", "https://webpack.js.org/loaders/css-loader/"],
+        ["sass-loader", "https://github.com/webpack-contrib/sass-loader"],
+        ["postcss-loader", "https://webpack.js.org/loaders/postcss-loader/"],
+        ["style-loader", "https://webpack.js.org/loaders/style-loader/"],
+        ["file-loader", "https://webpack.js.org/loaders/file-loader/"],
+        ["url-loader", "https://webpack.js.org/loaders/url-loader/"],
+        ["ts-loader", "https://github.com/TypeStrong/ts-loader"],
+        ["ts-node", "https://typestrong.org/ts-node/"],
+        ["Express", "https://expressjs.com/"],
+        ["SheetJS", "https://sheetjs.com/"],
+        ["TypeScript", "https://www.typescriptlang.org/"],
+        [
+          "Google APIs Node.js Client",
+          "https://github.com/googleapis/google-api-nodejs-client",
+        ],
+        ["Babel", "https://babeljs.io/"],
+        ["axios", "https://axios-http.com/"],
+        ["js-combinatorics", "https://github.com/dankogai/js-combinatorics"],
+        ["Web Font Loader", "https://github.com/typekit/webfontloader"],
+        ["WebGazer", "https://webgazer.cs.brown.edu/"],
+        ["Autoprefixer", "https://github.com/postcss/autoprefixer"],
+        [
+          "CssMinimizerWebpackPlugin",
+          "https://webpack.js.org/plugins/css-minimizer-webpack-plugin/",
+        ],
+        ["cssnano", "https://cssnano.co/"],
+        [
+          "EslintWebpackPlugin",
+          "https://webpack.js.org/plugins/eslint-webpack-plugin/",
+        ],
+        ["Sass", "https://sass-lang.com/"],
+        [
+          "svg-inline-loader",
+          "https://github.com/webpack-contrib/svg-inline-loader",
+        ],
+        [
+          "TerserWebpackPlugin",
+          "https://webpack.js.org/plugins/terser-webpack-plugin/",
+        ],
+        ["webpack-modules", "https://github.com/lukeed/webpack-modules"],
+        ["Tone.js", "https://github.com/Tonejs/Tone.js"],
+        ["TinyColor2", "https://github.com/bgrins/TinyColor"],
+        ["SweetAlert2", "https://sweetalert2.github.io/"],
+        [
+          "react-fast-compare",
+          "https://github.com/FormidableLabs/react-fast-compare",
+        ],
+        ["platform.js", "https://github.com/bestiejs/platform.js"],
+        [
+          "device-detector-js",
+          "https://github.com/etienne-martin/device-detector-js",
+        ],
+        ["Animate.css", "https://animate.style/"],
+        ["PsychoJS", "https://psychopy.github.io/psychojs/index.html"],
+      ];
+
+      packages.sort((a, b) => a[0].localeCompare(b[0]));
+
+      const packagesList = document.querySelector("#list-for-packages");
+      for (const [title, link, type, extraDescription] of packages) {
+        const li = document.createElement("li");
+        li.classList.add(type ? type : "package");
+        li.innerHTML = `<span class="title">${title}</span> ${
+          extraDescription ? extraDescription : ""
+        }<a href="${link}" target="_blank" rel="noopener noreferrer">Link</a>`;
+        packagesList.appendChild(li);
+      }
+    </script>
   </body>
 </html>
