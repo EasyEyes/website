@@ -74,6 +74,7 @@
     <style>
       .citations {
         margin-top: 5rem;
+        margin-bottom: 3rem;
       }
 
       .citations h1 {
@@ -87,6 +88,41 @@
 
       .citations .note * {
         color: #333;
+      }
+
+      .package-list * {
+        font-size: 1.2rem;
+      }
+
+      .package-list h2 {
+        font-weight: 700;
+      }
+
+      .package-list li {
+        list-style: none;
+        text-indent: -1rem;
+      }
+
+      .package-list ul li::before {
+        margin-right: 1rem !important;
+      }
+
+      .package-list ul .package::before {
+        content: "📦";
+      }
+
+      .package-list ul .sound::before {
+        content: "🔊";
+      }
+
+      .package-list .title {
+        font-weight: 600;
+      }
+
+      .package-list ul li a {
+        float: right;
+        text-decoration: none;
+        color: #666;
       }
     </style>
   </head>
@@ -176,6 +212,57 @@
             keeping prediction.
           </p>
         </div>
+      </div>
+
+      <div class="package-list">
+        <h2>
+          We want to thank all open-source packages and resources we use for
+          this project ❤️
+        </h2>
+        <ul>
+          <li class="package">
+            <span class="title">ESLint</span>
+            <a
+              href="https://eslint.org/"
+              target="_blank"
+              rel="noopener noreferrer"
+              >Link</a
+            >
+          </li>
+
+          <li class="package">
+            <span class="title">husky</span>
+            <a
+              href="https://github.com/typicode/husky"
+              target="_blank"
+              rel="noopener noreferrer"
+              >Link</a
+            >
+          </li>
+
+          <li class="package">
+            <span class="title">lint-staged</span>
+            <a
+              href="https://github.com/okonet/lint-staged"
+              target="_blank"
+              rel="noopener noreferrer"
+              >Link</a
+            >
+          </li>
+
+          <li class="sound">
+            <span class="title">Sound Jay</span> (page flip sound for Threshold
+            reading task)
+            <a
+              href="https://www.soundjay.com/page-flip-sounds-1.html"
+              target="_blank"
+              rel="noopener noreferrer"
+              >Link</a
+            >
+          </li>
+        </ul>
+
+        <p>(the full list to be updated soon...)</p>
       </div>
     </main>
 
