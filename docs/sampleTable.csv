@@ -20,8 +20,8 @@ targetAlphabet,DHKNORSVZ,DHKNORSVZ,acenorsuvxz,acenorsuvxz
 targetDurationSec,0.15,0.15,0.15,0.15
 targetEccentricityXDeg,10,-10,10,-10
 targetEccentricityYDeg,0,0,0,0
-targetFont,Courier New,Courier New,Verdana,Verdana
-targetFontStyle,,,,
+font,Courier New,Courier New,Verdana,Verdana
+fontStyle,,,,
 targetKind,letter,letter,letter,letter
 targetMinimumPix,8,8,8,8
 targetTask,identify,identify,identify,identify
