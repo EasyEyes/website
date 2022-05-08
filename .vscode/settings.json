@@ -1,3 +1,7 @@
 {
-  "liveServer.settings.root": "/docs"
+  "liveServer.settings.root": "/docs",
+  "liveServer.settings.ignoreFiles": [
+    ".vscode/**",
+    "**/*.scss",
+  ]
 }
