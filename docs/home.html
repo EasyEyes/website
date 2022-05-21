@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0"
+    />
+    <meta
+      name="description"
+      content="The open-source EasyEyes web app is meant to help anyone
+      test vision online. EasyEyes measures screen size once and uses the
+      webcam to track head and gaze continuously. It also allows use of a
+      smartphone to emulate a wireless keypad. Currently, we have a working
+      prototype with limited documentation. We are using it with PsychoPy.
+      You are welcome to use it with any online testing software."
+    />
+    <meta
+      name="keywords"
+      content="measure, calibration, psychology, psychophysics"
+    />
+
+    <!-- Global site tag (gtag.js) - Google Analytics -->
+    <script
+      async
+      src="https://www.googletagmanager.com/gtag/js?id=G-B8LSH945MT"
+    ></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag() {
+        dataLayer.push(arguments);
+      }
+      gtag("js", new Date());
+
+      gtag("config", "G-B8LSH945MT");
+    </script>
+
+    <!-- External -->
+
+    <script
+      src="https://code.jquery.com/jquery-3.6.0.slim.min.js"
+      integrity="sha256-u7e5khyithlIdTpu22PHhENmPcRdFiHRjhAuHcs05RI="
+      crossorigin="anonymous"
+    ></script>
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css"
+      integrity="sha384-EVSTQN3/azprG1Anm3QDgpJLIm9Nao0Yz1ztcQTwFspd3yD65VohhpuuCOmLASjC"
+      crossorigin="anonymous"
+    />
+    <script
+      src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/js/bootstrap.min.js"
+      integrity="sha384-cVKIPhGWiC2Al4u+LWgxfKTRIcfu0JTxR+EQDz/bgldoEyl4H0zUF0QKbrJ0EcQF"
+      crossorigin="anonymous"
+    ></script>
+
+    <!-- Internal -->
+
+    <link rel="stylesheet" href="uni.css" />
+
+    <meta
+      name="author"
+      content="Denis Pelli, Peiling Jiang, Augustin Burchell"
+    />
+    <link rel="apple-touch-icon" href="media/apple-touch-icon-default.png" />
+    <link
+      rel="shortcut icon"
+      href="media/favicon-default.ico"
+      type="image/x-icon"
+    />
+    <title>EasyEyes</title>
+
+    <style>
+      #main-description {
+        margin: 5rem 0 2rem;
+      }
+
+      h1 {
+        margin-bottom: 2rem;
+      }
+
+      .description {
+        font-size: 1.5rem;
+        line-height: 170%;
+        color: #666;
+      }
+
+      /* .citations p {
+        padding-left: 1.5rem;
+        text-indent: -1.5rem;
+      } */
+    </style>
+  </head>
+
+  <body>
+    <nav class="navbar navbar-expand-md navbar-light bg-white">
+      <a class="navbar-brand" href="."
+        ><img
+          class="easyeyes-logo"
+          src="media/easyeyes-default.svg"
+          alt="EasyEyes"
+          width="80px"
+          height="80px"
+      /></a>
+      <button
+        class="navbar-toggler"
+        type="button"
+        data-bs-toggle="collapse"
+        data-bs-target="#navbarNav"
+        aria-controls="navbarNav"
+        aria-expanded="false"
+        aria-label="Toggle navigation"
+      >
+        <span class="navbar-toggler-icon"></span>
+      </button>
+      <div class="collapse navbar-collapse" id="navbarNav">
+        <ul class="navbar-nav">
+          <li class="nav-item active">
+            <a class="nav-link active" href=".">Home</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="threshold/">Threshold</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="remote-calibrator/">Calibrator</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="virtual-keypad/">Keypad</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="acknowledgements.html"
+              >Acknowledgements</a
+            >
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="privacy.html">Privacy</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="references.html">References</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="https://github.com/EasyEyes">GitHub</a>
+          </li>
+        </ul>
+      </div>
+    </nav>
+
+    <main>
+      <div id="main-description">
+        <h1>EasyEyes <span class="headline-next">for Online Testing</span></h1>
+        <p class="description">
+          Welcome! The open-source EasyEyes web app is meant to help anyone test
+          vision online. EasyEyes measures screen size, and, with consent, uses
+          the webcam of the participant's computer to track the participant's
+          head and gaze positions. EasyEyes also enables use of any smartphone
+          to emulate a wireless keypad, to allow testing at long viewing
+          distances. We are using it with PsychoPy. You are welcome to use it
+          with any online testing software.
+        </p>
+        <p class="description">If you use it, please cite us.</p>
+        <p>
+          Jiang, P., Burchell, A., Pelli, D. G. (2021). EasyEyes aids online
+          testing by emulating a wireless keyboard and tracking viewing
+          distance. The 43rd European Conference on Visual Perception, online.
+          August 22-27, 2021. <em>Perception</em>.
+        </p>
+        <p class="description">Enjoy!</p>
+        <p class="description">The EasyEyes Team</p>
+      </div>
+
+      <div id="author">
+        <p>
+          <b>Denis Pelli</b><br />Professor of Psychology & Neural Science, New
+          York University<br />denis.pelli AT nyu DOT edu
+        </p>
+        <p>
+          <b>Peiling Jiang</b><br />Research Assistant, New York University<br />goodjpl
+          AT nyu DOT edu
+        </p>
+        <p>
+          <b>Augustin Burchell</b><br />
+          Research Assistant, New York University<br />
+          augustin DOT burchell AT gmail DOT com
+        </p>
+      </div>
+    </main>
+
+    <footer>
+      <p>
+        Copyright © 2022 New York University<br />Created by Denis Pelli and the
+        EasyEyes team
+      </p>
+    </footer>
+  </body>
+</html>
