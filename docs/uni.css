@@ -44,6 +44,31 @@ p {
   margin-left: 1rem;
 }
 
+.dropdown-menu {
+  padding: 0;
+  border: none !important;
+  overflow: hidden;
+  border-radius: 7px;
+  box-shadow: rgba(0, 0, 0, 0.1) 0px 4px 12px;
+}
+
+.dropdown-item {
+  padding: 0.375rem 1.5rem;
+}
+
+.dropdown-item.active {
+  background: #999;
+}
+
+.dropdown-item:not(.active) {
+  color: #666;
+}
+
+.dropdown-item:active {
+  color: #fff;
+  background: #999;
+}
+
 main {
   margin: 0 auto;
   padding-bottom: 5rem;

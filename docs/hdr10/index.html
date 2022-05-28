@@ -43,60 +43,46 @@
       integrity="sha256-u7e5khyithlIdTpu22PHhENmPcRdFiHRjhAuHcs05RI="
       crossorigin="anonymous"
     ></script>
+    <script
+      src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/js/bootstrap.min.js"
+      integrity="sha384-cVKIPhGWiC2Al4u+LWgxfKTRIcfu0JTxR+EQDz/bgldoEyl4H0zUF0QKbrJ0EcQF"
+      crossorigin="anonymous"
+    ></script>
     <link
       rel="stylesheet"
       href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css"
       integrity="sha384-EVSTQN3/azprG1Anm3QDgpJLIm9Nao0Yz1ztcQTwFspd3yD65VohhpuuCOmLASjC"
       crossorigin="anonymous"
     />
-    <script
-      src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/js/bootstrap.min.js"
-      integrity="sha384-cVKIPhGWiC2Al4u+LWgxfKTRIcfu0JTxR+EQDz/bgldoEyl4H0zUF0QKbrJ0EcQF"
-      crossorigin="anonymous"
-    ></script>
-    <script src="https://cdn.jsdelivr.net/npm/showdown@latest/dist/showdown.min.js"></script>
 
     <!-- Internal -->
 
-    <link rel="stylesheet" href="uni.css" />
+    <link rel="stylesheet" href="../uni.css" />
 
     <meta
       name="author"
       content="Denis Pelli, Peiling Jiang, Augustin Burchell"
     />
-    <link rel="apple-touch-icon" href="media/apple-touch-icon-default.png" />
+    <link rel="apple-touch-icon" href="../media/apple-touch-icon-default.png" />
     <link
       rel="shortcut icon"
-      href="media/favicon-default.ico"
+      href="../media/favicon-default.ico"
       type="image/x-icon"
     />
-    <title>EasyEyes | Privacy</title>
+    <title>EasyEyes | HDR10</title>
 
     <style>
-      .citations {
-        margin-top: 5rem;
+      #main-description {
+        margin: 5rem 0 2rem;
       }
 
-      .citations h1 {
+      h1 {
         margin-bottom: 2rem;
       }
 
-      .citations h2 {
-        font-size: 1.6rem;
-        margin-top: 2rem;
-      }
-
-      .citations p *,
-      .citations ul * {
-        font-size: 1.2rem;
-        color: #333;
-      }
-
-      .citations ul {
-        list-style-type: circle;
-      }
-
-      .citations a {
+      .description {
+        font-size: 1.5rem;
+        line-height: 170%;
         color: #666;
       }
     </style>
@@ -107,7 +93,7 @@
       <a class="navbar-brand" href="."
         ><img
           class="easyeyes-logo"
-          src="media/easyeyes-default.svg"
+          src="../media/easyeyes-default.svg"
           alt="EasyEyes"
           width="80px"
           height="80px"
@@ -126,19 +112,19 @@
       <div class="collapse navbar-collapse" id="navbarNav">
         <ul class="navbar-nav">
           <li class="nav-item">
-            <a class="nav-link" href="home.html">Home</a>
+            <a class="nav-link" href="../home.html">Home</a>
           </li>
           <li class="nav-item">
-            <a class="nav-link" href="threshold/">Threshold</a>
+            <a class="nav-link" href="../threshold/">Threshold</a>
           </li>
           <li class="nav-item">
-            <a class="nav-link" href="remote-calibrator/">Calibrator</a>
+            <a class="nav-link" href="../remote-calibrator/">Calibrator</a>
           </li>
           <li class="nav-item">
-            <a class="nav-link" href="virtual-keypad/">Keypad</a>
+            <a class="nav-link" href="../virtual-keypad/">Keypad</a>
           </li>
-          <li class="nav-item">
-            <a class="nav-link" href="../hdr10/">HDR10</a>
+          <li class="nav-item active">
+            <a class="nav-link active" href=".">HDR10</a>
           </li>
 
           <li class="nav-item dropdown">
@@ -156,7 +142,7 @@
               <a class="dropdown-item" href="../acknowledgements.html"
                 >Acknowledgements</a
               >
-              <a class="dropdown-item active" href="../privacy.html">Privacy</a>
+              <a class="dropdown-item" href="../privacy.html">Privacy</a>
               <a class="dropdown-item" href="../references.html">References</a>
             </div>
           </li>
@@ -169,8 +155,36 @@
     </nav>
 
     <main>
-      <div id="citations" class="citations">
-        <h1>EasyEyes Privacy Policy</h1>
+      <div id="main-description">
+        <h1>
+          <span class="headline-next">Evaluating</span>
+          HDR10
+          <span class="headline-next">
+            as a way to present 10-bit spatiotemporal stimuli</span
+          >
+        </h1>
+        <p class="description">
+          We designed a special test pattern, explained below, to visually
+          assess the linearity of image display. We show it first as JPG and
+          16-bit PNG images, and then as a static HDR10 movie. In limited
+          testing, Safari uses color management to display both JPG and PNG
+          correctly. Chrome seems to do color management only on JPG, not PNG.
+          Both browsers show the HDR10 movie correctly, with no visible
+          artifact.
+        </p>
+        <!-- <p class="description">If you use it, please cite us.</p>
+        <p>
+          Jiang, P., Burchell, A., Pelli, D. G. (2021). EasyEyes aids online
+          testing by emulating a wireless keyboard and tracking viewing
+          distance. The 43rd European Conference on Visual Perception, online.
+          August 22-27, 2021. <em>Perception</em>.
+        </p>
+        <p class="description">Enjoy!</p>
+        <p class="description">The EasyEyes Team</p> -->
+      </div>
+
+      <div id="author">
+        <p><b>Rajat Raghuwanshi</b> and <b>Denis Pelli</b></p>
       </div>
     </main>
 
@@ -180,36 +194,5 @@
         and the EasyEyes team
       </p>
     </footer>
-
-    <script>
-      const converter = new showdown.Converter();
-      const text = `
-We respect the privacy of every user and visitor, including researchers, programmers, and participants. Our privacy policy applies to:
-- Our website, which can be visited through [EasyEyes.app](https://EasyEyes.app) and [EasyEyes.js.org](https://EasyEyes.js.org)
-- Our open-source packages and projects, available at [github.com/EasyEyes](https://github.com/EasyEyes)
-
-This policy is subject to change at any time without notice.
-
-## When you visit our website
-Our efforts to raise support for EasyEyes depend on demonstrating that our software is used, so we use Google Analytics to collect website usage data, including page hits, interactions, visiting time and duration, type of device, browser used, and demographics. We retain only aggregate data, stripped of any personally identifying details, to document usage and help us serve our users. Our website is served by GitHub Pages and Netlify, and we provide links to their privacy policies below.
-
-## When you add our package to your experiment
-We use NPM to publish our package and jsDelivr as the recommended CDN service. We provide links to their privacy policies below. Both of them may collect usage data, but the EasyEyes team can see only the anonymous monthly or weekly hit count.
-
-## When you use our package as a participant
-We do not collect any personally-identifiable data about participants. Some functions of EasyEyes Remote Calibrator request your permission to use your computer’s webcam during the experiment to track head and gaze position. The webcam images are immediately processed locally and reduced to non-personally-identifiable estimates of head and gaze position. Each image exists for only a fraction of a second, is not stored, and never leaves your computer.
-
-## Statements
-Here are the Privacy Statements of the services that we use:
-- [GitHub Pages](https://docs.github.com/en/github/site-policy/github-privacy-statement)
-- [Netlify](https://www.netlify.com/privacy/)
-- [Google Analytics](https://policies.google.com/privacy)
-- [NPM](https://docs.npmjs.com/policies/privacy)
-- [jsDelivr](https://www.jsdelivr.com/terms/privacy-policy-jsdelivr-net)
-
-Updated August 23, 2021.`;
-      document.querySelector("#citations").innerHTML +=
-        converter.makeHtml(text);
-    </script>
   </body>
 </html>
