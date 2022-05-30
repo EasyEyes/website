@@ -59,10 +59,7 @@
 
     <link rel="stylesheet" href="../uni.css" />
 
-    <meta
-      name="author"
-      content="Denis Pelli, Peiling Jiang, Augustin Burchell"
-    />
+    <meta name="author" content="Denis Pelli, Rajat Raghuwanshi" />
     <link rel="apple-touch-icon" href="../media/apple-touch-icon-default.png" />
     <link
       rel="shortcut icon"
@@ -156,13 +153,27 @@
 
     <main>
       <div id="main-description">
+        <!-- <h1>
+        <span class="headline-next">Click to examine several visual test patterns designed to
+          assess</span>
+        HDR
+      </h1> -->
         <h1>
           <span class="headline-next"
-            >Click to examine several visual test patterns designed to
-            assess</span
-          >
-          HDR
+            >Visual test patterns designed to assess </span
+          >HDR
         </h1>
+        <p class="description">
+          HDR (<a
+            href="https://en.wikipedia.org/wiki/High-dynamic-range_video"
+            target="_blank"
+            >High Dynamic Range</a
+          >) is a standard format for digital movies that is widely supported by
+          browsers, tvs, and content producers, like Netflix. EasyEyes will use
+          HDR to present stimuli. With a compatible browser and display, HDR
+          offers 10-bit imaging, good timing, and color management (including
+          gamma correction). <br />Click to explore some tests and demos.
+        </p>
         <!-- <p class="description">
         We designed various special test patterns, to visually
         assess the linearity of image display. We show it first as JPG and
@@ -173,15 +184,23 @@
         artifact.
       </p> -->
         <div class="row description">
-          <div class="col-sm-6 col-md-3 offset-md-3">
+          <div class="col-sm-6 col-md-4">
+            <a
+              href="p_pnglinearity.html"
+              style="width: 100%"
+              class="btn btn-secondary"
+              >PNG Linearity Test
+            </a>
+          </div>
+          <div class="col-sm-6 col-md-4">
             <a
               href="p_linearity.html"
               style="width: 100%"
               class="btn btn-secondary"
-              >Linearity Test
+              >HDR Linearity Test
             </a>
           </div>
-          <div class="col-sm-6 col-md-3">
+          <div class="col-sm-6 col-md-4">
             <a
               href="p_timing.html"
               style="width: 100%"
@@ -192,7 +211,7 @@
         </div>
         <br />
         <div class="row description">
-          <div class="col-sm-6 col-md-3 offset-lg-2">
+          <div class="col-sm-6 col-md-3">
             <a
               href="p_csf.html"
               style="width: 100%"
@@ -200,7 +219,7 @@
               >CSF</a
             >
           </div>
-          <div class="col-sm-6 col-md-3 col-lg-2">
+          <div class="col-sm-6 col-md-3">
             <a
               href="p_drifting.html"
               style="width: 100%"
@@ -208,7 +227,7 @@
               >DriftingCSF</a
             >
           </div>
-          <div class="col-sm-6 col-md-3 col-lg-2">
+          <div class="col-sm-6 col-md-3">
             <a
               href="p_flickering.html"
               style="width: 100%"
@@ -216,7 +235,7 @@
               >FlickeringCSF</a
             >
           </div>
-          <div class="col-sm-6 col-md-3 col-lg-2">
+          <div class="col-sm-6 col-md-3">
             <a
               href="p_spatiotemporal.html"
               style="width: 100%"
@@ -225,26 +244,37 @@
             >
           </div>
         </div>
-        <!-- <p class="description">If you use it, please cite us.</p>
-        <p>
-          Jiang, P., Burchell, A., Pelli, D. G. (2021). EasyEyes aids online
-          testing by emulating a wireless keyboard and tracking viewing
-          distance. The 43rd European Conference on Visual Perception, online.
-          August 22-27, 2021. <em>Perception</em>.
-        </p>
-        <p class="description">Enjoy!</p>
-        <p class="description">The EasyEyes Team</p> -->
+        <br />
+        <div class="description">
+          Each demo was produced by computing 16-bit PNG images in MATLAB and
+          then using <a href="https://ffmpeg.org/" target="_blank">FFmpeg</a> to
+          convert the PNG images into an HDR movie. The web assembly version of
+          FFmpeg (<a href="https://ffmpegwasm.netlify.app/" target="_blank"
+            >FFmpeg.wasm</a
+          >) runs in any browser .
+        </div>
       </div>
-      <!-- 
-    <div id="author">
-      <p><b>Rajat Raghuwanshi</b> and <b>Denis Pelli</b></p>
-    </div> -->
+
+      <div id="author">
+        <p>
+          <b>Denis Pelli</b><br />
+          Professor of Psychology &amp; Neural Science, New York University
+          <br />
+          denis.pelli AT nyu DOT edu
+          <br />
+          <br />
+          <b>Rajat Raghuwanshi</b><br />
+          Research Assistant, New York University
+          <br />
+          rajat.raghuwanshi AT nyu DOT edu
+        </p>
+      </div>
     </main>
 
     <footer>
       <p>
-        Copyright © 2020 - 2022 New York University<br />Created by Denis Pelli
-        and the EasyEyes team
+        Copyright © 2022 New York University<br />Created by Denis Pelli and the
+        EasyEyes team
       </p>
     </footer>
   </body>
