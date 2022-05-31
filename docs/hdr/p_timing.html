@@ -3,40 +3,153 @@
   <head>
     <meta charset="UTF-8" />
     <meta http-equiv="X-UA-Compatible" content="IE=edge" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>EasyEyes Timing Test</title>
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0"
+    />
+    <meta
+      name="description"
+      content="The open-source EasyEyes web app is meant to help anyone
+      test vision online. EasyEyes measures screen size once and uses the
+      webcam to track head and gaze continuously. It also allows use of a
+      smartphone to emulate a wireless keypad. Currently, we have a working
+      prototype with limited documentation. We are using it with PsychoPy.
+      You are welcome to use it with any online testing software."
+    />
+    <meta
+      name="keywords"
+      content="measure, calibration, psychology, psychophysics"
+    />
+
+    <!-- Global site tag (gtag.js) - Google Analytics -->
+    <script
+      async
+      src="https://www.googletagmanager.com/gtag/js?id=G-B8LSH945MT"
+    ></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag() {
+        dataLayer.push(arguments);
+      }
+      gtag("js", new Date());
+
+      gtag("config", "G-B8LSH945MT");
+    </script>
+
+    <!-- External -->
+
+    <script
+      src="https://code.jquery.com/jquery-3.6.0.slim.min.js"
+      integrity="sha256-u7e5khyithlIdTpu22PHhENmPcRdFiHRjhAuHcs05RI="
+      crossorigin="anonymous"
+    ></script>
+    <script
+      src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/js/bootstrap.min.js"
+      integrity="sha384-cVKIPhGWiC2Al4u+LWgxfKTRIcfu0JTxR+EQDz/bgldoEyl4H0zUF0QKbrJ0EcQF"
+      crossorigin="anonymous"
+    ></script>
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css"
+      integrity="sha384-EVSTQN3/azprG1Anm3QDgpJLIm9Nao0Yz1ztcQTwFspd3yD65VohhpuuCOmLASjC"
+      crossorigin="anonymous"
+    />
+
+    <!-- Internal -->
+
+    <link rel="stylesheet" href="../uni.css" />
+
+    <meta name="author" content="Denis Pelli, Rajat Raghuwanshi" />
+    <link rel="apple-touch-icon" href="../media/apple-touch-icon-default.png" />
+    <link
+      rel="shortcut icon"
+      href="../media/favicon-default.ico"
+      type="image/x-icon"
+    />
+    <title>EasyEyes | HDR</title>
+
+    <style>
+      #main-description {
+        margin: 3rem 0 2rem;
+      }
+
+      h1 {
+        margin-bottom: 2rem;
+      }
+
+      .description {
+        font-size: 1.5rem;
+        line-height: 170%;
+        color: #666;
+      }
+    </style>
     <link rel="stylesheet" href="style.css" />
   </head>
 
   <body>
-    <div>
-      <video id="timing-video" controls autoplay loop playsinline></video>
-    </div>
-    <h3><span id="message1"></span></h3>
-    <p><span id="message3" hidden></span></p>
-    <script src="https://cdn.jsdelivr.net/npm/remote-calibrator@latest"></script>
-    <script>
-      const message1 = document.getElementById("message3");
-      const timing_video = document.getElementById("timing-video");
+    <main>
+      <div id="main-description">
+        <h1>
+          <span class="headline-next">TIMING TEST OF</span> HDR
+          <span class="headline-next">MOVIE</span>
+        </h1>
+        <video id="timing-video" controls autoplay loop playsinline></video>
+        <h3><span id="message1"></span></h3>
+        <div>
+          <p id="message0"></p>
+        </div>
+        <p style="font-size: large; font-weight: bold" id="message3"></p>
+        <h3 class="description">
+          TIMING TEST checks whether your browser's timing is frame-accurate.
+          The stimulus is a drifting black line. When you track it, any
+          deviation from steady motion produces a striking shudder. Using
+          full-screen mode, we get silky smooth motion on Chrome and Safari
+          browsers.
+        </h3>
+      </div>
+      <script src="https://cdn.jsdelivr.net/npm/remote-calibrator@latest"></script>
+      <script>
+        const message0 = document.getElementById("message0");
+        const message1 = document.getElementById("message1");
+        const message3 = document.getElementById("message3");
 
-      const isHVC1Supported = MediaSource.isTypeSupported(
-        'video/mp4; codecs="hvc1"'
-      );
-      const isAVC1Supported = MediaSource.isTypeSupported(
-        'video/mp4; codecs="avc1.6e0033"'
-      );
-      RemoteCalibrator.init({ id: "session_022" });
-      message3.innerHTML =
-        " Browser detected: " + RemoteCalibrator.browser.value;
-      if (isHVC1Supported == true) {
-        timing_video.src = "Timing/safari_timing.mp4";
-      } else if (isAVC1Supported == true) {
-        timing_video.src = "Timing/chrome_timing.mp4";
-      } else {
-        message1.innerHTML =
-          "Both hvc1 codec and avc1.6e0033 codec are not supported by your browser. Please use CHROME or SAFARI ";
-      }
-      timing_video.removeAttribute("controls");
-    </script>
+        const timing_video = document.getElementById("timing-video");
+
+        const isHVC1Supported = MediaSource.isTypeSupported(
+          'video/mp4; codecs="hvc1"'
+        );
+        const isAVC1Supported = MediaSource.isTypeSupported(
+          'video/mp4; codecs="avc1.6e0033"'
+        );
+        RemoteCalibrator.init({ id: "session_022" });
+        message3.innerHTML =
+          " Browser detected: " + RemoteCalibrator.browser.value;
+        if (isHVC1Supported == true) {
+          message0.innerHTML =
+            "MediaSource.isTypeSupported says that the browser supports the HVC1 codec. Using the following configuration: hvc1 compiled using <u>libx265</u> codec with <u>yuv444p10le</u> pixel format, colorprim=bt2020, transfer=linear, colormatrix=bt2020nc";
+          message1.innerHTML =
+            "Movie generated by <a target='_blank' href='https://github.com/ffmpegwasm/ffmpeg.wasm'>ffmpeg.wasm</a> from the PNG image using H.265 codec ";
+
+          timing_video.src = "Timing/safari_timing.mp4";
+        } else if (isAVC1Supported == true) {
+          message0.innerHTML =
+            "MediaSource.isTypeSupported says that HVC1 codec is not supported by your browser, so using AVC1 with the following configuration : avc1 compiled using <u>libx264</u> codec with <u>yuv444p10le</u> pixel format, colorprim=bt2020, transfer=linear, colormatrix=bt2020nc";
+          message1.innerHTML =
+            "Movie generated by <a target='_blank' href='https://github.com/ffmpegwasm/ffmpeg.wasm'>ffmpeg.wasm</a> from the PNG image using H.264 codec ";
+
+          timing_video.src = "Timing/chrome_timing.mp4";
+        } else {
+          message1.innerHTML =
+            "Both hvc1 codec and avc1.6e0033 codec are not supported by your browser. Please use CHROME or SAFARI ";
+        }
+        timing_video.removeAttribute("controls");
+      </script>
+    </main>
+    <footer>
+      <p>
+        Copyright © 2022 New York University<br />Created by Denis Pelli and the
+        EasyEyes team
+      </p>
+    </footer>
   </body>
 </html>

@@ -18,6 +18,7 @@
     <script>
       const message1 = document.getElementById("message3");
       const flickering_video = document.getElementById("flickering-video");
+      flickering_video.removeAttribute("controls");
 
       const isHVC1Supported = MediaSource.isTypeSupported(
         'video/mp4; codecs="hvc1"'
@@ -36,7 +37,6 @@
         message1.innerHTML =
           "Both hvc1 codec and avc1.6e0033 codec are not supported by your browser. Please use CHROME or SAFARI ";
       }
-      flickering_video.removeAttribute("controls");
     </script>
   </body>
 </html>
