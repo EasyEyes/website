@@ -5,6 +5,7 @@
     <meta http-equiv="X-UA-Compatible" content="IE=edge" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>EasyEyes Spatiotemporal</title>
+    <link rel="stylesheet" href="style.css" />
   </head>
 
   <body>
@@ -15,7 +16,6 @@
         autoplay
         loop
         playsinline
-        style="pointer-events: none"
       ></video>
     </div>
     <h3><span id="message1"></span></h3>
@@ -46,6 +46,7 @@
         message1.innerHTML =
           "Both hvc1 codec and avc1.6e0033 codec are not supported by your browser. Please use CHROME or SAFARI ";
       }
+      spatiotemporal_video.removeAttribute("controls");
     </script>
   </body>
 </html>

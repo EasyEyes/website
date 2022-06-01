@@ -59,10 +59,7 @@
 
     <link rel="stylesheet" href="../uni.css" />
 
-    <meta
-      name="author"
-      content="Denis Pelli, Peiling Jiang, Augustin Burchell"
-    />
+    <meta name="author" content="Denis Pelli, Rajat Raghuwanshi" />
     <link rel="apple-touch-icon" href="../media/apple-touch-icon-default.png" />
     <link
       rel="shortcut icon"
@@ -93,54 +90,51 @@
       <div id="main-description">
         <h1>
           <span class="headline-next">LINEARITY TEST OF</span> HDR
-          <span class="headline-next">MOVIE FOR EASYEYES.APP</span>
+          <span class="headline-next">MOVIE</span>
         </h1>
       </div>
-      <!-- <p class="description">Evaluating HDR as a way to present 10-bit spatiotemporal stimuli.</p> -->
-      <h3 class="description">
-        LINEARITY TEST checks whether your browser is doing accurate color
-        management. Color management takes into account the imaging properties
-        (icc color profile) of your display. The linearity test is shown as JPG
-        and 16-bit PNG images, and as a static HDR movie. This test uses spatial
-        dither to alternate light and dark pixels. If displayed by your browser
-        with accurate color management, then the gray area will appear uniform.
-        Otherwise the gray area will have 8 light alternating with 8 dark
-        strips. The same applies to the other three areas: red, green, and blue.
-        In our limited testing, Safari uses color management to display both JPG
-        and PNG correctly, and Chrome too does color management on JPG, but not
-        PNG. Both browsers show the HDR movie correctly.
-      </h3>
-      <p style="font-size: large; font-weight: bold" id="message3"></p>
-      <hr />
-      <h3>
-        A 16 bit PNG image with linear gamma profile
-        <a
-          href="https://github.com/ellelstone/elles_icc_profiles/blob/master/profiles/Rec2020-elle-V4-g10.icc"
-          >Rec2020-elle-V4-g10.icc</a
-        >
-      </h3>
-      <p>
-        The PNG image has four colored vertical bands: Red Green Blue Gray. Each
-        colored band consists of four repetitions of a pair of stripes. That
-        pair consists of a solid and a dithered stripe. All the solid stripe
-        pixels are set to 0.5 of the relevant RGB components. The matching
-        dithered stripe alternates pixels that are brighter or darker than 0.5,
-        so that if they are optically averaged the mean will match that of the
-        solid stripe. The dither contrast is 100% at the top (e.g. for gray we
-        alternate black and white) and fades linearly to 0% at the bottom
-        (identical to the solid stripe). The linear gamma of the image, with
-        correct color management of the display will result in the dithered and
-        solid stripes being identical after optical blur. But the dither should
-        be visible through a microscope.
-      </p>
-      <img id="image" src="Linearity/image.png" />
-      <hr />
+      <video id="output-video" controls autoplay loop></video>
       <h3><span id="message1"></span></h3>
       <div>
         <p id="message0"></p>
       </div>
+      <p style="font-size: large; font-weight: bold" id="message3"></p>
+      <h3 class="description">
+        LINEARITY TEST checks whether your browser is doing accurate color
+        management. Color management takes into account the imaging properties
+        (icc color profile) of your display. The linearity test is shown as a
+        static HDR movie. This test uses spatial dither to alternate light and
+        dark pixels. If displayed by your browser with accurate color
+        management, then the gray area will appear uniform. Otherwise the gray
+        area will have 4 light alternating with 4 dark stripes. The same applies
+        to the other three areas: red, green, and blue. In our limited testing,
+        both Safari and Chrome browsers show an HDR movie correctly, provided
+        it's made with a supported codec.
+      </h3>
 
-      <video id="output-video" controls autoplay loop></video>
+      <!-- <hr />
+    <h3>
+      A 16 bit PNG image with linear gamma profile
+      <a
+        href="https://github.com/ellelstone/elles_icc_profiles/blob/master/profiles/Rec2020-elle-V4-g10.icc">Rec2020-elle-V4-g10.icc</a>
+    </h3>
+    <p>
+      The PNG image has four colored vertical bands: Red Green Blue Gray. Each
+      colored band consists of four repetitions of a pair of stripes. That
+      pair consists of a solid and a dithered stripe. All the solid stripe
+      pixels are set to 0.5 of the relevant RGB components. The matching
+      dithered stripe alternates pixels that are brighter or darker than 0.5,
+      so that if they are optically averaged the mean will match that of the
+      solid stripe. The dither contrast is 100% at the top (e.g. for gray we
+      alternate black and white) and fades linearly to 0% at the bottom
+      (identical to the solid stripe). The linear gamma of the image, with
+      correct color management of the display will result in the dithered and
+      solid stripes being identical after optical blur. But the dither should
+      be visible through a microscope.
+    </p>
+    <img id="image" src="Linearity/image.png" />
+    <hr /> -->
+
       <script src="https://cdn.jsdelivr.net/npm/remote-calibrator@latest"></script>
       <script>
         const message0 = document.getElementById("message0");
@@ -160,16 +154,16 @@
         if (isHVC1Supported == true) {
           //safari video
           message0.innerHTML =
-            "MediaSource.isTypeSupported says that the browser supports the HVC1 codec. Using the following configuration: <br>hvc1 compiled using <u>libx265</u> codec with <u>yuv444p10le</u> pixel format, colorprim=bt2020, transfer=linear, colormatrix=bt2020nc";
+            "MediaSource.isTypeSupported says that the browser supports the HVC1 codec. Using the following configuration: hvc1 compiled using <u>libx265</u> codec with <u>yuv444p10le</u> pixel format, colorprim=bt2020, transfer=linear, colormatrix=bt2020nc";
           message1.innerHTML =
-            "The Video generated by <a target='_blank' href='https://github.com/ffmpegwasm/ffmpeg.wasm'>ffmpeg.wasm</a> from the PNG image using H.265 Codec ";
+            "Movie generated by <a target='_blank' href='https://github.com/ffmpegwasm/ffmpeg.wasm'>ffmpeg.wasm</a> from the PNG image using H.265 codec ";
           video.src = "Linearity/safari_video.mp4";
         } else if (isAVC1Supported == true) {
           //chrome video
           message0.innerHTML =
-            "MediaSource.isTypeSupported says that HVC1 codecs is not supported by your browser, so using AVC1 with the following configuration : <br>avc1 compiled using <u>libx264</u> codec with <u>yuv444p10le</u> pixel format, colorprim=bt2020, transfer=linear, colormatrix=bt2020nc";
+            "MediaSource.isTypeSupported says that HVC1 codec is not supported by your browser, so using AVC1 with the following configuration : avc1 compiled using <u>libx264</u> codec with <u>yuv444p10le</u> pixel format, colorprim=bt2020, transfer=linear, colormatrix=bt2020nc";
           message1.innerHTML =
-            "The Video generated by <a target='_blank' href='https://github.com/ffmpegwasm/ffmpeg.wasm'>ffmpeg.wasm</a> from the PNG image using H.264 Codec ";
+            "Movie generated by <a target='_blank' href='https://github.com/ffmpegwasm/ffmpeg.wasm'>ffmpeg.wasm</a> from the PNG image using H.264 codec ";
           video.src = "Linearity/chrome_video.mp4";
         } else {
           message1.innerHTML =
@@ -179,8 +173,8 @@
     </main>
     <footer>
       <p>
-        Copyright © 2020 - 2022 New York University<br />Created by Denis Pelli
-        and the EasyEyes team
+        Copyright © 2022 New York University<br />Created by Denis Pelli and the
+        EasyEyes team
       </p>
     </footer>
   </body>
