@@ -186,15 +186,21 @@
         <div class="row description">
           <div class="col-sm-6 col-md-4">
             <a
-              href="p_pnglinearity.html"
+              onclick="linear_png_open()"
               style="width: 100%"
               class="btn btn-secondary"
               >PNG Linearity Test
             </a>
           </div>
           <div class="col-sm-6 col-md-4">
-            <a
+            <!-- <a
               href="p_linearity.html"
+              style="width: 100%"
+              class="btn btn-secondary"
+              >HDR Linearity Test
+            </a> -->
+            <a
+              onclick="linear_hdr_open()"
               style="width: 100%"
               class="btn btn-secondary"
               >HDR Linearity Test
@@ -202,7 +208,7 @@
           </div>
           <div class="col-sm-6 col-md-4">
             <a
-              href="p_timing.html"
+              onclick="timing_open()"
               style="width: 100%"
               class="btn btn-secondary"
               >Timing Test
@@ -213,7 +219,7 @@
         <div class="row description">
           <div class="col-sm-6 col-md-3">
             <a
-              href="p_csf.html"
+              onclick="csf_open()"
               style="width: 100%"
               class="btn btn-outline-secondary"
               >CSF</a
@@ -221,7 +227,7 @@
           </div>
           <div class="col-sm-6 col-md-3">
             <a
-              href="p_drifting.html"
+              onclick="drifting_open()"
               style="width: 100%"
               class="btn btn-outline-secondary"
               >DriftingCSF</a
@@ -229,7 +235,7 @@
           </div>
           <div class="col-sm-6 col-md-3">
             <a
-              href="p_flickering.html"
+              onclick="flickering_open()"
               style="width: 100%"
               class="btn btn-outline-secondary"
               >FlickeringCSF</a
@@ -237,7 +243,7 @@
           </div>
           <div class="col-sm-6 col-md-3">
             <a
-              href="p_spatiotemporal.html"
+              onclick="spatiotemporal_open()"
               style="width: 100%"
               class="btn btn-outline-secondary"
               >Spatiotemporal</a
@@ -299,5 +305,39 @@
         EasyEyes team
       </p>
     </footer>
+    <script>
+      function linear_hdr_open() {
+        let windowFeatures = "popup";
+        window.open("p_linearity.html", "Linearity Test HDR", windowFeatures);
+      }
+      function linear_png_open() {
+        let windowFeatures = "popup";
+        window.open(
+          "p_pnglinearity.html",
+          "Linearity Test PNG",
+          windowFeatures
+        );
+      }
+      function timing_open() {
+        let windowFeatures = "popup";
+        window.open("p_timing.html", "Timing Test HDR", windowFeatures);
+      }
+      function csf_open() {
+        let windowFeatures = "popup";
+        window.open("p_csf.html", "CSF", windowFeatures);
+      }
+      function drifting_open() {
+        let windowFeatures = "popup";
+        window.open("p_drifting.html", "drifting", windowFeatures);
+      }
+      function flickering_open() {
+        let windowFeatures = "popup";
+        window.open("p_flickering.html", "flickering", windowFeatures);
+      }
+      function spatiotemporal_open() {
+        let windowFeatures = "popup";
+        window.open("p_spatiotemporal.html", "spatiotemporal", windowFeatures);
+      }
+    </script>
   </body>
 </html>

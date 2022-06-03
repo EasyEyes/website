@@ -6,6 +6,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>EasyEyes CSF</title>
     <link rel="stylesheet" href="style.css" />
+    <script>
+      window.resizeTo(1310, 780);
+    </script>
   </head>
 
   <body>
@@ -34,7 +37,7 @@
         csf_video.src = "CSF-PNG/chrome_CSF.mp4";
       } else {
         message1.innerHTML =
-          "Both hvc1 codec and avc1.6e0033 codec are not supported by your browser. Please use CHROME or SAFARI ";
+          "Neither the hvc1 (H.265) nor avc1.6e0033 (H.264) codec is supported by your browser. Please use CHROME or SAFARI ";
       }
       csf_video.removeAttribute("controls");
     </script>
