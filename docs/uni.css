@@ -76,6 +76,15 @@ main {
   max-width: 960px;
 }
 
+pre {
+  font-size: 0.675rem;
+  line-height: 150%;
+  margin: 0;
+  padding: 0.25rem;
+  color: #999;
+  /* background: #fafafa; */
+}
+
 /* -------------------------------------------------------------------------- */
 
 #header {
