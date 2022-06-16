@@ -11,7 +11,7 @@ Submodule structure.
 ```
 [website] (this)
   docs
-    [threshold] (threshold-scientist, https://github.com/EasyEyes/threshold-scientist)
+    [experiment] (threshold-scientist, https://github.com/EasyEyes/threshold-scientist)
       [threshold] (https://github.com/EasyEyes/threshold)
         [psychojs] (forked from psychopy/psychojs, https://github.com/EasyEyes/psychojs)
 ```
@@ -55,14 +55,14 @@ npm run git "commit message" n
 ### Scientist Page
 
 ```shell
-cd docs/threshold
+cd docs/experiment
 npm run start
 ```
 
 ### Participant Page
 
 ```shell
-cd docs/threshold/threshold
+cd docs/experiment/threshold
 npm run build # Only needed once
 npm run examples # Needed every time changes made to the experiment tables
 npm run start -- --name=nameOfTheExperimentTable
