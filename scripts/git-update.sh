@@ -53,7 +53,7 @@ check() {
 
 update_threshold() {
   printf "${GREEN}\n>>> UPDATING THRESHOLD\n\n${DEFAULT}"
-  cd docs/threshold/threshold
+  cd docs/experiment/threshold
 
   check
 
@@ -66,7 +66,7 @@ update_threshold() {
 
 update_threshold_scientist() {
   printf "${GREEN}\n>>> UPDATING THRESHOLD SCIENTIST\n\n${DEFAULT}"
-  cd docs/threshold
+  cd docs/experiment
 
   check
 
