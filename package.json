@@ -38,5 +38,9 @@
   },
   "lint-staged": {
     "*.{js,json,md,html,css}": "prettier --write"
+  },
+  "dependencies": {
+    "@ffmpeg/core": "^0.10.0",
+    "@ffmpeg/ffmpeg": "^0.10.1"
   }
 }
