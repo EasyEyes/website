@@ -38,8 +38,5 @@
   },
   "lint-staged": {
     "*.{js,json,md,html,css}": "prettier --write"
-  },
-  "dependencies": {
-    "npm": "^8.15.0"
   }
 }
