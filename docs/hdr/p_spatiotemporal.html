@@ -8,6 +8,39 @@
     <script src="./ffmpeg.min.js"></script>
     <title>EasyEyes Spatiotemporal</title>
     <link rel="stylesheet" href="style.css" />
+    <style>
+      .loader {
+        border: 16px solid #f3f3f3;
+        border-radius: 50%;
+        border-top: 16px solid #3498db;
+        width: 120px;
+        height: 120px;
+        -webkit-animation: spin 2s linear infinite;
+        /* Safari */
+        animation: spin 2s linear infinite;
+      }
+
+      /* Safari */
+      @-webkit-keyframes spin {
+        0% {
+          -webkit-transform: rotate(0deg);
+        }
+
+        100% {
+          -webkit-transform: rotate(360deg);
+        }
+      }
+
+      @keyframes spin {
+        0% {
+          transform: rotate(0deg);
+        }
+
+        100% {
+          transform: rotate(360deg);
+        }
+      }
+    </style>
     <script>
       window.resizeTo(1310, 780);
     </script>
@@ -24,12 +57,15 @@
         muted
       ></video>
     </div>
-    <p id="loading">Loading...</p>
+    <p id="loading">Generating Video...</p>
+    <div id="loader" class="loader"></div>
     <p><span id="message1"></span></p>
     <p><span id="message3" hidden></span></p>
     <script src="https://cdn.jsdelivr.net/npm/remote-calibrator@latest"></script>
     <script>
       const load = document.getElementById("loading");
+      const loader = document.getElementById("loader");
+
       const message1 = document.getElementById("message1");
       const spatiotemporal_video = document.getElementById(
         "spatiotemporal-video"
@@ -151,6 +187,8 @@
         console.log(data.buffer);
         spatiotemporal_video.hidden = false;
         load.hidden = true;
+        loader.hidden = true;
+
         spatiotemporal_video.src = URL.createObjectURL(
           new Blob([data.buffer], { type: "video/mp4" })
         );
