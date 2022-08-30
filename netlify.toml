@@ -3,5 +3,10 @@ environment = { NODE_VERSION = "16", NPM_VERSION = "8.5.1" }
 publish = "docs/"
 command = "npm run netlify"
 
+[headers]
+for = "/*"
+Cross-Origin-Embedder-Policy = "require-corp"
+Cross-Origin-Opener-Policy = "same-origin"
+
 # [[plugins]]
 # package = "@netlify/plugin-lighthouse"
