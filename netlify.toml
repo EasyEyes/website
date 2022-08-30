@@ -3,8 +3,9 @@ environment = { NODE_VERSION = "16", NPM_VERSION = "8.5.1" }
 publish = "docs/"
 command = "npm run netlify"
 
-[headers]
+[[headers]]
 for = "/*"
+[headers.values]
 Cross-Origin-Embedder-Policy = "require-corp"
 Cross-Origin-Opener-Policy = "same-origin"
 
