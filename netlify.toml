@@ -4,7 +4,7 @@ publish = "docs/"
 command = "npm run netlify"
 
 [[headers]]
-for = "/*"
+for = "/hdr/*"
 [headers.values]
 Cross-Origin-Embedder-Policy = "require-corp"
 Cross-Origin-Opener-Policy = "same-origin"
