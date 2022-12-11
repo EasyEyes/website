@@ -25,60 +25,60 @@ jobs:
 
   phrases:
     runs-on: ubuntu-latest
-        steps:
-          - uses: actions/checkout@v3
-          - uses: actions/setup-node@v3
-            with:
-              node-version: 16
-          - run: |
-              git submodule update --init --recursive
-              npm run setup
-          - run: |
-              cd docs/experiment/threshold
-              npm run phrases
-              git add -A
-              git commit -m 'github action: update phrases'
-              git remote set-url origin https://x-access-token:${{github.token}}@github.com/EasyEyes/threshold
-              git push
-              
-              cd ..
-              git add -A
-              git commit -m 'github action: update phrases'
-              git remote set-url origin https://x-access-token:${{github.token}}@github.com/EasyEyes/threshold-scientist
-              git push
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-node@v3
+        with:
+          node-version: 16
+      - run: |
+          git submodule update --init --recursive
+          npm run setup
+      - run: |
+          cd docs/experiment/threshold
+          npm run phrases
+          git add -A
+          git commit -m 'github action: update phrases'
+          git remote set-url origin https://x-access-token:${{github.token}}@github.com/EasyEyes/threshold
+          git push
 
-              cd ..
-              git add -A
-              git commit -m 'github action: update phrases'
-              git remote set-url origin https://x-access-token:${{github.token}}@github.com/EasyEyes/${{github.repository}}
-              git push
+          cd ..
+          git add -A
+          git commit -m 'github action: update phrases'
+          git remote set-url origin https://x-access-token:${{github.token}}@github.com/EasyEyes/threshold-scientist
+          git push
+
+          cd ..
+          git add -A
+          git commit -m 'github action: update phrases'
+          git remote set-url origin https://x-access-token:${{github.token}}@github.com/EasyEyes/${{github.repository}}
+          git push
 
   glossary:
     runs-on: ubuntu-latest
-        steps:
-          - uses: actions/checkout@v3
-          - uses: actions/setup-node@v3
-            with:
-              node-version: 16
-          - run: |
-              git submodule update --init --recursive
-              npm run setup
-          - run: |
-              cd docs/experiment/threshold
-              npm run phrases
-              git add -A
-              git commit -m 'github action: update glossary'
-              git remote set-url origin https://x-access-token:${{github.token}}@github.com/EasyEyes/threshold
-              git push
-              
-              cd ..
-              git add -A
-              git commit -m 'github action: update glossary'
-              git remote set-url origin https://x-access-token:${{github.token}}@github.com/EasyEyes/threshold-scientist
-              git push
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-node@v3
+        with:
+          node-version: 16
+      - run: |
+          git submodule update --init --recursive
+          npm run setup
+      - run: |
+          cd docs/experiment/threshold
+          npm run phrases
+          git add -A
+          git commit -m 'github action: update glossary'
+          git remote set-url origin https://x-access-token:${{github.token}}@github.com/EasyEyes/threshold
+          git push
 
-              cd ..
-              git add -A
-              git commit -m 'github action: update glossary'
-              git remote set-url origin https://x-access-token:${{github.token}}@github.com/EasyEyes/${{github.repository}}
-              git push
+          cd ..
+          git add -A
+          git commit -m 'github action: update glossary'
+          git remote set-url origin https://x-access-token:${{github.token}}@github.com/EasyEyes/threshold-scientist
+          git push
+
+          cd ..
+          git add -A
+          git commit -m 'github action: update glossary'
+          git remote set-url origin https://x-access-token:${{github.token}}@github.com/EasyEyes/${{github.repository}}
+          git push
