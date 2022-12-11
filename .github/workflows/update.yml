@@ -31,10 +31,21 @@ jobs:
       - uses: actions/setup-node@v3
         with:
           node-version: 16
-      - run: |
+      - name: set github account
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+      - name: installations
+        run: |
           git submodule update --init --recursive
           npm run setup
-      - run: |
+      - name: decrypt credentials
+        run: |
+          gpg --quiet --batch --yes --passphrase="${{secrets.google_api_pw}}" \
+          --output docs/experiment/threshold/server/credentials.json \
+          --decrypt docs/experiment/threshold/server/credentials.json.gpg
+      - name: fetch and update phrases
+        run: |
           cd docs/experiment/threshold
           npm run phrases
           git add -A
@@ -62,10 +73,21 @@ jobs:
       - uses: actions/setup-node@v3
         with:
           node-version: 16
-      - run: |
+      - name: set github account
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+      - name: installations
+        run: |
           git submodule update --init --recursive
           npm run setup
-      - run: |
+      - name: decrypt credentials
+        run: |
+          gpg --quiet --batch --yes --passphrase="${{secrets.google_api_pw}}" \
+          --output docs/experiment/threshold/server/credentials.json \
+          --decrypt docs/experiment/threshold/server/credentials.json.gpg
+      - name: fetch and update glossary
+        run: |
           cd docs/experiment/threshold
           npm run phrases
           git add -A
