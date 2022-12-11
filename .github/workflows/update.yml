@@ -16,6 +16,7 @@ jobs:
       - run: |
           git config user.name "GitHub Actions Bot"
           git config user.email "<>"
+      - run: git submodule update --init --recursive
       - run: npm run setup
       - run: gpg --quiet --batch --yes --decrypt --passphrase="$GOOGLE_API_PW" \
           --output docs/experiment/threshold/server/credentials.json \
