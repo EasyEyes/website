@@ -45,7 +45,7 @@ jobs:
           cd ..
           git add -A
           git commit -m 'github action: update phrases'
-          git remote set-url origin https://x-access-token:${{secrets.ci_token}}@github.com/EasyEyes/${{github.repository}}
+          git remote set-url origin https://x-access-token:${{secrets.ci_token}}@github.com/${{github.repository}}
           git push
 
   glossary:
@@ -88,5 +88,5 @@ jobs:
           cd ..
           git add -A
           git commit -m 'github action: update glossary'
-          git remote set-url origin https://x-access-token:${{secrets.ci_token}}@github.com/EasyEyes/${{github.repository}}
+          git remote set-url origin https://x-access-token:${{secrets.ci_token}}@github.com/${{github.repository}}
           git push
