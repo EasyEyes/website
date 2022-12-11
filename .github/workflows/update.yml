@@ -14,8 +14,8 @@ jobs:
         with:
           node-version: 16
       - run: |
-          git config user.name "GitHub Actions Bot"
-          git config user.email "<>"
+          git config --global user.name "GitHub Actions Bot"
+          git config --global user.email "<>"
       - run: git submodule update --init --recursive
       - run: npm run setup
       - run: |
