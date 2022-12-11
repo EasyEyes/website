@@ -31,6 +31,7 @@ jobs:
         run: |
           cd docs/experiment/threshold
           npm run phrases
+          git status
           git add -A
           git commit -m 'github action: update phrases'
           git remote set-url origin https://x-access-token:${{secrets.ci_token}}@github.com/EasyEyes/threshold
@@ -73,7 +74,8 @@ jobs:
         continue-on-error: true
         run: |
           cd docs/experiment/threshold
-          npm run phrases
+          npm run glossary
+          git status
           git add -A
           git commit -m 'github action: update glossary'
           git remote set-url origin https://x-access-token:${{secrets.ci_token}}@github.com/EasyEyes/threshold
