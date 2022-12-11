@@ -6,45 +6,28 @@ name: Update Phrases and Glossary
 on: workflow_dispatch
 
 jobs:
-  prepare:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-node@v3
-        with:
-          node-version: 16
-      - run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-      - run: git submodule update --init --recursive
-      - run: npm run setup
-      - run: |
-          gpg --quiet --batch --yes --passphrase="${{secrets.google_api_pw}}" \
-          --output docs/experiment/threshold/server/credentials.json \
-          --decrypt docs/experiment/threshold/server/credentials.json.gpg
-
   phrases:
-    needs: prepare
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
       - uses: actions/setup-node@v3
         with:
           node-version: 16
-      - name: set github account
+      - name: Set commit account information
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
-      - name: installations
+      - name: Installations
         run: |
           git submodule update --init --recursive
           npm run setup
-      - name: decrypt credentials
+      - name: Decrypt credentials
         run: |
           gpg --quiet --batch --yes --passphrase="${{secrets.google_api_pw}}" \
           --output docs/experiment/threshold/server/credentials.json \
           --decrypt docs/experiment/threshold/server/credentials.json.gpg
-      - name: fetch and update phrases
+      - name: Fetch and update phrases
+        continue-on-error: true
         run: |
           cd docs/experiment/threshold
           npm run phrases
@@ -66,27 +49,28 @@ jobs:
           git push
 
   glossary:
-    needs: [prepare, phrases]
+    needs: phrases
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
       - uses: actions/setup-node@v3
         with:
           node-version: 16
-      - name: set github account
+      - name: Set commit account information
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
-      - name: installations
+      - name: Installations
         run: |
           git submodule update --init --recursive
           npm run setup
-      - name: decrypt credentials
+      - name: Decrypt credentials
         run: |
           gpg --quiet --batch --yes --passphrase="${{secrets.google_api_pw}}" \
           --output docs/experiment/threshold/server/credentials.json \
           --decrypt docs/experiment/threshold/server/credentials.json.gpg
-      - name: fetch and update glossary
+      - name: Fetch and update glossary
+        continue-on-error: true
         run: |
           cd docs/experiment/threshold
           npm run phrases
