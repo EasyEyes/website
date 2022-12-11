@@ -6,7 +6,7 @@ name: Update Phrases and Glossary
 on: workflow_dispatch
 
 jobs:
-  update:
+  env:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -14,13 +14,71 @@ jobs:
         with:
           node-version: 16
       - run: |
-          git config --global user.name "GitHub Actions Bot"
-          git config --global user.email "<>"
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
       - run: git submodule update --init --recursive
       - run: npm run setup
       - run: |
           gpg --quiet --batch --yes --passphrase="${{secrets.google_api_pw}}" \
           --output docs/experiment/threshold/server/credentials.json \
           --decrypt docs/experiment/threshold/server/credentials.json.gpg
-      - run: npm run update:phrases
-      - run: npm run update:glossary
+
+  phrases:
+    runs-on: ubuntu-latest
+        steps:
+          - uses: actions/checkout@v3
+          - uses: actions/setup-node@v3
+            with:
+              node-version: 16
+          - run: |
+              git submodule update --init --recursive
+              npm run setup
+          - run: |
+              cd docs/experiment/threshold
+              npm run phrases
+              git add -A
+              git commit -m 'github action: update phrases'
+              git remote set-url origin https://x-access-token:${{github.token}}@github.com/EasyEyes/threshold
+              git push
+              
+              cd ..
+              git add -A
+              git commit -m 'github action: update phrases'
+              git remote set-url origin https://x-access-token:${{github.token}}@github.com/EasyEyes/threshold-scientist
+              git push
+
+              cd ..
+              git add -A
+              git commit -m 'github action: update phrases'
+              git remote set-url origin https://x-access-token:${{github.token}}@github.com/EasyEyes/${{github.repository}}
+              git push
+
+  glossary:
+    runs-on: ubuntu-latest
+        steps:
+          - uses: actions/checkout@v3
+          - uses: actions/setup-node@v3
+            with:
+              node-version: 16
+          - run: |
+              git submodule update --init --recursive
+              npm run setup
+          - run: |
+              cd docs/experiment/threshold
+              npm run phrases
+              git add -A
+              git commit -m 'github action: update glossary'
+              git remote set-url origin https://x-access-token:${{github.token}}@github.com/EasyEyes/threshold
+              git push
+              
+              cd ..
+              git add -A
+              git commit -m 'github action: update glossary'
+              git remote set-url origin https://x-access-token:${{github.token}}@github.com/EasyEyes/threshold-scientist
+              git push
+
+              cd ..
+              git add -A
+              git commit -m 'github action: update glossary'
+              git remote set-url origin https://x-access-token:${{github.token}}@github.com/EasyEyes/${{github.repository}}
+              git push
