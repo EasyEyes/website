@@ -18,7 +18,7 @@ jobs:
           git config user.email "<>"
       - run: npm run setup
       - run: gpg --quiet --batch --yes --decrypt --passphrase="$GOOGLE_API_PW" \
-        --output docs/experiment/threshold/server/credentials.json \
-        docs/experiment/threshold/server/credentials.json.gpg
+          --output docs/experiment/threshold/server/credentials.json \
+          docs/experiment/threshold/server/credentials.json.gpg
       - run: npm run update:phrases
       - run: npm run update:glossary
