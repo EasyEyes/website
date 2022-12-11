@@ -33,19 +33,19 @@ jobs:
           npm run phrases
           git add -A
           git commit -m 'github action: update phrases'
-          git remote set-url origin https://x-access-token:${{github.token}}@github.com/EasyEyes/threshold
+          git remote set-url origin https://x-access-token:${{secrets.ci_token}}@github.com/EasyEyes/threshold
           git push
 
           cd ..
           git add -A
           git commit -m 'github action: update phrases'
-          git remote set-url origin https://x-access-token:${{github.token}}@github.com/EasyEyes/threshold-scientist
+          git remote set-url origin https://x-access-token:${{secrets.ci_token}}@github.com/EasyEyes/threshold-scientist
           git push
 
           cd ..
           git add -A
           git commit -m 'github action: update phrases'
-          git remote set-url origin https://x-access-token:${{github.token}}@github.com/EasyEyes/${{github.repository}}
+          git remote set-url origin https://x-access-token:${{secrets.ci_token}}@github.com/EasyEyes/${{github.repository}}
           git push
 
   glossary:
@@ -76,17 +76,17 @@ jobs:
           npm run phrases
           git add -A
           git commit -m 'github action: update glossary'
-          git remote set-url origin https://x-access-token:${{github.token}}@github.com/EasyEyes/threshold
+          git remote set-url origin https://x-access-token:${{secrets.ci_token}}@github.com/EasyEyes/threshold
           git push
 
           cd ..
           git add -A
           git commit -m 'github action: update glossary'
-          git remote set-url origin https://x-access-token:${{github.token}}@github.com/EasyEyes/threshold-scientist
+          git remote set-url origin https://x-access-token:${{secrets.ci_token}}@github.com/EasyEyes/threshold-scientist
           git push
 
           cd ..
           git add -A
           git commit -m 'github action: update glossary'
-          git remote set-url origin https://x-access-token:${{github.token}}@github.com/EasyEyes/${{github.repository}}
+          git remote set-url origin https://x-access-token:${{secrets.ci_token}}@github.com/EasyEyes/${{github.repository}}
           git push
