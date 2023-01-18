@@ -9,5 +9,11 @@ for = "/hdr/*"
 Cross-Origin-Embedder-Policy = "require-corp"
 Cross-Origin-Opener-Policy = "same-origin"
 
+[[headers]]
+# Define which paths this specific [[headers]] block will cover.
+for = "/experiment/*"
+[headers.values]
+Access-Control-Allow-Origin = "*"
+
 # [[plugins]]
 # package = "@netlify/plugin-lighthouse"
