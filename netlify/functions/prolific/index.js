@@ -5,7 +5,7 @@ exports.handler = async (event, context) => {
 
   // 'users/me/' or 'studies/'
   const task = event.path
-    .replace("/.netlify/functions/prolific/", "")
+    .replace("/netlify/functions/prolific/", "")
     .replace(/\//gim, "");
 
   try {
