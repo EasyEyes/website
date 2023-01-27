@@ -3,6 +3,9 @@ environment = { NODE_VERSION = "16", NPM_VERSION = "9.1.3" }
 publish = "docs/"
 command = "npm run netlify"
 
+[[plugins]]
+package = "@netlify/plugin-functions-install-core"
+
 [[headers]]
 for = "/hdr/*"
 [headers.values]
