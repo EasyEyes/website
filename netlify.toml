@@ -20,3 +20,11 @@ Access-Control-Allow-Origin = "*"
 
 # [[plugins]]
 # package = "@netlify/plugin-lighthouse"
+
+[dev]
+command = ""
+port = 8888
+publish = "docs/"
+
+[functions]
+node_bundler = "esbuild"

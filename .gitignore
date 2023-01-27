@@ -108,3 +108,6 @@ dist
 
 # intellij specific file
 .idea
+
+# Local Netlify folder
+.netlify
