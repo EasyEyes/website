@@ -6,15 +6,12 @@ exports.handler = async (event, context) => {
   // 'users/me/' or 'studies/'
   const task = event.path.replace("/.netlify/functions/prolific/", "");
 
-  console.log("task", task);
-  console.log("event", event);
-
   if (task.includes("users")) {
     try {
       const response = await fetch(`https://api.prolific.co/api/v1/${task}`, {
         method: "GET",
         headers: event.headers,
-        authorization: event.authorization,
+        redirect: "follow",
       });
       data = await response.json();
       console.log(data);
