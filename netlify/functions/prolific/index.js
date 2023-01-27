@@ -1,5 +1,17 @@
 import fetch from "node-fetch";
 
+const responseWrapper = (statusCode, body) => {
+  return {
+    statusCode,
+    headers: {
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Headers": "*",
+      "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+    },
+    body: JSON.stringify(body),
+  };
+};
+
 exports.handler = async (event, context) => {
   let statusCode, data;
 
@@ -7,32 +19,55 @@ exports.handler = async (event, context) => {
   const task = event.path.replace("/.netlify/functions/prolific/", "");
 
   if (task.includes("users")) {
+    // ! user
     try {
       const response = await fetch(`https://api.prolific.co/api/v1/${task}`, {
         method: "GET",
-        headers: event.headers,
+        headers: {
+          ...event.headers,
+          host: "api.prolific.co",
+          "Access-Control-Allow-Origin": "*",
+        },
         redirect: "follow",
       });
+
       data = await response.json();
-      console.log(data);
       statusCode = 200;
     } catch (error) {
+      console.error("ERROR", error);
+
       data = {
         error: error.message,
       };
-      console.log(error);
       statusCode = 500;
     }
 
-    return {
-      statusCode: statusCode,
-      headers: {
-        /* Required for CORS support to work */
-        "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Headers": "*",
-        "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-      },
-      body: JSON.stringify(data),
-    };
+    return responseWrapper(statusCode, data);
+  } else if (task.includes("studies")) {
+    // ! study
+    try {
+      const response = await fetch(`https://api.prolific.co/api/v1/${task}`, {
+        method: "POST",
+        body: event.body,
+        headers: {
+          ...event.headers,
+          host: "api.prolific.co",
+          "Access-Control-Allow-Origin": "*",
+        },
+        // redirect: "follow",
+      });
+
+      data = await response.json();
+      statusCode = 200;
+    } catch (error) {
+      console.error("ERROR", error);
+
+      data = {
+        error: error.message,
+      };
+      statusCode = 500;
+    }
+
+    return responseWrapper(statusCode, data);
   }
 };
