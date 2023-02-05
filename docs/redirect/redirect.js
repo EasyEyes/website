@@ -30,7 +30,6 @@ const sleep = (time) => {
 sleep(500).then(() => {
   if (hrefSplit.length > 1 && redirectTarget) {
     const tokenInfo = hrefSplit[1];
-    console.log(tokenInfo.includes(`#access_token`));
     if (tokenInfo.includes(`#access_token`)) {
       window.location.replace(redirectTarget + tokenInfo);
     }
