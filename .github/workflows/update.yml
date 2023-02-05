@@ -33,19 +33,19 @@ jobs:
           npm run phrases
           git status
           git add -A
-          git commit -m 'github action: update phrases'
+          git commit -m 'github action: update phrases' --no-verify
           git remote set-url origin https://x-access-token:${{secrets.ci_token}}@github.com/EasyEyes/threshold
           git push
 
           cd ..
           git add -A
-          git commit -m 'github action: update phrases'
+          git commit -m 'github action: update phrases' --no-verify
           git remote set-url origin https://x-access-token:${{secrets.ci_token}}@github.com/EasyEyes/threshold-scientist
           git push
 
           cd ..
           git add -A
-          git commit -m 'github action: update phrases'
+          git commit -m 'github action: update phrases' --no-verify
           git remote set-url origin https://x-access-token:${{secrets.ci_token}}@github.com/${{github.repository}}
           git push
 
@@ -77,18 +77,18 @@ jobs:
           npm run glossary
           git status
           git add -A
-          git commit -m 'github action: update glossary'
+          git commit -m 'github action: update glossary' --no-verify
           git remote set-url origin https://x-access-token:${{secrets.ci_token}}@github.com/EasyEyes/threshold
           git push
 
           cd ..
           git add -A
-          git commit -m 'github action: update glossary'
+          git commit -m 'github action: update glossary' --no-verify
           git remote set-url origin https://x-access-token:${{secrets.ci_token}}@github.com/EasyEyes/threshold-scientist
           git push
 
           cd ..
           git add -A
-          git commit -m 'github action: update glossary'
+          git commit -m 'github action: update glossary' --no-verify
           git remote set-url origin https://x-access-token:${{secrets.ci_token}}@github.com/${{github.repository}}
           git push
