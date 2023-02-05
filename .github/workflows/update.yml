@@ -27,7 +27,7 @@ jobs:
           --output docs/experiment/threshold/server/credentials.json \
           --decrypt docs/experiment/threshold/server/credentials.json.gpg
       - name: Fetch and update phrases
-        continue-on-error: true
+        # continue-on-error: true
         run: |
           cd docs/experiment/threshold
           npm run phrases
@@ -71,7 +71,7 @@ jobs:
           --output docs/experiment/threshold/server/credentials.json \
           --decrypt docs/experiment/threshold/server/credentials.json.gpg
       - name: Fetch and update glossary
-        continue-on-error: true
+        # continue-on-error: true
         run: |
           cd docs/experiment/threshold
           npm run glossary
