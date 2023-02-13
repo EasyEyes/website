@@ -7,7 +7,6 @@ on: workflow_dispatch
 
 jobs:
   glossary:
-    needs: phrases
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
