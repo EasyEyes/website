@@ -15,7 +15,7 @@ const responseWrapper = (statusCode, body) => {
 exports.handler = async (event, context) => {
   let statusCode, data;
 
-  // 'users/me/' or 'studies/'
+  // 'users/me/' or 'studies/' or 'projects/id/studies'
   const task = event.path.replace("/.netlify/functions/prolific/", "");
 
   if (task.includes("users")) {
@@ -67,6 +67,34 @@ exports.handler = async (event, context) => {
       };
       statusCode = 500;
     }
+
+    return responseWrapper(statusCode, data);
+  } else if (task.includes("projects")) {
+    // ! projects
+    console.log(task);
+    try {
+      const response = await fetch(`https://api.prolific.co/api/v1/${task}`, {
+        method: "GET",
+        headers: {
+          ...event.headers,
+          host: "api.prolific.co",
+          "Access-Control-Allow-Origin": "*",
+        },
+      });
+      console.log(response);
+
+      data = await response.json();
+      console.log(data);
+      statusCode = 200;
+    } catch (error) {
+      console.error("ERROR", error);
+
+      data = {
+        error: error.message,
+      };
+      statusCode = 500;
+    }
+    console.log(data);
 
     return responseWrapper(statusCode, data);
   }
