@@ -71,7 +71,6 @@ exports.handler = async (event, context) => {
     return responseWrapper(statusCode, data);
   } else if (task.includes("projects")) {
     // ! projects
-    console.log(task);
     try {
       const response = await fetch(`https://api.prolific.co/api/v1/${task}`, {
         method: "GET",
@@ -81,10 +80,8 @@ exports.handler = async (event, context) => {
           "Access-Control-Allow-Origin": "*",
         },
       });
-      console.log(response);
 
       data = await response.json();
-      console.log(data);
       statusCode = 200;
     } catch (error) {
       console.error("ERROR", error);
@@ -94,7 +91,6 @@ exports.handler = async (event, context) => {
       };
       statusCode = 500;
     }
-    console.log(data);
 
     return responseWrapper(statusCode, data);
   }
