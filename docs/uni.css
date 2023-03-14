@@ -89,9 +89,8 @@ pre {
 
 #header {
   margin-top: 5rem;
-  /* width: 80%; */
-  /* padding-bottom: 1rem; */
-  /* border-bottom: solid 1px #ccc; */
+  display: inline-flex;
+  gap: 3rem;
 }
 
 #header h1 {
@@ -102,8 +101,12 @@ pre {
   /* font-weight: 700; */
 }
 
-#header .description,
-#header .description a {
+.description {
+  margin: 0 0 2rem 0;
+}
+
+.description,
+.description a {
   font-size: 1.5rem;
   line-height: 170%;
   color: #666;
