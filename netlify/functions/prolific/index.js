@@ -43,7 +43,7 @@ exports.handler = async (event, context) => {
     }
 
     return responseWrapper(statusCode, data);
-  } else if (task.includes("studies") && !task.endsWith("studies/")) {
+  } else if (task.includes("studies") && task.endsWith("studies/")) {
     // ! study
     try {
       const response = await fetch(`https://api.prolific.co/api/v1/${task}`, {
