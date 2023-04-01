@@ -43,7 +43,7 @@ exports.handler = async (event, context) => {
     }
 
     return responseWrapper(statusCode, data);
-  } else if (task.includes("studies") && !task.includes("projects")) {
+  } else if (task.includes("studies") && !task.endsWith("studies/")) {
     // ! study
     try {
       const response = await fetch(`https://api.prolific.co/api/v1/${task}`, {
@@ -69,8 +69,8 @@ exports.handler = async (event, context) => {
     }
 
     return responseWrapper(statusCode, data);
-  } else if (task.includes("projects")) {
-    // ! projects
+  } else if (task.includes("studies")) {
+    // ! studies
     try {
       const response = await fetch(`https://api.prolific.co/api/v1/${task}`, {
         method: "GET",
