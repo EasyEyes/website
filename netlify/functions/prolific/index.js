@@ -72,14 +72,17 @@ exports.handler = async (event, context) => {
   } else if (task.includes("submissions")) {
     // ! study submissions
     try {
-      const response = await fetch(`https://api.prolific.co/api/v1/${task}`, {
-        method: "GET",
-        headers: {
-          ...event.headers,
-          host: "api.prolific.co",
-          "Access-Control-Allow-Origin": "*",
-        },
-      });
+      const response = await fetch(
+        `https://api.prolific.co/api/v1/${task}?limit=150&offset=0`,
+        {
+          method: "GET",
+          headers: {
+            ...event.headers,
+            host: "api.prolific.co",
+            "Access-Control-Allow-Origin": "*",
+          },
+        }
+      );
 
       data = await response.json();
       statusCode = 200;
