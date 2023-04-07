@@ -73,7 +73,7 @@ exports.handler = async (event, context) => {
     // ! study submissions
     try {
       const response = await fetch(
-        `https://api.prolific.co/api/v1/${task}?limit=150&offset=0`,
+        `https://api.prolific.co/api/v1/${task}?limit=300&offset=0`,
         {
           method: "GET",
           headers: {
