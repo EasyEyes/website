@@ -105,12 +105,10 @@ exports.handler = async (event, context) => {
           ...event.headers,
           host: "api.prolific.co",
           "Access-Control-Allow-Origin": "*",
-          "Content-Type": "text/csv",
         },
       });
 
-      data = await response.blob();
-      console.log(data, "ritika");
+      data = await response.text();
       statusCode = 200;
     } catch (error) {
       console.error("ERROR", error);
