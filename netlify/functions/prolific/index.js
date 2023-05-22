@@ -105,6 +105,7 @@ exports.handler = async (event, context) => {
           ...event.headers,
           host: "api.prolific.co",
           "Access-Control-Allow-Origin": "*",
+          "Content-Type": "text/csv",
         },
       });
 
