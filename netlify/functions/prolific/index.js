@@ -108,8 +108,7 @@ exports.handler = async (event, context) => {
         },
       });
 
-      data = response;
-      console.log(data, "ritika");
+      data = await response.text();
       statusCode = 200;
     } catch (error) {
       console.error("ERROR", error);
