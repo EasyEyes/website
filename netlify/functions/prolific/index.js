@@ -1,6 +1,4 @@
 import fetch from "node-fetch";
-import { saveAs } from "file-saver";
-import Blob from "cross-blob";
 
 const responseWrapper = (statusCode, body) => {
   return {
@@ -110,13 +108,7 @@ exports.handler = async (event, context) => {
         },
       });
 
-      const blob1 = await response.blob();
-      const blob = new Blob([blob1], { type: "text/csv" });
-      console.log(blob1, "prolific");
-      saveAs(blob, "data.csv");
-      data = {
-        message: "CSV file downloaded and saved",
-      };
+      data = await response.text();
       statusCode = 200;
     } catch (error) {
       console.error("ERROR", error);
