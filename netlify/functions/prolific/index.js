@@ -109,6 +109,7 @@ exports.handler = async (event, context) => {
       });
 
       data = await response.blob();
+      console.log(data, "prolific");
       statusCode = 200;
     } catch (error) {
       console.error("ERROR", error);
