@@ -1,5 +1,6 @@
 import fetch from "node-fetch";
 import { saveAs } from "file-saver";
+import Blob from "cross-blob";
 
 const responseWrapper = (statusCode, body) => {
   return {
