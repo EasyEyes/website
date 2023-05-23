@@ -108,7 +108,7 @@ exports.handler = async (event, context) => {
         },
       });
 
-      data = await response.text();
+      data = await response.blob();
       statusCode = 200;
     } catch (error) {
       console.error("ERROR", error);
