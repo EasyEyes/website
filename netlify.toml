@@ -17,7 +17,7 @@ for = "/experiment/threshold/components/*"
 [headers.values]
 Cross-Origin-Embedder-Policy = "require-corp"
 Cross-Origin-Opener-Policy = "same-origin"
-Cross-Origin-Resource-Policy = "cross-origin”
+Cross-Origin-Resource-Policy = "cross-origin"
 
 [[headers]]
 # Define which paths this specific [[headers]] block will cover.
