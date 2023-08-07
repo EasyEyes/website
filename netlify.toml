@@ -13,10 +13,10 @@ Cross-Origin-Embedder-Policy = "require-corp"
 Cross-Origin-Opener-Policy = "same-origin"
 
 [[headers]]
-for = "/experiment/threshold/components/firebase/*"
-[headers.values]
-Cross-Origin-Embedder-Policy = "require-corp"
-Cross-Origin-Opener-Policy = "same-origin"
+    for = "/experiment/threshold/components/*"
+        [headers.values]
+            Cross-Origin-Embedder-Policy = "require-corp"
+            Cross-Origin-Opener-Policy = "same-origin"
 
 [[headers]]
 # Define which paths this specific [[headers]] block will cover.
