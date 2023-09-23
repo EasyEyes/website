@@ -34,6 +34,158 @@
       gtag("js", new Date());
 
       gtag("config", "G-B8LSH945MT");
+      function onCompatibilityClick() {
+        Swal.fire({
+          title: "Compatibility",
+          html: `
+                  <table
+          style="
+            width: 100%;
+            text-align: "center;"
+        >
+          <thead>
+            <tr>
+              <th rowSpan="2"></th>
+              <th colSpan="2">
+                Chrome
+              </th>
+              <th colSpan="2">
+                Safari
+              </th>
+              <th colSpan="2">
+                Firefox
+              </th>
+              <th colSpan="2">
+                Edge
+              </th>
+              <th colSpan="2">
+                Opera
+              </th>
+            </tr>
+            <tr>
+              <th>
+                <i class="bi bi-display"></i>
+              </th>
+              <th>
+                <i class="bi bi-phone"></i>
+              </th>
+              <th>
+                <i class="bi bi-display"></i>
+              </th>
+              <th>
+                <i class="bi bi-phone"></i>
+              </th>
+              <th>
+                <i class="bi bi-display"></i>
+              </th>
+              <th>
+                <i class="bi bi-phone"></i>
+              </th>
+              <th>
+                <i class="bi bi-display"></i>
+              </th>
+              <th>
+                <i class="bi bi-phone"></i>
+              </th>
+              <th>
+                <i class="bi bi-display"></i>
+              </th>
+              <th>
+                <i class="bi bi-phone"></i>
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="left-td">Scientist page (this)</td>
+              <td>✅</td>
+              <td>✅</td>
+              <td>✅</td>
+              <td>✅</td>
+              <td>✅</td>
+              <td>✅</td>
+              <td>✅</td>
+              <td>✅</td>
+              <td>✅</td>
+              <td>✅</td>
+            </tr>
+            <tr>
+              <td class="left-td">Participant page</td>
+              <td>✅</td>
+              <td>❌</td>
+              <td>✅</td>
+              <td>❌</td>
+              <td>✅</td>
+              <td>❌</td>
+              <td>❌</td>
+              <td>❌</td>
+              <td>✅</td>
+              <td>❌</td>
+            </tr>
+          </tbody>
+        </table>
+        <p
+          style="
+            font-size: 1rem;"
+        >
+          Please report any exception to denis.pelli AT nyu.edu.
+        </p>`,
+          confirmButtonColor: "#019267",
+          customClass: {
+            htmlContainer: "popup-text-container smaller-text",
+          },
+        });
+      }
+
+      function onIntroClick() {
+        Swal.fire({
+          title: "Welcome to EasyEyes!",
+          html: `<p>
+            All you need to run your experiment is a few accounts (<a
+              href="https://pavlovia.org/"
+              rel="noopener noreferrer"
+              target="_blank"
+              >Pavlovia</a
+            >
+            and probably
+            <a
+              href="https://prolific.co/"
+              rel="noopener noreferrer"
+              target="_blank"
+              >Prolific</a
+            >) and a table that you create in any spreadsheet app, e.g., Google
+            Sheets. The
+            <a
+              href="https://docs.google.com/document/d/12zZOEN7se437ueBZuGhyBC7HGhwgZe2OROatEyaRvoM/edit#heading=h.6h3xdiqhq593"
+              rel="noopener noreferrer"
+              target="_blank"
+              >Manual</a
+            >
+            and
+            <a
+              href="https://docs.google.com/spreadsheets/d/1x65NjykMm-XUOz98Eu_oo6ON2xspm_h0Q0M2u6UGtug/edit#gid=1287694458"
+              rel="noopener noreferrer"
+              target="_blank"
+              >Parameter Glossary</a
+            >
+            explain how to create your experiment table, compile it into a
+            participant web app, and run it. You can download
+            <a href="./resources/EasyEyes_demo.zip" download>our demo</a>
+            with all the files you need (table, fonts, forms, and a README of
+            instructions) to run an experiment.
+          </p>
+          <p>
+            You can online test yourself, and people you personally recruit, with
+            just a Pavlovia account. To recruit and test participants online,
+            you'll need both Pavlovia and Prolific accounts. We hope to offer
+            MTurk support as well, as an alternative to Prolific.
+          </p>`,
+          confirmButtonColor: "#019267",
+          customClass: {
+            htmlContainer: "popup-text-container smaller-text",
+          },
+        });
+      }
     </script>
 
     <!-- External -->
@@ -48,11 +200,16 @@
       integrity="sha384-cVKIPhGWiC2Al4u+LWgxfKTRIcfu0JTxR+EQDz/bgldoEyl4H0zUF0QKbrJ0EcQF"
       crossorigin="anonymous"
     ></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <link
       rel="stylesheet"
       href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css"
       integrity="sha384-EVSTQN3/azprG1Anm3QDgpJLIm9Nao0Yz1ztcQTwFspd3yD65VohhpuuCOmLASjC"
       crossorigin="anonymous"
+    />
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.6.1/font/bootstrap-icons.css"
     />
 
     <!-- Internal -->
@@ -81,6 +238,45 @@
         font-size: 1.5rem;
         line-height: 170%;
         color: #666;
+      }
+      table {
+        border-collapse: collapse;
+        border-spacing: 0;
+        width: auto;
+        margin: 1rem 0;
+      }
+
+      td,
+      th {
+        border-color: #f0f0f0;
+        border-width: 1px;
+        width: 4rem;
+        border-radius: 0.5rem;
+        font-size: 0.85rem;
+        overflow: hidden;
+        padding: 0.1rem 0.2rem;
+        text-align: center;
+        word-break: normal;
+      }
+
+      .left-td {
+        text-align: left !important;
+        width: 30rem;
+      }
+      .swal2-popup {
+        padding-bottom: 2.25rem !important;
+        border-radius: 0.7rem;
+      }
+
+      .swal2-html-container {
+        line-height: 150%;
+      }
+      .popup-text-container {
+        text-align: left !important;
+        line-height: 150%;
+        &.smaller-text {
+          font-size: 1rem;
+        }
       }
     </style>
   </head>
@@ -131,8 +327,18 @@
               Docs
             </a>
             <div class="dropdown-menu" aria-labelledby="navbarDropdownMenuLink">
+              <a class="dropdown-item" onclick="onIntroClick()">Intro</a>
+              <a
+                class="dropdown-item"
+                href="https://docs.google.com/document/d/12zZOEN7se437ueBZuGhyBC7HGhwgZe2OROatEyaRvoM/edit"
+                target="_blank"
+                >Manual</a
+              >
+              <a class="dropdown-item" onclick="onCompatibilityClick()"
+                >Compatibility</a
+              >
               <a class="dropdown-item" href="../acknowledgements.html"
-                >Acknowledgements</a
+                >Thanks</a
               >
               <a class="dropdown-item" href="../privacy.html">Privacy</a>
               <a class="dropdown-item" href="../references.html">References</a>
