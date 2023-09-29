@@ -33,6 +33,8 @@ p {
   padding-left: 3rem;
   padding-right: 3rem;
   background: #fff;
+  padding-bottom: 0;
+  padding-top: 5px;
 }
 
 .nav-item {
@@ -71,7 +73,7 @@ p {
 
 main {
   margin: 0 auto;
-  padding-bottom: 5rem;
+  padding-bottom: 5px;
   width: 90%;
   max-width: 960px;
 }
@@ -88,27 +90,22 @@ pre {
 /* -------------------------------------------------------------------------- */
 
 #header {
-  margin-top: 1rem;
+  margin-top: 0px;
   display: inline-flex;
   gap: 3rem;
 }
 
 #header h1 {
   color: #333;
-  margin-bottom: 2rem;
-  /* color: #FF9A00; */
-  /* font-size: 3rem; */
-  /* font-weight: 700; */
 }
 
 .description {
-  margin: 0 0 2rem 0;
+  margin: 0 0 10px 0;
 }
 
 .description,
 .description a {
   font-size: 1.5rem;
-  line-height: 170%;
   color: #666;
 }
 
