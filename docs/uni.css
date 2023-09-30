@@ -80,6 +80,7 @@ main {
   padding-bottom: 5px;
   width: 90%;
   max-width: 960px;
+  margin-top: -10px;
 }
 
 pre {
@@ -95,6 +96,7 @@ pre {
 
 #header {
   margin-top: 0px;
+  margin-bottom: 0px;
   display: flex;
   justify-content: center;
   align-items: center;
@@ -102,6 +104,7 @@ pre {
 
 #header h1 {
   color: #333;
+  margin-bottom: 0;
 }
 
 .description {
