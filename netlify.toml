@@ -13,7 +13,7 @@ Cross-Origin-Embedder-Policy = "require-corp"
 Cross-Origin-Opener-Policy = "same-origin"
 
 [[headers]]
-for = "/experiment/threshold/components/*"
+for = "/experiment/threshold/*"
 [headers.values]
 Cross-Origin-Embedder-Policy = "require-corp"
 Cross-Origin-Opener-Policy = "same-origin"
