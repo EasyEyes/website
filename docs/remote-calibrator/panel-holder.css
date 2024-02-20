@@ -1,4 +1,5 @@
 #rc-panel-holder {
+  z-index: 99999;
   width: 100%;
   margin: 7rem 0 5rem;
 }
