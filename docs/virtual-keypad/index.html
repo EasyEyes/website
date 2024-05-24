@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
@@ -283,6 +283,9 @@
             <a class="nav-link" href="../experiment/">Compiler</a>
           </li>
           <li class="nav-item">
+            <a class="nav-link" href="../merge-files/">Merge</a>
+          </li>
+          <li class="nav-item">
             <a
               class="nav-link"
               href="https://easyeyes.shinyapps.io/easyeyes_app/"
@@ -451,7 +454,7 @@
       };
       var receiver = new virtualKeypad.Receiver(
         keypad_options,
-        ondata_callback
+        ondata_callback,
       );
       // Handle form submission of new alphabet
       const newAlphabetSubmitted = (event) => {

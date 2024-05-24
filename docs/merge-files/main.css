@@ -1,0 +1,129 @@
+#root {
+  margin: 0 auto;
+  padding-bottom: 5px;
+  width: 90%;
+  position: relative;
+}
+
+.merge-intro {
+  font-size: 1.2rem;
+  margin-bottom: 20px;
+  margin-top: 40px;
+}
+
+.file-error {
+  color: red;
+  margin-bottom: 10px;
+  font-size: 1rem;
+}
+
+.output-filename {
+  margin-bottom: 10px;
+}
+
+.filename-warning {
+  color: red;
+}
+
+.file-zone-merge {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.dropzone {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.dropzone-sub-text {
+  font-size: 1.2rem;
+  color: #666;
+}
+
+.merge-btn-disabled {
+  background: #999;
+  color: white;
+  padding: 1rem;
+  border: none;
+  border-radius: 0.5rem;
+  cursor: not-allowed !important;
+  font-size: 1rem;
+  font-weight: 400;
+  text-align: center;
+  line-height: 100%;
+  outline: none !important;
+  border: none !important;
+}
+
+.merge-btn-enabled {
+  background: #019267;
+  color: white;
+  padding: 1rem;
+  border: none;
+  border-radius: 0.5rem;
+  cursor: pointer !important;
+  font-size: 1rem;
+  font-weight: 500;
+  text-align: center;
+  line-height: 100%;
+  outline: none !important;
+  border: none !important;
+}
+
+.selected-file {
+  display: flex;
+  align-items: center;
+  margin-bottom: 5px;
+  padding: 5px;
+  border-radius: 4px;
+}
+
+.selected-file span {
+  display: flex;
+  align-items: center;
+}
+
+.selected-file span:first-child {
+  padding: 5px;
+  border-radius: 4px;
+}
+
+.selected-file i {
+  font-size: 1.2rem;
+  cursor: pointer;
+}
+
+#output-filename-input {
+  display: none;
+}
+
+.dropzone {
+  position: relative;
+  border-radius: 0.5rem !important;
+  outline-offset: -2px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  background: #019267;
+  transition:
+    color 0.1s ease-in-out,
+    outline 0.1s ease-in-out;
+  min-width: 250px;
+  padding: 0.7rem;
+
+  .dropzone-sub-text {
+    font-size: 1.2rem;
+    font-weight: 500;
+    color: white;
+  }
+
+  p {
+    line-height: 150%;
+    margin-bottom: 0;
+  }
+}
