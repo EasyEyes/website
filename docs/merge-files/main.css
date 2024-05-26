@@ -5,10 +5,14 @@
   position: relative;
 }
 
-.merge-intro {
-  font-size: 1.2rem;
-  margin-bottom: 20px;
-  margin-top: 40px;
+#header-title {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  h1 {
+    color: #333;
+    margin-bottom: 20px;
+  }
 }
 
 .file-error {
@@ -23,18 +27,6 @@
 
 .filename-warning {
   color: red;
-}
-
-.file-zone-merge {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.dropzone {
-  display: flex;
-  justify-content: center;
-  align-items: center;
 }
 
 .dropzone-sub-text {
@@ -97,6 +89,7 @@
 
 #output-filename-input {
   display: none;
+  width: 350px;
 }
 
 .dropzone {
@@ -113,8 +106,9 @@
   transition:
     color 0.1s ease-in-out,
     outline 0.1s ease-in-out;
-  min-width: 250px;
+  width: 250px;
   padding: 0.7rem;
+  margin-bottom: 10px;
 
   .dropzone-sub-text {
     font-size: 1.2rem;
