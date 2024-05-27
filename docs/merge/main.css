@@ -89,7 +89,7 @@
 
 #output-filename-input {
   display: none;
-  width: 350px;
+  min-width: 350px;
 }
 
 .dropzone {

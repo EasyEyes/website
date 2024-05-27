@@ -11,8 +11,21 @@ const mergeBtn = document.getElementById("merge-btn");
 
 fileInput.addEventListener("change", onDrop);
 mergeBtn.addEventListener("click", handleMerge);
+outputFilenameInput.addEventListener("input", adjustInputWidth);
 
 dropZoneRef.addEventListener("click", () => fileInput.click());
+
+function adjustInputWidth() {
+  const tempSpan = document.createElement("span");
+  tempSpan.style.visibility = "hidden";
+  tempSpan.style.position = "absolute";
+  tempSpan.style.whiteSpace = "nowrap";
+  tempSpan.textContent = outputFilenameInput.value;
+  document.body.appendChild(tempSpan);
+  const width = tempSpan.offsetWidth + 20; // Add some padding
+  outputFilenameInput.style.width = `${width}px`;
+  document.body.removeChild(tempSpan);
+}
 
 function onDrop(event) {
   const files = event.target.files;
@@ -48,6 +61,7 @@ function onDrop(event) {
       .slice(0, -1)
       .join(".")}-MERGED.xlsx`;
   }
+  adjustInputWidth();
 }
 
 function updateSelectedFilesList() {
