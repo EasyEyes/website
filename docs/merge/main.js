@@ -99,7 +99,7 @@ async function handleMerge() {
 
   const readFile = async (file) => {
     const arrayBuffer = await file.arrayBuffer();
-    return XLSX.read(arrayBuffer, { type: "array" });
+    return XLSX.read(arrayBuffer, { type: "array", cellStyles: true });
   };
 
   const removeEmptyRows = (data) => {
@@ -136,6 +136,11 @@ async function handleMerge() {
       primaryRowNo < primaryData.length ||
       secondaryRowNo < secondaryData.length
     ) {
+      const getRowKey = (row) => {
+        let key = row[0] ? row[0].toString().toLowerCase() : "";
+        return key.startsWith("%") ? key.substring(1) : key;
+      };
+
       if (primaryRowNo >= primaryData.length) {
         mergeData.push(secondaryData[secondaryRowNo]);
         mergeSourceFileNo.push(secondarySourceFileNo[secondaryRowNo]);
@@ -149,14 +154,32 @@ async function handleMerge() {
       } else {
         const primaryRow = primaryData[primaryRowNo];
         const secondaryRow = secondaryData[secondaryRowNo];
+        const primaryKey = getRowKey(primaryRow);
+        const secondaryKey = getRowKey(secondaryRow);
 
+        // Case 1: Rows are exactly the same
         if (JSON.stringify(primaryRow) === JSON.stringify(secondaryRow)) {
           mergeData.push(primaryRow);
           mergeSourceFileNo.push(primarySourceFileNo[primaryRowNo]);
           mergeConsensusBool.push(primaryConsensusBool[primaryRowNo] && true);
           primaryRowNo++;
           secondaryRowNo++;
-        } else if (JSON.stringify(primaryRow) < JSON.stringify(secondaryRow)) {
+        }
+        // Case 2: Rows have the same first cell (ignoring '%'), but are not the same
+        else if (primaryKey === secondaryKey) {
+          // Add primary row first
+          mergeData.push(primaryRow);
+          mergeSourceFileNo.push(primarySourceFileNo[primaryRowNo]);
+          mergeConsensusBool.push(false);
+          primaryRowNo++;
+          // Add secondary row next
+          mergeData.push(secondaryRow);
+          mergeSourceFileNo.push(secondarySourceFileNo[secondaryRowNo]);
+          mergeConsensusBool.push(false);
+          secondaryRowNo++;
+        }
+        // Rows are different
+        else if (primaryKey < secondaryKey) {
           mergeData.push(primaryRow);
           mergeSourceFileNo.push(primarySourceFileNo[primaryRowNo]);
           mergeConsensusBool.push(false);
