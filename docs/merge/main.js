@@ -231,13 +231,32 @@ async function handleMerge() {
     processedFileCount++;
   }
 
-  const mergedSheet = XLSX.utils.aoa_to_sheet(primaryData);
+  const header = selectedFiles.map((file, index) => [`% ${file.name}`]);
+  const headerColors = selectedFiles.map((file, index) =>
+    pastelColors[index % pastelColors.length].replace("#", ""),
+  );
+
+  const mergedSheet = XLSX.utils.aoa_to_sheet([...header, ...primaryData]);
   const sheetRange = XLSX.utils.decode_range(mergedSheet["!ref"]);
 
   for (let rowNo = sheetRange.s.r; rowNo <= sheetRange.e.r; rowNo++) {
-    if (!primaryConsensusBool[rowNo]) {
+    if (rowNo < selectedFiles.length) {
+      const color = headerColors[rowNo];
+      for (let colNo = sheetRange.s.c; colNo <= sheetRange.e.c; colNo++) {
+        const cellRef = XLSX.utils.encode_cell({ r: rowNo, c: colNo });
+        const cell = mergedSheet[cellRef];
+        if (cell) {
+          cell.s = cell.s || {};
+          cell.s.fill = {
+            patternType: "solid",
+            fgColor: { rgb: color },
+          };
+        }
+      }
+    } else if (!primaryConsensusBool[rowNo - selectedFiles.length]) {
       const color = pastelColors[
-        (primarySourceFileNo[rowNo] - 1) % pastelColors.length
+        (primarySourceFileNo[rowNo - selectedFiles.length] - 1) %
+          pastelColors.length
       ].replace("#", "");
       for (let colNo = sheetRange.s.c; colNo <= sheetRange.e.c; colNo++) {
         const cellRef = XLSX.utils.encode_cell({ r: rowNo, c: colNo });
