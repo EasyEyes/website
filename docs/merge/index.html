@@ -366,7 +366,14 @@
 
     <div id="root">
       <div id="header-title"><h1>Merge experiments</h1></div>
-
+      <div class="description">
+        Use Merge to combine different experiments or to highlight the
+        differences between similar experiments. Select two or more EasyEyes
+        experiments (spreadsheets). They will be merged and saved as one file in
+        the Downloads folder. Identical lines merge into one. Different lines
+        persist, and the colors of different cells indicate their source files.
+        Click to open the merged file.
+      </div>
       <div tabindex="0" class="dropzone" id="dropzone">
         <input
           multiple
@@ -375,21 +382,24 @@
           tabindex="-1"
           style="display: none"
         />
-        <p class="dropzone-sub-text">Select file</p>
+        <p class="dropzone-sub-text">Select files</p>
       </div>
 
       <div id="selected-files" class="selected-files"></div>
 
       <div id="file-error" class="file-error"></div>
-      <button id="merge-btn" class="merge-btn-disabled">Merge</button>
+      <button id="merge-btn" class="merge-btn-disabled">Merge ⇩</button>
 
       <div style="margin-bottom: 10px"></div>
-      <div class="output-filename">
-        <input
-          type="text"
-          id="output-filename-input"
-          placeholder="Enter output filename"
-        />
+      <div class="output-filename-container">
+        <div class="merge-file-status">
+          <input
+            type="text"
+            id="output-filename-input"
+            placeholder="Output filename"
+          />
+          <div id="merge-status"></div>
+        </div>
         <p id="filename-warning" class="filename-warning"></p>
       </div>
     </div>

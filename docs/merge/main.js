@@ -8,10 +8,14 @@ const outputFilenameInput = document.getElementById("output-filename-input");
 const filenameWarning = document.getElementById("filename-warning");
 const fileError = document.getElementById("file-error");
 const mergeBtn = document.getElementById("merge-btn");
+const mergeStatus = document.getElementById("merge-status");
 
 fileInput.addEventListener("change", onDrop);
 mergeBtn.addEventListener("click", handleMerge);
-outputFilenameInput.addEventListener("input", adjustInputWidth);
+outputFilenameInput.addEventListener("input", () => {
+  adjustInputWidth();
+  removeMergeStatus();
+});
 
 dropZoneRef.addEventListener("click", () => fileInput.click());
 
@@ -22,7 +26,7 @@ function adjustInputWidth() {
   tempSpan.style.whiteSpace = "nowrap";
   tempSpan.textContent = outputFilenameInput.value;
   document.body.appendChild(tempSpan);
-  const width = tempSpan.offsetWidth + 20; // Add some padding
+  const width = tempSpan.offsetWidth + 20;
   outputFilenameInput.style.width = `${width}px`;
   document.body.removeChild(tempSpan);
 }
@@ -55,13 +59,9 @@ function onDrop(event) {
   selectedFiles = [...selectedFiles, ...validFiles];
   updateSelectedFilesList();
 
-  if (!outputFilenameInput.value && selectedFiles.length > 1) {
-    outputFilenameInput.value = `${selectedFiles[0].name
-      .split(".")
-      .slice(0, -1)
-      .join(".")}-MERGED.xlsx`;
-  }
+  updateOutputFilename();
   adjustInputWidth();
+  removeMergeStatus();
 }
 
 function updateSelectedFilesList() {
@@ -70,29 +70,44 @@ function updateSelectedFilesList() {
     const fileDiv = document.createElement("div");
     fileDiv.className = "selected-file";
     fileDiv.innerHTML = `
-            <span style="background-color: ${
-              pastelColors[index % pastelColors.length]
-            }; padding: 5px;">
-                ${index + 1}. ${file.name}
-            </span>
-            <span style="cursor: pointer; padding-left: 10px;" onclick="removeFile(${index})">
-                <i class="bi bi-x-circle"></i>
-            </span>
-        `;
+      <span style="background-color: ${
+        pastelColors[index % pastelColors.length]
+      }; padding: 5px;">
+          ${index + 1}. ${file.name}
+      </span>
+      <span style="cursor: pointer; padding-left: 10px;" onclick="removeFile(${index})">
+          <i class="bi bi-x-circle"></i>
+      </span>
+    `;
     selectedFilesContainer.appendChild(fileDiv);
   });
   if (selectedFiles.length > 1) {
-    document.getElementById("output-filename-input").style.display = "unset";
+    outputFilenameInput.style.display = "unset";
     mergeBtn.className = "merge-btn-enabled";
   } else {
-    document.getElementById("output-filename-input").style.display = "none";
+    outputFilenameInput.style.display = "none";
     mergeBtn.className = "merge-btn-disabled";
   }
+  removeMergeStatus();
 }
 
 function removeFile(index) {
   selectedFiles = selectedFiles.filter((_, i) => i !== index);
   updateSelectedFilesList();
+
+  updateOutputFilename();
+  adjustInputWidth();
+}
+
+function updateOutputFilename() {
+  if (selectedFiles.length > 0) {
+    outputFilenameInput.value = `${selectedFiles[0].name
+      .split(".")
+      .slice(0, -1)
+      .join(".")}-MERGED.xlsx`;
+  } else {
+    outputFilenameInput.value = "";
+  }
 }
 
 function isValidFilename(filename) {
@@ -100,6 +115,10 @@ function isValidFilename(filename) {
   const parts = filename.split(".");
   const extension = parts[parts.length - 1].toLowerCase();
   return validExtensions.includes(extension);
+}
+
+function removeMergeStatus() {
+  mergeStatus.innerText = "";
 }
 
 async function handleMerge() {
@@ -124,7 +143,10 @@ async function handleMerge() {
 
   const primaryFile = await readFile(selectedFiles[0].file);
   let primarySheet = primaryFile.Sheets[primaryFile.SheetNames[0]];
-  let primaryData = XLSX.utils.sheet_to_json(primarySheet, { header: 1 });
+  let primaryData = XLSX.utils.sheet_to_json(primarySheet, {
+    header: 1,
+    raw: true,
+  });
   primaryData = removeEmptyRows(primaryData);
 
   let primarySourceFileNo = Array(primaryData.length).fill(1);
@@ -134,7 +156,10 @@ async function handleMerge() {
   for (let i = 1; i < selectedFiles.length; i++) {
     const secondaryFile = await readFile(selectedFiles[i].file);
     let secondarySheet = secondaryFile.Sheets[secondaryFile.SheetNames[0]];
-    let secondaryData = XLSX.utils.sheet_to_json(secondarySheet, { header: 1 });
+    let secondaryData = XLSX.utils.sheet_to_json(secondarySheet, {
+      header: 1,
+      raw: true,
+    });
     secondaryData = removeEmptyRows(secondaryData);
 
     const secondarySourceFileNo = Array(secondaryData.length).fill(i + 1);
@@ -171,29 +196,22 @@ async function handleMerge() {
         const primaryKey = getRowKey(primaryRow);
         const secondaryKey = getRowKey(secondaryRow);
 
-        // Case 1: Rows are exactly the same
         if (JSON.stringify(primaryRow) === JSON.stringify(secondaryRow)) {
           mergeData.push(primaryRow);
           mergeSourceFileNo.push(primarySourceFileNo[primaryRowNo]);
           mergeConsensusBool.push(primaryConsensusBool[primaryRowNo] && true);
           primaryRowNo++;
           secondaryRowNo++;
-        }
-        // Case 2: Rows have the same first cell (ignoring '%'), but are not the same
-        else if (primaryKey === secondaryKey) {
-          // Add primary row first
+        } else if (primaryKey === secondaryKey) {
           mergeData.push(primaryRow);
           mergeSourceFileNo.push(primarySourceFileNo[primaryRowNo]);
           mergeConsensusBool.push(false);
           primaryRowNo++;
-          // Add secondary row next
           mergeData.push(secondaryRow);
           mergeSourceFileNo.push(secondarySourceFileNo[secondaryRowNo]);
           mergeConsensusBool.push(false);
           secondaryRowNo++;
-        }
-        // Rows are different
-        else if (primaryKey < secondaryKey) {
+        } else if (primaryKey < secondaryKey) {
           mergeData.push(primaryRow);
           mergeSourceFileNo.push(primarySourceFileNo[primaryRowNo]);
           mergeConsensusBool.push(false);
@@ -239,4 +257,5 @@ async function handleMerge() {
   XLSX.utils.book_append_sheet(newWorkbook, mergedSheet, "Merged Data");
 
   XLSX.writeFile(newWorkbook, outputFilename);
+  mergeStatus.innerText = "✅";
 }

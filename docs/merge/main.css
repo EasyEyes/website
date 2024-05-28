@@ -15,6 +15,12 @@
   }
 }
 
+.description {
+  font-size: 1.5rem;
+  color: #666;
+  margin: 0 0 10px 0;
+}
+
 .file-error {
   color: red;
   margin-bottom: 10px;
@@ -55,13 +61,10 @@
   padding: 1rem;
   border: none;
   border-radius: 0.5rem;
-  cursor: pointer !important;
-  font-size: 1rem;
+  font-size: 1.2rem;
   font-weight: 500;
   text-align: center;
   line-height: 100%;
-  outline: none !important;
-  border: none !important;
 }
 
 .selected-file {
@@ -120,4 +123,13 @@
     line-height: 150%;
     margin-bottom: 0;
   }
+}
+
+.merge-file-status {
+  display: flex;
+  align-items: center;
+}
+
+#merge-status {
+  margin-left: 10px;
 }
