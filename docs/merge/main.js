@@ -203,13 +203,37 @@ async function handleMerge() {
           primaryRowNo++;
           secondaryRowNo++;
         } else if (primaryKey === secondaryKey) {
-          mergeData.push(primaryRow);
+          const mergedRowPrimary = [];
+          const mergedRowSecondary = [];
+          for (let col = 0; col < primaryRow.length; col++) {
+            if (primaryRow[col] !== secondaryRow[col]) {
+              mergedRowPrimary.push({
+                value: primaryRow[col],
+                color: pastelColors[
+                  (primarySourceFileNo[primaryRowNo] - 1) % pastelColors.length
+                ].replace("#", ""),
+              });
+              mergedRowSecondary.push({
+                value: secondaryRow[col],
+                color: pastelColors[
+                  (secondarySourceFileNo[secondaryRowNo] - 1) %
+                    pastelColors.length
+                ].replace("#", ""),
+              });
+              mergeConsensusBool.push(false);
+            } else {
+              mergedRowPrimary.push({ value: primaryRow[col], color: null });
+              mergedRowSecondary.push({
+                value: secondaryRow[col],
+                color: null,
+              });
+            }
+          }
+          mergeData.push(mergedRowPrimary);
+          mergeData.push(mergedRowSecondary);
           mergeSourceFileNo.push(primarySourceFileNo[primaryRowNo]);
-          mergeConsensusBool.push(false);
-          primaryRowNo++;
-          mergeData.push(secondaryRow);
           mergeSourceFileNo.push(secondarySourceFileNo[secondaryRowNo]);
-          mergeConsensusBool.push(false);
+          primaryRowNo++;
           secondaryRowNo++;
         } else if (primaryKey < secondaryKey) {
           mergeData.push(primaryRow);
@@ -236,7 +260,13 @@ async function handleMerge() {
     pastelColors[index % pastelColors.length].replace("#", ""),
   );
 
-  const mergedSheet = XLSX.utils.aoa_to_sheet([...header, ...primaryData]);
+  const mergedSheetData = [
+    ...header,
+    ...primaryData.map((row) =>
+      row.map((cell) => (typeof cell === "object" ? cell.value : cell)),
+    ),
+  ];
+  const mergedSheet = XLSX.utils.aoa_to_sheet(mergedSheetData);
   const sheetRange = XLSX.utils.decode_range(mergedSheet["!ref"]);
 
   for (let rowNo = sheetRange.s.r; rowNo <= sheetRange.e.r; rowNo++) {
@@ -253,19 +283,17 @@ async function handleMerge() {
           };
         }
       }
-    } else if (!primaryConsensusBool[rowNo - selectedFiles.length]) {
-      const color = pastelColors[
-        (primarySourceFileNo[rowNo - selectedFiles.length] - 1) %
-          pastelColors.length
-      ].replace("#", "");
+    } else {
+      const actualRowNo = rowNo - selectedFiles.length;
+      const row = primaryData[actualRowNo];
       for (let colNo = sheetRange.s.c; colNo <= sheetRange.e.c; colNo++) {
         const cellRef = XLSX.utils.encode_cell({ r: rowNo, c: colNo });
         const cell = mergedSheet[cellRef];
-        if (cell) {
+        if (cell && row[colNo] && row[colNo].color) {
           cell.s = cell.s || {};
           cell.s.fill = {
             patternType: "solid",
-            fgColor: { rgb: color },
+            fgColor: { rgb: row[colNo].color },
           };
         }
       }
