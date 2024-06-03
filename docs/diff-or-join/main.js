@@ -7,11 +7,13 @@ const selectedFilesContainer = document.getElementById("selected-files");
 const outputFilenameInput = document.getElementById("output-filename-input");
 const filenameWarning = document.getElementById("filename-warning");
 const fileError = document.getElementById("file-error");
-const mergeBtn = document.getElementById("merge-btn");
+const diffBtn = document.getElementById("diff-btn");
+const joinBtn = document.getElementById("join-btn");
 const mergeStatus = document.getElementById("merge-status");
 
 fileInput.addEventListener("change", onDrop);
-mergeBtn.addEventListener("click", handleMerge);
+diffBtn.addEventListener("click", () => handleMerge(false));
+joinBtn.addEventListener("click", () => handleMerge(true));
 outputFilenameInput.addEventListener("input", () => {
   adjustInputWidth();
   removeMergeStatus();
@@ -39,10 +41,7 @@ function onDrop(event) {
   for (let file of files) {
     const fileExtension = file.name.split(".").pop().toLowerCase();
     if (fileExtension === "xlsx" || fileExtension === "csv") {
-      validFiles.push({
-        file,
-        name: file.name,
-      });
+      validFiles.push({ file, name: file.name });
     } else {
       invalidFiles.push(file.name);
     }
@@ -83,10 +82,12 @@ function updateSelectedFilesList() {
   });
   if (selectedFiles.length > 1) {
     outputFilenameInput.style.display = "unset";
-    mergeBtn.className = "merge-btn-enabled";
+    diffBtn.className = "merge-btn-enabled";
+    joinBtn.className = "merge-btn-enabled";
   } else {
     outputFilenameInput.style.display = "none";
-    mergeBtn.className = "merge-btn-disabled";
+    diffBtn.className = "merge-btn-disabled";
+    joinBtn.className = "merge-btn-disabled";
   }
   removeMergeStatus();
 }
@@ -94,7 +95,6 @@ function updateSelectedFilesList() {
 function removeFile(index) {
   selectedFiles = selectedFiles.filter((_, i) => i !== index);
   updateSelectedFilesList();
-
   updateOutputFilename();
   adjustInputWidth();
 }
@@ -121,7 +121,7 @@ function removeMergeStatus() {
   mergeStatus.innerText = "";
 }
 
-async function handleMerge() {
+async function handleMerge(joinBool) {
   const outputFilename = outputFilenameInput.value;
 
   if (!isValidFilename(outputFilename)) {
@@ -141,27 +141,98 @@ async function handleMerge() {
     );
   };
 
-  const primaryFile = await readFile(selectedFiles[0].file);
+  const findBlockRowIndex = (data) => {
+    return data.findIndex(
+      (row) => row[0] && row[0].toString().toLowerCase() === "block",
+    );
+  };
+
+  const getMaxColumn = (data) => {
+    return data.reduce((max, row) => Math.max(max, row.length), 0);
+  };
+
+  let primaryFile = await readFile(selectedFiles[0].file);
   let primarySheet = primaryFile.Sheets[primaryFile.SheetNames[0]];
   let primaryData = XLSX.utils.sheet_to_json(primarySheet, {
     header: 1,
     raw: true,
   });
   primaryData = removeEmptyRows(primaryData);
+  let primaryBlockRowIndex = findBlockRowIndex(primaryData);
+  const primaryBlockRowFiltered = primaryData[primaryBlockRowIndex]
+    .slice(1)
+    .map(Number)
+    .filter((x) => !isNaN(x));
+  let maxBlock = Math.max(...primaryBlockRowFiltered) || 0;
+  let maxColumn = getMaxColumn(primaryData);
 
-  let primarySourceFileNo = Array(primaryData.length).fill(1);
-  let primaryConsensusBool = Array(primaryData.length).fill(true);
-  let processedFileCount = 1;
+  const preProcessedFiles = [primaryData];
 
-  for (let i = 1; i < selectedFiles.length; i++) {
-    const secondaryFile = await readFile(selectedFiles[i].file);
-    let secondarySheet = secondaryFile.Sheets[secondaryFile.SheetNames[0]];
-    let secondaryData = XLSX.utils.sheet_to_json(secondarySheet, {
-      header: 1,
-      raw: true,
-    });
-    secondaryData = removeEmptyRows(secondaryData);
+  if (joinBool) {
+    for (let i = 1; i < selectedFiles.length; i++) {
+      const secondaryFile = await readFile(selectedFiles[i].file);
+      let secondarySheet = secondaryFile.Sheets[secondaryFile.SheetNames[0]];
+      let secondaryData = XLSX.utils.sheet_to_json(secondarySheet, {
+        header: 1,
+        raw: true,
+      });
+      secondaryData = removeEmptyRows(secondaryData);
+      let secondaryBlockRowIndex = findBlockRowIndex(secondaryData);
 
+      if (secondaryBlockRowIndex >= 0) {
+        for (
+          let col = 1;
+          col < secondaryData[secondaryBlockRowIndex].length;
+          col++
+        ) {
+          if (
+            secondaryData[secondaryBlockRowIndex][col] !== undefined &&
+            secondaryData[secondaryBlockRowIndex][col] !== ""
+          ) {
+            secondaryData[secondaryBlockRowIndex][col] =
+              Number(secondaryData[secondaryBlockRowIndex][col]) + maxBlock;
+          }
+        }
+      }
+
+      // Shift columns starting from the third column (index 2)
+      let newSecondaryData = secondaryData.map((row) => {
+        let newRow = row.slice(0, 2);
+        for (let col = 2; col < row.length; col++) {
+          newRow[maxColumn + col - 2] = row[col];
+        }
+        return newRow;
+      });
+
+      const secondaryBlockRowFiltered = secondaryData[secondaryBlockRowIndex]
+        .slice(1)
+        .map(Number)
+        .filter((x) => !isNaN(x));
+      maxBlock += Math.max(...secondaryBlockRowFiltered) || 0;
+      maxColumn = Math.max(maxColumn, getMaxColumn(newSecondaryData));
+
+      preProcessedFiles.push(newSecondaryData);
+    }
+  } else {
+    for (let i = 1; i < selectedFiles.length; i++) {
+      const secondaryFile = await readFile(selectedFiles[i].file);
+      let secondarySheet = secondaryFile.Sheets[secondaryFile.SheetNames[0]];
+      let secondaryData = XLSX.utils.sheet_to_json(secondarySheet, {
+        header: 1,
+        raw: true,
+      });
+      secondaryData = removeEmptyRows(secondaryData);
+      preProcessedFiles.push(secondaryData);
+    }
+  }
+
+  // Merge the pre-processed files
+  let mergedData = preProcessedFiles[0];
+  let sourceFileNo = Array(mergedData.length).fill(1);
+  let consensusBool = Array(mergedData.length).fill(true);
+
+  for (let i = 1; i < preProcessedFiles.length; i++) {
+    let secondaryData = preProcessedFiles[i];
     const secondarySourceFileNo = Array(secondaryData.length).fill(i + 1);
 
     const mergeData = [];
@@ -172,7 +243,7 @@ async function handleMerge() {
     let secondaryRowNo = 0;
 
     while (
-      primaryRowNo < primaryData.length ||
+      primaryRowNo < mergedData.length ||
       secondaryRowNo < secondaryData.length
     ) {
       const getRowKey = (row) => {
@@ -180,41 +251,43 @@ async function handleMerge() {
         return key.startsWith("%") ? key.substring(1) : key;
       };
 
-      if (primaryRowNo >= primaryData.length) {
+      if (primaryRowNo >= mergedData.length) {
         mergeData.push(secondaryData[secondaryRowNo]);
         mergeSourceFileNo.push(secondarySourceFileNo[secondaryRowNo]);
         mergeConsensusBool.push(false);
         secondaryRowNo++;
       } else if (secondaryRowNo >= secondaryData.length) {
-        mergeData.push(primaryData[primaryRowNo]);
-        mergeSourceFileNo.push(primarySourceFileNo[primaryRowNo]);
+        mergeData.push(mergedData[primaryRowNo]);
+        mergeSourceFileNo.push(sourceFileNo[primaryRowNo]);
         mergeConsensusBool.push(false);
         primaryRowNo++;
       } else {
-        const primaryRow = primaryData[primaryRowNo];
+        const primaryRow = mergedData[primaryRowNo];
         const secondaryRow = secondaryData[secondaryRowNo];
         const primaryKey = getRowKey(primaryRow);
         const secondaryKey = getRowKey(secondaryRow);
 
         if (JSON.stringify(primaryRow) === JSON.stringify(secondaryRow)) {
           mergeData.push(primaryRow);
-          mergeSourceFileNo.push(primarySourceFileNo[primaryRowNo]);
-          mergeConsensusBool.push(primaryConsensusBool[primaryRowNo] && true);
+          mergeSourceFileNo.push(sourceFileNo[primaryRowNo]);
+          mergeConsensusBool.push(consensusBool[primaryRowNo] && true);
           primaryRowNo++;
           secondaryRowNo++;
         } else if (primaryKey === secondaryKey) {
           const mergedRowPrimary = [];
           const mergedRowSecondary = [];
-          for (let col = 0; col < primaryRow.length; col++) {
+          const maxCols = Math.max(primaryRow.length, secondaryRow.length);
+
+          for (let col = 0; col < maxCols; col++) {
             if (primaryRow[col] !== secondaryRow[col]) {
               mergedRowPrimary.push({
-                value: primaryRow[col],
+                value: primaryRow[col] !== undefined ? primaryRow[col] : "",
                 color: pastelColors[
-                  (primarySourceFileNo[primaryRowNo] - 1) % pastelColors.length
+                  (sourceFileNo[primaryRowNo] - 1) % pastelColors.length
                 ].replace("#", ""),
               });
               mergedRowSecondary.push({
-                value: secondaryRow[col],
+                value: secondaryRow[col] !== undefined ? secondaryRow[col] : "",
                 color: pastelColors[
                   (secondarySourceFileNo[secondaryRowNo] - 1) %
                     pastelColors.length
@@ -231,13 +304,13 @@ async function handleMerge() {
           }
           mergeData.push(mergedRowPrimary);
           mergeData.push(mergedRowSecondary);
-          mergeSourceFileNo.push(primarySourceFileNo[primaryRowNo]);
+          mergeSourceFileNo.push(sourceFileNo[primaryRowNo]);
           mergeSourceFileNo.push(secondarySourceFileNo[secondaryRowNo]);
           primaryRowNo++;
           secondaryRowNo++;
         } else if (primaryKey < secondaryKey) {
           mergeData.push(primaryRow);
-          mergeSourceFileNo.push(primarySourceFileNo[primaryRowNo]);
+          mergeSourceFileNo.push(sourceFileNo[primaryRowNo]);
           mergeConsensusBool.push(false);
           primaryRowNo++;
         } else {
@@ -249,10 +322,9 @@ async function handleMerge() {
       }
     }
 
-    primaryData = mergeData;
-    primarySourceFileNo = mergeSourceFileNo;
-    primaryConsensusBool = mergeConsensusBool;
-    processedFileCount++;
+    mergedData = mergeData;
+    sourceFileNo = mergeSourceFileNo;
+    consensusBool = mergeConsensusBool;
   }
 
   const header = selectedFiles.map((file, index) => [`% ${file.name}`]);
@@ -262,7 +334,7 @@ async function handleMerge() {
 
   const mergedSheetData = [
     ...header,
-    ...primaryData.map((row) =>
+    ...mergedData.map((row) =>
       row.map((cell) => (typeof cell === "object" ? cell.value : cell)),
     ),
   ];
@@ -285,7 +357,7 @@ async function handleMerge() {
       }
     } else {
       const actualRowNo = rowNo - selectedFiles.length;
-      const row = primaryData[actualRowNo];
+      const row = mergedData[actualRowNo];
       for (let colNo = sheetRange.s.c; colNo <= sheetRange.e.c; colNo++) {
         const cellRef = XLSX.utils.encode_cell({ r: rowNo, c: colNo });
         const cell = mergedSheet[cellRef];

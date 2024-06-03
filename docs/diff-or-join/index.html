@@ -291,7 +291,7 @@
             <a class="nav-link" href="../experiment/">Compiler</a>
           </li>
           <li class="nav-item active">
-            <a class="nav-link actve" href="../merge/">Merge</a>
+            <a class="nav-link actve" href="../diff-or-join/">Diff or Join</a>
           </li>
           <li class="nav-item">
             <a
@@ -365,13 +365,13 @@
     </nav>
 
     <div id="root">
-      <div id="header-title"><h1>Merge experiments</h1></div>
+      <div id="header-title"><h1>Diff or Join</h1></div>
       <div class="description">
-        Use Merge to combine different experiments or to highlight the
-        differences between similar experiments. Select two or more EasyEyes
-        experiments (spreadsheets). They will be merged and saved as one file in
-        the Downloads folder. Identical lines merge into one. Different lines
-        persist, and the colors of different cells indicate their source files.
+        Use Diff to highlight the differences between similar experiments. Use
+        Join to combine experiments, one after another. First select several
+        EasyEyes experiments (spreadsheets). They will all be diffed or joined
+        to create one XLSX file in the Downloads folder. Identical lines are
+        merged and differing lines are highlighted with color indicating origin.
       </div>
       <div tabindex="0" class="dropzone" id="dropzone">
         <input
@@ -387,7 +387,8 @@
       <div id="selected-files" class="selected-files"></div>
 
       <div id="file-error" class="file-error"></div>
-      <button id="merge-btn" class="merge-btn-disabled">Merge ⇩</button>
+      <button id="diff-btn" class="merge-btn-disabled">Diff ⇩</button>
+      <button id="join-btn" class="merge-btn-disabled">Join ⇩</button>
 
       <div style="margin-bottom: 10px"></div>
       <div class="output-filename-container">
