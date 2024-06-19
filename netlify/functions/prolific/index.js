@@ -21,11 +21,11 @@ exports.handler = async (event, context) => {
   if (task.includes("users")) {
     // ! user
     try {
-      const response = await fetch(`https://api.prolific.co/api/v1/${task}`, {
+      const response = await fetch(`https://api.prolific.com/api/v1/${task}`, {
         method: "GET",
         headers: {
           ...event.headers,
-          host: "api.prolific.co",
+          host: "api.prolific.com",
           "Access-Control-Allow-Origin": "*",
         },
         redirect: "follow",
@@ -46,12 +46,12 @@ exports.handler = async (event, context) => {
   } else if (task.includes("studies") && task.endsWith("studies/")) {
     // ! study
     try {
-      const response = await fetch(`https://api.prolific.co/api/v1/${task}`, {
+      const response = await fetch(`https://api.prolific.com/api/v1/${task}`, {
         method: "POST",
         body: event.body,
         headers: {
           ...event.headers,
-          host: "api.prolific.co",
+          host: "api.prolific.com",
           "Access-Control-Allow-Origin": "*",
         },
         // redirect: "follow",
@@ -73,15 +73,15 @@ exports.handler = async (event, context) => {
     // ! study submissions
     try {
       const response = await fetch(
-        `https://api.prolific.co/api/v1/${task}?limit=300&offset=0`,
+        `https://api.prolific.com/api/v1/${task}?limit=300&offset=0`,
         {
           method: "GET",
           headers: {
             ...event.headers,
-            host: "api.prolific.co",
+            host: "api.prolific.com",
             "Access-Control-Allow-Origin": "*",
           },
-        }
+        },
       );
 
       data = await response.json();
@@ -99,11 +99,11 @@ exports.handler = async (event, context) => {
   } else if (task.includes("export")) {
     // ! download participants demographics
     try {
-      const response = await fetch(`https://api.prolific.co/api/v1/${task}`, {
+      const response = await fetch(`https://api.prolific.com/api/v1/${task}`, {
         method: "GET",
         headers: {
           ...event.headers,
-          host: "api.prolific.co",
+          host: "api.prolific.com",
           "Access-Control-Allow-Origin": "*",
         },
       });
@@ -123,11 +123,11 @@ exports.handler = async (event, context) => {
   } else if (task.includes("studies")) {
     // ! retrive study
     try {
-      const response = await fetch(`https://api.prolific.co/api/v1/${task}`, {
+      const response = await fetch(`https://api.prolific.com/api/v1/${task}`, {
         method: "GET",
         headers: {
           ...event.headers,
-          host: "api.prolific.co",
+          host: "api.prolific.com",
           "Access-Control-Allow-Origin": "*",
         },
       });
