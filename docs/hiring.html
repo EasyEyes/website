@@ -8,8 +8,17 @@
       content="width=device-width, initial-scale=1.0, maximum-scale=1.0"
     />
     <meta
-      name="author"
-      content="Denis Pelli, Peiling Jiang, Augustin Burchell"
+      name="description"
+      content="The open-source EasyEyes web app is meant to help anyone
+      test vision online. EasyEyes measures screen size once and uses the
+      webcam to track head and gaze continuously. It also allows use of a
+      smartphone to emulate a wireless keypad. Currently, we have a working
+      prototype with limited documentation. We are using it with PsychoPy.
+      You are welcome to use it with any online testing software."
+    />
+    <meta
+      name="keywords"
+      content="measure, calibration, psychology, psychophysics"
     />
 
     <!-- Global site tag (gtag.js) - Google Analytics -->
@@ -144,7 +153,8 @@
               rel="noopener noreferrer"
               target="_blank"
               >Prolific</a
-            >) and a table that you create in any spreadsheet app, e.g., Excel. The
+            >) and a table that you create in any spreadsheet app, e.g., Google
+            Sheets. The
             <a
               href="https://docs.google.com/document/u/1/d/e/2PACX-1vTTrqaSyva2afVupLchBjfTHc_YW5jAbEexGbudXMJ9xMKPBDA3nxQmHXa4wjnAoSVabeEA8T9CGIMa/pub"
               rel="noopener noreferrer"
@@ -179,6 +189,8 @@
       }
     </script>
 
+    <!-- External -->
+
     <script
       src="https://code.jquery.com/jquery-3.6.0.slim.min.js"
       integrity="sha256-u7e5khyithlIdTpu22PHhENmPcRdFiHRjhAuHcs05RI="
@@ -200,7 +212,42 @@
       crossorigin="anonymous"
     ></script>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+    <!-- Internal -->
+
+    <link rel="stylesheet" href="uni.css" />
+
+    <meta
+      name="author"
+      content="Denis Pelli, Peiling Jiang, Augustin Burchell"
+    />
+    <link rel="apple-touch-icon" href="media/apple-touch-icon-default.png" />
+    <link
+      rel="shortcut icon"
+      href="media/favicon-default.ico"
+      type="image/x-icon"
+    />
+    <title>EasyEyes | References</title>
+
     <style>
+      .citations {
+        margin-top: 5rem;
+      }
+
+      .citations h1 {
+        margin-bottom: 2rem;
+      }
+
+      .citations p:not(.note) {
+        padding-left: 1.5rem;
+        text-indent: -1.5rem;
+        overflow-wrap: break-word;
+      }
+
+      .citations .note,
+      .citations .note * {
+        color: #999;
+      }
       table {
         border-collapse: collapse;
         border-spacing: 0;
@@ -241,28 +288,15 @@
         }
       }
     </style>
-
-    <!-- Virtual keypad -->
-    <script src="https://cdn.jsdelivr.net/npm/virtual-keypad@latest/dist/main.min.js"></script>
-
-    <link rel="stylesheet" href="../uni.css" />
-    <link rel="stylesheet" href="main.css" />
-
-    <link rel="apple-touch-icon" href="../media/apple-touch-icon-blue.png" />
-    <link
-      rel="shortcut icon"
-      href="../media/favicon-blue.ico"
-      type="image/x-icon"
-    />
-    <title>EasyEyes | Virtual Keypad</title>
   </head>
+
   <body>
     <nav class="navbar navbar-expand navbar-light bg-white">
-      <a class="navbar-brand" href="../home.html"
+      <a class="navbar-brand" href="home.html"
         ><img
           class="easyeyes-logo"
-          src="../media/easyeyes-blue.svg"
-          alt="EasyEyes | Virtual Keypad"
+          src="media/easyeyes-default.svg"
+          alt="EasyEyes"
           width="80px"
           height="80px"
       /></a>
@@ -280,7 +314,7 @@
       <div class="collapse navbar-collapse" id="navbarNav">
         <ul class="navbar-nav">
           <li class="nav-item">
-            <a class="nav-link" href="../experiment/">Compiler</a>
+            <a class="nav-link" href="experiment/">Compiler</a>
           </li>
           <li class="nav-item">
             <a class="nav-link" href="../diff-or-join/">Diff or Join</a>
@@ -328,7 +362,9 @@
                 >Thanks</a
               >
               <a class="dropdown-item" href="../privacy.html">Privacy</a>
-              <a class="dropdown-item" href="../references.html">References</a>
+              <a class="dropdown-item active" href="../references.html"
+                >References</a
+              >
               <a
                 class="dropdown-item"
                 href="https://github.com/EasyEyes"
@@ -337,7 +373,6 @@
               >
             </div>
           </li>
-
           <li class="nav-item dropdown">
             <a
               class="nav-link dropdown-toggle"
@@ -350,8 +385,8 @@
               Demos
             </a>
             <div class="dropdown-menu" aria-labelledby="navbarDropdownMenuLink">
-              <a class="nav-link" href="../remote-calibrator/">Calibrator</a>
-              <a class="nav-link active" href=".">Keypad</a>
+              <a class="nav-link" href="remote-calibrator/">Calibrator</a>
+              <a class="nav-link" href="virtual-keypad/">Keypad</a>
               <a class="nav-link" href="../hdr/">HDR</a>
             </div>
           </li>
@@ -360,154 +395,136 @@
     </nav>
 
     <main>
-      <div id="header">
-        <h1><span class="headline-next">Virtual</span> Keypad</h1>
-        <p class="description">
-          Use your smartphone as a keypad to respond from any distance. Just
-          point your smartphone camera at the QR code below, and click the
-          pop-up window that appears on your smartphone.
-        </p>
+      <div class="citations">
+        <h1>NEED JavaScript Programmers</h1>
+        <ul>
+          Need to hire one or two
+          <strong>JAVASCRIPT PROGRAMMERS</strong>
+          to help implement software for
+          <strong>ONLINE TESTING OF HEARING, VISION, AND READING</strong
+          >. You will join a small team of programmers working under Professor
+          Pelli's supervision to enhance
+          <a href="https://EasyEyes.app">EasyEyes.app</a>
+        </ul>
+
+        <ul>
+          We need your help to:
+        </ul>
+        <ul>
+          <li>
+            synthesize and show HDR movies for accurate movie presentation
+          </li>
+          <li>
+            use Google Face Mesh to estimate face orientation and distance from
+            camera
+          </li>
+          <li>simulate VR optics by adding controlled blur</li>
+          <li>
+            add support for variable fonts and tracking, probably by replacing
+            PixiJS
+          </li>
+          <li>
+            make upload more robust, to work even at internet speeds below 1
+            MB/s.
+          </li>
+          <li>interface to gaze tracker, e.g. Pupil Labs or Eyelink.</li>
+          <li>
+            allow users to write and add new JS modules to implement new
+            perceptual tests.
+          </li>
+          <li>
+            refactor to ease maintenance and facilitate user contributions to
+            the code.
+          </li>
+          <li>streamline user interface.</li>
+          <li>improve bug reporting system</li>
+          <li>diagnose and fix bugs when they appear.</li>
+        </ul>
+
+        <h2>Publications</h2>
+        <ul>
+          Professor Pelli coauthored the PsychToolbox package for vision
+          research which is used by thousands of labs and has been cited 18,000
+          times (<a href="http://psychtoolbox.org">http://psychtoolbox.org</a
+          >). A recent paper about EasyEyes is:
+          <em
+            >EasyEyes—A new method for accurate fixation in online vision
+            testing</em
+          >
+        </ul>
+
+        <h2>The Job</h2>
+        <ul>
+          Available immediately. Hours flexible. The work is performed remotely.
+          Non-USA preferred. Fluency in English required. Salary $40/hour,
+          adjusted based on experience. Tasks are assigned and monitored on
+          Trello. 1,305 tasks have been completed, and several hundred await
+          assignment. Professor Pelli supervises through two lab meetings every
+          week.
+        </ul>
+
+        <h2>Required Qualifications</h2>
+        <ul>
+          Substantial experience writing and debugging front-end web development
+          with graphics in JavaScript (required), and HTML & CSS (desirable).
+          Expert understanding of webpage components (e.g., HTML nodes and their
+          operations in JS), JavaScript flow (e.g., asynchronous and promise),
+          and JavaScript ES6 usages (e.g., modules). Experience in making a web
+          app or personal website is a huge plus.
+        </ul>
+
+        <h2>Preferred Qualifications</h2>
+        <ul>
+          <li>Experience in testing or gaming software.</li>
+          <li>Experience (e.g. with R) analyzing and plotting human data.</li>
+          <li>
+            Knowledge of visual perception, e.g., crowding, acuity, visual
+            fields.
+          </li>
+          <li>
+            Knowledge of HTML canvas, animation frame, and rendering context
+            (e.g., experience with libraries like p5.js or PixiJS).
+          </li>
+          <li>Knowledge of TypeScript, Webpack, and NPM.</li>
+          <li>Knowledge of PsychoPy/PsychoJS, and MATLAB.</li>
+          <li>Knowledge of GLSL and WebXR.</li>
+          <li>Knowledge of web frameworks, like React.</li>
+          <li>
+            Experience in collaborative projects using Git, GitHub, and Git
+            submodules.
+          </li>
+        </ul>
+        <h2>To Apply</h2>
+        <ul>
+          Please email:<br />
+          <a href="mailto:denis.pelli@nyu.edu">denis.pelli@nyu.edu</a
+          ><br />
+          Subject: Javascript Programmer<br />
+          <ul>
+            <li>Cover Letter</li>
+            <li>Resume</li>
+            <li>Links to working examples of your work</li>
+            <li>Links to your code repository</li>
+          </ul>
+        </ul>
+
+        <ul>
+          Denis Pelli<br />
+          Professor of Psychology and Neural Science<br />
+          New York University<br />
+          <a href="https://as.nyu.edu/faculty/denis-pelli.html"
+            >https://as.nyu.edu/faculty/denis-pelli.html</a
+          ><br />
+          July 19, 2024
+        </ul>
       </div>
-      <section id="demo-section">
-        <div id="demo-widget">
-          <form id="demo-parameters-form">
-            <!-- FONT -->
-            <!-- <input type="radio" id="sloan" name="font-select" value="Sloan" />
-            <label for="sloan">Sloan</label> <br />
-            <input type="radio" id="pelli" name="font-select" value="Pelli" />
-            <label for="pelli">Pelli</label> <br /> -->
-            <p class="main-text" style="margin-bottom: 5px">Font</p>
-            <select id="font-select" name="font-select" id="font-select">
-              <option value="Sloan" selected>Sloan</option>
-              <option value="Pelli">Pelli</option>
-            </select>
-            <!-- ALPHABET -->
-            <p class="main-text" style="margin-bottom: 5px">
-              Alphabet (comma separated)
-            </p>
-            <!-- <label for="alphabet-input">Alphabet (comma separated)</label><br /> -->
-            <input type="text" id="alphabet-input" name="alphabet-input" />
-            <input type="submit" id="alphabet-submit" value="Submit" />
-          </form>
-          <div id="qrcode-demo"></div>
-        </div>
-      </section>
-      <section id="for-programmers">
-        <p class="main-text">
-          <b>Programmers: </b>From within an online experiment (such as one
-          created using
-          <a href="https://github.com/psychopy/psychojs">PsychoJS</a>
-          or <a href="https://lab.js.org">lab.js</a>), initiate an appropriate
-          <code>Receiver</code> to provide the participant with a unique QR
-          code. Use this <code>Receiver</code> object throughout the experiment
-          to update keypad parameters or provide messages to the participant -
-          bidirectional communication between the <code>Receiver</code> and
-          <code>Keypad</code> allows for trial-by-trial adjustment of font and
-          alphabet.
-        </p>
-      </section>
     </main>
 
     <footer>
-      <a href="https://github.com/EasyEyes/virtual-keypad"
-        ><img
-          alt="GitHub stars"
-          src="https://img.shields.io/github/stars/EasyEyes/virtual-keypad?style=flat-square"
-      /></a>
-      <a href="https://npmjs.org/package/virtual-keypad"
-        ><img
-          alt="npm version"
-          src="https://img.shields.io/npm/v/virtual-keypad.svg?style=flat-square"
-      /></a>
-      <a href="https://github.com/EasyEyes/virtual-keypad/blob/main/LICENSE"
-        ><img
-          alt="GitHub license"
-          src="https://img.shields.io/github/license/EasyEyes/virtual-keypad?style=flat-square"
-      /></a>
-      <a href="https://www.jsdelivr.com/package/npm/virtual-keypad"
-        ><img
-          alt="jsdelivr"
-          src="https://data.jsdelivr.com/v1/package/npm/virtual-keypad/badge"
-      /></a>
       <p>
         Copyright © 2020 - 2023 New York University<br />Created by Denis Pelli
         and the EasyEyes team
       </p>
     </footer>
-
-    <script>
-      // document.getElementById("sloan").checked = true;
-
-      var receivedData = [];
-      let keypad_options = {
-        // Specify a 'keypadUrl' field if you really need to redirect to a keypad hosted elsewhere
-        alphabet: [..."CDHKNORSVZ".split(""), "ESC", "SPACE"], // Set of symbols to display; array perfered
-        font: "Sloan", // Supported font, in which to display letters
-        targetElementId: "qrcode-demo", // id of the the div where messages should be displayed
-      };
-      let ondata_callback = (data) => {
-        receivedData.push(data.response);
-        const displayPort = document.getElementById("qrcode-demo");
-        displayPort.innerText += data.response + ", ";
-        if (receivedData.length % 30 == 0) {
-          displayPort.innerText += "\n";
-        }
-        console.log(receivedData);
-      };
-      var receiver = new virtualKeypad.Receiver(
-        keypad_options,
-        ondata_callback,
-      );
-      // Handle form submission of new alphabet
-      const newAlphabetSubmitted = (event) => {
-        let alphabetString = document.getElementById("alphabet-input").value;
-        // https://css-tricks.com/snippets/javascript/strip-whitespace-from-string/
-        alphabetString = alphabetString.trim().replace(/\s+/g, "");
-
-        if (document.querySelector("#font-select").value === "Sloan") {
-          // Sloan font
-          alphabetString = alphabetString.toUpperCase();
-        } else {
-          // Pelli font
-          // Pelli font only supports numbers
-          alphabetString.replace(/[^0-9,]/g, "");
-        }
-
-        const alphabet = alphabetString.split(",");
-        try {
-          receiver.updateAlphabet(alphabet); // TODO verify updateAlphabet works
-          document.getElementById("alphabet-input").value = ""; // Reset text field?
-        } catch (error) {
-          console.error(error);
-          alert("Error updating alphabet. Sorry for the inconvenience!");
-        }
-      };
-
-      // Handle form submission of new font
-      const newFontSelected = (font) => {
-        try {
-          receiver.updateFont(font); // TODO verify updateFont works
-        } catch (error) {
-          console.error(error);
-          alert("Error updating font. Sorry for the inconvenience!");
-        }
-      };
-
-      // Assign font button handlers
-      // const fontButtons = document.getElementsByName("font-select");
-      // for (let i = 0; i < fontButtons.length; i++) {
-      //   const selectedFont = fontButtons[i].value;
-      //   fontButtons[i].onclick = () => {
-      //     newFontSelected(selectedFont);
-      //   };
-      // }
-      document.querySelector("#font-select").onchange = (e) => {
-        newFontSelected(document.querySelector("#font-select").value);
-      };
-      // Assign alphabet from handler
-      document
-        .getElementById("demo-parameters-form")
-        .addEventListener("submit", newAlphabetSubmitted);
-    </script>
   </body>
 </html>
