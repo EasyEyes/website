@@ -1,5 +1,5 @@
 [build]
-environment = { NODE_VERSION = "16", NPM_VERSION = "9.1.3" }
+environment = { NODE_VERSION = "20.18.1", NPM_VERSION = "10.8.2" }
 publish = "docs/"
 command = "npm run netlify"
 
