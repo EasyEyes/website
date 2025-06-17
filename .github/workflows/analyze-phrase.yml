@@ -18,5 +18,3 @@ jobs:
         run: |
           cd docs/experiment/threshold
           npm run analyze:phrases
-        # env:
-        #   NODE_OPTIONS: --no-warnings --input-type=module
