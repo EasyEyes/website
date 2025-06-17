@@ -15,8 +15,8 @@ jobs:
           git submodule update --init --recursive
           npm ci
       - name: Run i18n phrase static analysis
-        env:
-          NODE_OPTIONS: --no-warnings --input-type=module
         run: |
           cd docs/experiment/threshold
           npm run analyze:phrases
+        # env:
+        #   NODE_OPTIONS: --no-warnings --input-type=module
