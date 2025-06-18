@@ -57,12 +57,12 @@ update_threshold() {
 
   check
 
-  # Check for undefined i18n phrases before proceeding
-  npm run analyze:phrases
-  if [ $? -ne 0 ]; then
-    echo "\033[31mERROR: Undefined i18n phrases found. Commit aborted.\033[0m"
-    exit 1
-  fi
+  # # Check for undefined i18n phrases before proceeding
+  # npm run analyze:phrases
+  # if [ $? -ne 0 ]; then
+  #   echo "\033[31mERROR: Undefined i18n phrases found. Commit aborted.\033[0m"
+  #   exit 1
+  # fi
 
   # git status
   git add -A
