@@ -1,10 +1,11 @@
-name: Analyze International Phrases Used
+name: Analyze International Phrases
 
 on: workflow_dispatch
 
 jobs:
-  analyze-phrases:
+  check-undefined-phrases:
     runs-on: ubuntu-latest
+    name: Check undefined phrases
     steps:
       - uses: actions/checkout@v3
       - uses: actions/setup-node@v3
@@ -12,9 +13,36 @@ jobs:
           node-version: 16
       - name: Install dependencies
         run: |
-          git submodule update --init --recursive
-          npm ci
-      - name: Run i18n phrase static analysis
+          git submodule update --init --recursive 2>/dev/null
+          npm ci --silent --no-audit --no-fund 2>/dev/null
+        env:
+          NPM_CONFIG_LOGLEVEL: error
+      - name: Analyze phrases
         run: |
           cd docs/experiment/threshold
-          npm run analyze:phrases
+          npm run analyze:phrases-undefined --silent 2>/dev/null
+        env:
+          NODE_OPTIONS: --experimental-specifier-resolution=node
+          NODE_NO_WARNINGS: 1
+
+  check-unused-phrases:
+    runs-on: ubuntu-latest
+    name: Check unused phrases
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-node@v3
+        with:
+          node-version: 16
+      - name: Install dependencies
+        run: |
+          git submodule update --init --recursive 2>/dev/null
+          npm ci --silent --no-audit --no-fund 2>/dev/null
+        env:
+          NPM_CONFIG_LOGLEVEL: error
+      - name: Analyze phrases
+        run: |
+          cd docs/experiment/threshold
+          npm run analyze:phrases-unused --silent 2>/dev/null
+        env:
+          NODE_OPTIONS: --experimental-specifier-resolution=node
+          NODE_NO_WARNINGS: 1
