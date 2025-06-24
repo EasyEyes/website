@@ -5,7 +5,7 @@ on: workflow_dispatch
 jobs:
   check-undefined-phrases:
     runs-on: ubuntu-latest
-    name: Check undefined phrases
+    name: Check for undefined phrases in use
     steps:
       - uses: actions/checkout@v3
       - uses: actions/setup-node@v3
@@ -27,7 +27,7 @@ jobs:
 
   check-unused-phrases:
     runs-on: ubuntu-latest
-    name: Check unused phrases
+    name: Check for unused phrases
     steps:
       - uses: actions/checkout@v3
       - uses: actions/setup-node@v3
