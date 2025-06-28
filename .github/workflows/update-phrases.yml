@@ -8,6 +8,8 @@ on: workflow_dispatch
 jobs:
   phrases:
     runs-on: ubuntu-latest
+        env:
+          NODE_OPTIONS: --max-old-space-size=4096  # ⬅️ added to increase memory for Node.js
     steps:
       - uses: actions/checkout@v3
       - uses: actions/setup-node@v3
