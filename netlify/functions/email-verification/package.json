@@ -1,0 +1,11 @@
+{
+  "name": "email-verification",
+  "version": "1.0.0",
+  "description": "EasyEyes email verification for microphone calibration",
+  "main": "index.js",
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "mailtrap": "^4.2.0"
+  }
+}
