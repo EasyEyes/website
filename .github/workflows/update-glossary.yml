@@ -33,18 +33,30 @@ jobs:
           npm run glossary
           git status
           git add -A
-          git commit -m 'github action: update glossary' --no-verify
-          git remote set-url origin https://x-access-token:${{secrets.ci_token}}@github.com/EasyEyes/threshold
-          git push
+          if ! git diff --cached --quiet; then
+            git commit -m 'github action: update glossary' --no-verify
+            git remote set-url origin https://x-access-token:${{secrets.ci_token}}@github.com/EasyEyes/threshold
+            git push
+          else
+            echo "No changes in threshold repository"
+          fi
 
           cd ..
           git add -A
-          git commit -m 'github action: update glossary' --no-verify
-          git remote set-url origin https://x-access-token:${{secrets.ci_token}}@github.com/EasyEyes/threshold-scientist
-          git push
+          if ! git diff --cached --quiet; then
+            git commit -m 'github action: update glossary' --no-verify
+            git remote set-url origin https://x-access-token:${{secrets.ci_token}}@github.com/EasyEyes/threshold-scientist
+            git push
+          else
+            echo "No changes in threshold-scientist repository"
+          fi
 
           cd ..
           git add -A
-          git commit -m 'github action: update glossary' --no-verify
-          git remote set-url origin https://x-access-token:${{secrets.ci_token}}@github.com/${{github.repository}}
-          git push
+          if ! git diff --cached --quiet; then
+            git commit -m 'github action: update glossary' --no-verify
+            git remote set-url origin https://x-access-token:${{secrets.ci_token}}@github.com/${{github.repository}}
+            git push
+          else
+            echo "No changes in website repository"
+          fi
