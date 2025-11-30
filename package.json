@@ -30,6 +30,7 @@
   },
   "homepage": "https://github.com/EasyEyes/website#readme",
   "devDependencies": {
+    "debug": "^4.4.3",
     "eslint": "^8.53.0",
     "husky": "^8.0.3",
     "lint-staged": "^15.0.2",
