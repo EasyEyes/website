@@ -120,6 +120,30 @@ exports.handler = async (event, context) => {
     }
 
     return responseWrapper(statusCode, data);
+  } else if (task.includes("participant-groups")) {
+    // ! participant groups
+    try {
+      const response = await fetch(`https://api.prolific.com/api/v1/${task}`, {
+        method: "GET",
+        headers: {
+          ...event.headers,
+          host: "api.prolific.com",
+          "Access-Control-Allow-Origin": "*",
+        },
+      });
+
+      data = await response.json();
+      statusCode = 200;
+    } catch (error) {
+      console.error("ERROR", error);
+
+      data = {
+        error: error.message,
+      };
+      statusCode = 500;
+    }
+
+    return responseWrapper(statusCode, data);
   } else if (task.includes("studies")) {
     // ! retrive study
     try {
