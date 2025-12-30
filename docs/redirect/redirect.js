@@ -1,7 +1,9 @@
-const hrefSplit = window.location.href.split("/redirect/");
-
-const urlSearchParams = new URLSearchParams(window.location.href);
+// Parse query parameters from the OAuth callback
+const urlSearchParams = new URLSearchParams(window.location.search);
+const authCode = urlSearchParams.get("code");
 const redirectTarget = urlSearchParams.get("state");
+const error = urlSearchParams.get("error");
+const errorDescription = urlSearchParams.get("error_description");
 
 // var dots = window.setInterval(function () {
 //   var wait = document.getElementById("wait");
@@ -28,10 +30,25 @@ const sleep = (time) => {
 };
 
 sleep(500).then(() => {
-  if (hrefSplit.length > 1 && redirectTarget) {
-    const tokenInfo = hrefSplit[1];
-    if (tokenInfo.includes(`#access_token`)) {
-      window.location.replace(redirectTarget + tokenInfo);
-    }
+  // Handle OAuth errors
+  if (error) {
+    console.error("OAuth error:", error, errorDescription);
+    alert(`OAuth error: ${error}\n${errorDescription || ""}`);
+    return;
+  }
+
+  // Redirect back to original page with authorization code
+  if (authCode && redirectTarget) {
+    // Decode the state parameter to get the original URL
+    const targetUrl = decodeURI(redirectTarget);
+
+    // Append the authorization code to the target URL
+    const separator = targetUrl.includes("?") ? "&" : "?";
+    const redirectUrl = `${targetUrl}${separator}code=${authCode}`;
+
+    window.location.replace(redirectUrl);
+  } else {
+    console.error("Missing authorization code or redirect target");
+    alert("OAuth redirect failed: missing code or state parameter");
   }
 });
