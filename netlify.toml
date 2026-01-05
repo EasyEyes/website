@@ -13,7 +13,7 @@ Cross-Origin-Embedder-Policy = "require-corp"
 Cross-Origin-Opener-Policy = "same-origin"
 
 [[headers]]
-for = "/experiment/threshold/*"
+for = "/compiler/threshold/*"
 [headers.values]
 Cross-Origin-Embedder-Policy = "require-corp"
 Cross-Origin-Opener-Policy = "same-origin"
@@ -24,6 +24,13 @@ Cross-Origin-Resource-Policy = "cross-origin"
 for = "/*"
 [headers.values]
 Access-Control-Allow-Origin = "*"
+
+# Rewrite /compiler/* to /experiment/* (keeps URL as /compiler/)
+[[redirects]]
+from = "/compiler/*"
+to = "/experiment/:splat"
+status = 200
+force = true
 
 # [[plugins]]
 # package = "@netlify/plugin-lighthouse"
