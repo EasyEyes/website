@@ -35,7 +35,16 @@
     <link rel="apple-touch-icon" href="media/apple-touch-icon-default.png" />
 
     <!-- Redirect (must be after meta tags for SEO) -->
-    <meta http-equiv="refresh" content="0; URL='/compiler'" />
+    <script>
+      // Only redirect if not a bot/crawler
+      if (!/bot|crawler|spider|crawling/i.test(navigator.userAgent)) {
+        window.location.href = "/compiler";
+      }
+    </script>
   </head>
-  <body></body>
+  <body>
+    <noscript>
+      <meta http-equiv="refresh" content="0; URL='/compiler'" />
+    </noscript>
+  </body>
 </html>
