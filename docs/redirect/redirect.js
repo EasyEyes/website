@@ -1,34 +1,15 @@
 // Parse query parameters from the OAuth callback
 const urlSearchParams = new URLSearchParams(window.location.search);
 const authCode = urlSearchParams.get("code");
-const redirectTarget = urlSearchParams.get("state");
+const state = urlSearchParams.get("state");
 const error = urlSearchParams.get("error");
 const errorDescription = urlSearchParams.get("error_description");
-
-// var dots = window.setInterval(function () {
-//   var wait = document.getElementById("wait");
-//   switch ((wait.innerHTML.match(/\./g) || []).length) {
-//     case 0:
-//       wait.innerHTML = ".&nbsp;&nbsp;";
-//       break;
-//     case 1:
-//       wait.innerHTML = "..&nbsp;";
-//       break;
-//     case 2:
-//       wait.innerHTML = "...";
-//       break;
-//     case 3:
-//       wait.innerHTML = "&nbsp;&nbsp;&nbsp;";
-//       break;
-//     default:
-//       break;
-//   }
-// }, 500);
 
 const sleep = (time) => {
   return new Promise((resolve) => setTimeout(resolve, time));
 };
 
+//todo: possibly it should remove
 sleep(500).then(() => {
   // Handle OAuth errors
   if (error) {
@@ -37,18 +18,20 @@ sleep(500).then(() => {
     return;
   }
 
-  // Redirect back to original page with authorization code
-  if (authCode && redirectTarget) {
-    // Decode the state parameter to get the original URL
-    const targetUrl = decodeURI(redirectTarget);
+  // Get return URL from sessionStorage (stored by GitLabAuth.startAuthorization)
+  // Default to /compiler/ if not found
+  const returnUrl = sessionStorage.getItem("oauth_return_url") || "/compiler/";
 
-    // Append the authorization code to the target URL
-    const separator = targetUrl.includes("?") ? "&" : "?";
-    const redirectUrl = `${targetUrl}${separator}code=${authCode}`;
+  // Redirect back to original page with authorization code and state
+  if (authCode && state) {
+    // Append the authorization code and state to the return URL
+    const separator = returnUrl.includes("?") ? "&" : "?";
+    const redirectUrl = `${returnUrl}${separator}code=${authCode}&state=${state}`;
 
+    console.log("OAuth redirect: returning to", redirectUrl);
     window.location.replace(redirectUrl);
   } else {
-    console.error("Missing authorization code or redirect target");
+    console.error("Missing authorization code or state parameter");
     alert("OAuth redirect failed: missing code or state parameter");
   }
 });
