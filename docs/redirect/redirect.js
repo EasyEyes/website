@@ -18,9 +18,26 @@ sleep(500).then(() => {
     return;
   }
 
-  // Get return URL from sessionStorage (stored by GitLabAuth.startAuthorization)
-  // Default to /compiler/ if not found
-  const returnUrl = sessionStorage.getItem("oauth_return_url") || "/compiler/";
+  // Decode compound state to extract return URL
+  // Format: base64(csrfToken|returnUrl)
+  let returnUrl = "/compiler/"; // Default fallback
+
+  if (state) {
+    try {
+      const decoded = atob(state);
+      const parts = decoded.split("|");
+      if (parts.length === 2) {
+        // parts[0] is CSRF token, parts[1] is return URL
+        returnUrl = parts[1];
+        console.log("Decoded return URL from state:", returnUrl);
+      } else {
+        console.warn("State parameter has unexpected format, using default");
+      }
+    } catch (error) {
+      console.error("Failed to decode state parameter:", error);
+      // Fall back to default return URL
+    }
+  }
 
   // Redirect back to original page with authorization code and state
   if (authCode && state) {
