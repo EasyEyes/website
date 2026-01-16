@@ -9,7 +9,6 @@ const sleep = (time) => {
   return new Promise((resolve) => setTimeout(resolve, time));
 };
 
-//todo: possibly it should remove
 sleep(500).then(() => {
   // Handle OAuth errors
   if (error) {
@@ -18,24 +17,47 @@ sleep(500).then(() => {
     return;
   }
 
-  // Decode compound state to extract return URL
-  // Format: base64(csrfToken|returnUrl)
+  // Decode state to extract return URL
+  // Supports both OLD and NEW formats for backward compatibility:
+  // - NEW format: base64(csrfToken|returnUrl)
+  // - OLD format: URL-encoded URL
   let returnUrl = "/compiler/"; // Default fallback
 
   if (state) {
     try {
+      // Try NEW format first: base64-encoded compound state
       const decoded = atob(state);
       const parts = decoded.split("|");
+
       if (parts.length === 2) {
-        // parts[0] is CSRF token, parts[1] is return URL
+        // NEW format: parts[0] is CSRF token, parts[1] is return URL
         returnUrl = parts[1];
-        console.log("Decoded return URL from state:", returnUrl);
+        console.log(
+          "Decoded return URL from compound state (NEW format):",
+          returnUrl,
+        );
       } else {
-        console.warn("State parameter has unexpected format, using default");
+        // Might be OLD format that happened to be valid base64
+        // Fall through to OLD format handling
+        throw new Error("Not compound state format");
       }
     } catch (error) {
-      console.error("Failed to decode state parameter:", error);
-      // Fall back to default return URL
+      // Failed to decode as NEW format, try OLD format
+      try {
+        // OLD format: URL-encoded URL
+        returnUrl = decodeURI(state);
+        console.log(
+          "Decoded return URL from URI-encoded state (OLD format):",
+          returnUrl,
+        );
+      } catch (oldFormatError) {
+        console.error(
+          "Failed to decode state parameter in any format:",
+          error,
+          oldFormatError,
+        );
+        // Fall back to default return URL
+      }
     }
   }
 
