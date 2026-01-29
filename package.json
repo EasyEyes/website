@@ -14,7 +14,7 @@
     "update:phrases": "cd docs/experiment/threshold && npm run phrases && cd ../../.. && npm run git 'update phrases' 2",
     "update:glossary": "cd docs/experiment/threshold && npm run glossary && cd ../../.. && npm run git 'update glossary' 2",
     "update:fetch": "cd docs/experiment/threshold && npm run fetch && cd ../../.. && npm run git 'update fetch' 2",
-    "update": "run-s update:sub update:git",
+    "update": "npm run update:sub && npm run update:git",
     "format": "prettier --write \"**/*.{js,json,md,html,css}\"",
     "start": "cd docs/experiment && npm start",
     "netlify": "git submodule update --init --recursive && cd docs/experiment && npm run netlify"
@@ -35,7 +35,6 @@
     "husky": "^8.0.3",
     "lint-staged": "^15.0.2",
     "netlify-cli": "^23.13.0",
-    "npm-run-all": "^4.1.5",
     "prettier": "^3.0.3"
   },
   "lint-staged": {
