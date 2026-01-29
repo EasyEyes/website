@@ -27,24 +27,70 @@ jobs:
           --output docs/experiment/threshold/server/credentials.json \
           --decrypt docs/experiment/threshold/server/credentials.json.gpg
       - name: Fetch and update phrases
-        # continue-on-error: true
+        id: fetch_phrases
         run: |
           cd docs/experiment/threshold
           npm run phrases
           git status
           git add -A
-          git commit -m 'github action: update phrases' --no-verify
-          git remote set-url origin https://x-access-token:${{secrets.ci_token}}@github.com/EasyEyes/threshold
-          git push
+          
+          # Check if there are changes to commit
+          if git diff --cached --quiet; then
+            echo "No phrase changes detected"
+            echo "phrases_updated=false" >> $GITHUB_OUTPUT
+          else
+            git commit -m 'github action: update phrases' --no-verify
+            git remote set-url origin https://x-access-token:${{secrets.ci_token}}@github.com/EasyEyes/threshold
+            git push
+            echo "phrases_updated=true" >> $GITHUB_OUTPUT
+          fi
 
           cd ..
           git add -A
-          git commit -m 'github action: update phrases' --no-verify
-          git remote set-url origin https://x-access-token:${{secrets.ci_token}}@github.com/EasyEyes/threshold-scientist
-          git push
+          if ! git diff --cached --quiet; then
+            git commit -m 'github action: update phrases' --no-verify
+            git remote set-url origin https://x-access-token:${{secrets.ci_token}}@github.com/EasyEyes/threshold-scientist
+            git push
+          fi
 
           cd ..
           git add -A
-          git commit -m 'github action: update phrases' --no-verify
-          git remote set-url origin https://x-access-token:${{secrets.ci_token}}@github.com/${{github.repository}}
-          git push
+          if ! git diff --cached --quiet; then
+            git commit -m 'github action: update phrases' --no-verify
+            git remote set-url origin https://x-access-token:${{secrets.ci_token}}@github.com/${{github.repository}}
+            git push
+          fi
+
+      - name: Notify Slack on success (phrases updated)
+        if: success() && steps.fetch_phrases.outputs.phrases_updated == 'true'
+        uses: slackapi/slack-github-action@v2.1.1
+        with:
+          webhook: ${{ secrets.slack_webhook_url }}
+          webhook-type: webhook-trigger
+          payload: |
+            status: "success"
+            message: "✅ *Phrases Updated Successfully*\n Wait for Netlify to deploy the changes before testing the new phrases."
+            workflow_url: "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+
+      - name: Notify Slack on success (no changes)
+        if: success() && steps.fetch_phrases.outputs.phrases_updated == 'false'
+        uses: slackapi/slack-github-action@v2.1.1
+        with:
+          webhook: ${{ secrets.slack_webhook_url }}
+          webhook-type: webhook-trigger
+          payload: |
+            status: "no_changes"
+            message: "ℹ️ *Phrases Workflow Completed*\nNo phrase changes detected in Google Sheets. Production is already up to date."
+            workflow_url: "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+
+
+      - name: Notify Slack on failure
+        if: failure()
+        uses: slackapi/slack-github-action@v2.1.1
+        with:
+          webhook: ${{ secrets.slack_webhook_url }}
+          webhook-type: webhook-trigger
+          payload: |
+            status: "failure"
+            message: "❌ *Phrases Update Failed*\nThe international phrases workflow encountered an error. Phrases were NOT updated."
+            workflow_url: "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
