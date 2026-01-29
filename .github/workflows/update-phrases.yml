@@ -69,7 +69,7 @@ jobs:
           webhook-type: webhook-trigger
           payload: |
             status: "success"
-            message: "✅ *Phrases Updated Successfully*\n Wait for Netlify to deploy the changes before testing the new phrases."
+            message: "Phrases Updated Successfully\n Wait for Netlify to deploy the changes before testing the new phrases."
             workflow_url: "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
 
       - name: Notify Slack on success (no changes)
@@ -80,7 +80,7 @@ jobs:
           webhook-type: webhook-trigger
           payload: |
             status: "no_changes"
-            message: "ℹ️ *Phrases Workflow Completed*\nNo phrase changes detected in Google Sheets. Production is already up to date."
+            message: "Phrases Workflow Completed\nNo phrase changes detected in Google Sheets. Production is already up to date."
             workflow_url: "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
 
 
@@ -92,5 +92,5 @@ jobs:
           webhook-type: webhook-trigger
           payload: |
             status: "failure"
-            message: "❌ *Phrases Update Failed*\nThe international phrases workflow encountered an error. Phrases were NOT updated."
+            message: "❌ Phrases Update Failed\nThe international phrases workflow encountered an error. Phrases were NOT updated."
             workflow_url: "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
