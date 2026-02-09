@@ -21,17 +21,27 @@ exports.handler = async (event) => {
   }
 
   try {
-    const { image, filename } = JSON.parse(event.body);
+    const { image, experimentID, participantID } = JSON.parse(event.body);
 
-    if (!image || !filename) {
+    if (!image || !experimentID || !participantID) {
       return {
         statusCode: 400,
         headers,
         body: JSON.stringify({
-          error: "Missing required fields: image, filename",
+          error: "Missing required fields: image, experimentID, participantID",
         }),
       };
     }
+
+    // Privacy-compliant filename: code number only (no participant ID) + expiration date
+    const timestamp = Date.now();
+    const codeNumber = `${timestamp}-${Math.random()
+      .toString(36)
+      .substring(2, 8)}`;
+    const expirationDate = new Date(timestamp);
+    expirationDate.setFullYear(expirationDate.getFullYear() + 10);
+    const expirationStr = expirationDate.toISOString().split("T")[0];
+    const filename = `snapshot_${codeNumber}_expires_${expirationStr}.jpg`;
 
     if (!process.env.BOX_CONFIG) {
       console.error("Missing BOX_CONFIG environment variable");
@@ -61,10 +71,43 @@ exports.handler = async (event) => {
     const readable = new stream.PassThrough();
     readable.end(buffer);
 
-    const folderId = process.env.BOX_FOLDER_ID || "0";
+    // Create nested folder structure: [experiment]/[participantID]/
+    const rootFolderId = "0";
+    let targetFolderId = rootFolderId;
+
+    try {
+      let experimentFolderItems = await client.folders.getItems(rootFolderId, {
+        fields: ["id", "name", "type"],
+      });
+      let experimentFolder = experimentFolderItems.entries?.find(
+        (item) => item.type === "folder" && item.name === experimentID,
+      );
+
+      if (!experimentFolder) {
+        experimentFolder = await client.folders.create(rootFolderId, experimentID);
+      }
+      const experimentFolderId = experimentFolder.id;
+
+      // Step 2: Find or create participant folder inside session folder
+      let participantFolderItems = await client.folders.getItems(experimentFolderId, {
+        fields: ["id", "name", "type"],
+      });
+      let participantFolder = participantFolderItems.entries?.find(
+        (item) => item.type === "folder" && item.name === participantID,
+      );
+
+      if (!participantFolder) {
+        participantFolder = await client.folders.create(experimentFolderId, participantID);
+      }
+      targetFolderId = participantFolder.id;
+    } catch (folderErr) {
+      console.warn("Could not create/find folder structure:", folderErr.message);
+      // Fall back to root if folder creation fails
+      targetFolderId = rootFolderId;
+    }
 
     const uploadResponse = await client.files.uploadFile(
-      folderId,
+      targetFolderId,
       filename,
       readable,
     );
