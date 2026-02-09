@@ -1,0 +1,10 @@
+{
+  "name": "box-api",
+  "version": "1.0.0",
+  "description": "EasyEyes Box.com image upload for webcam snapshots",
+  "main": "index.js",
+  "license": "MIT",
+  "dependencies": {
+    "box-node-sdk": "^3.1.0"
+  }
+}
