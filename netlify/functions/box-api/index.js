@@ -113,13 +113,31 @@ exports.handler = async (event) => {
     );
     const uploadedFile = uploadResponse.entries[0];
 
+    // Create a view-only shared link for the folder
+    let sharedLinkUrl = null;
+    try {
+      const folderWithSharedLink = await client.folders.update(targetFolderId, {
+        shared_link: {
+          access: 'open', // 'open' = anyone with link, 'company' = company only
+          permissions: {
+            can_download: false,
+            can_preview: true,
+          },
+        },
+      });
+      sharedLinkUrl = folderWithSharedLink.shared_link.url;
+    } catch (linkError) {
+      console.warn('Could not create shared link:', linkError.message);
+      // Continue without shared link if it fails
+    }
+
     return {
       statusCode: 200,
       headers,
       body: JSON.stringify({
         success: true,
-        fileId: uploadedFile.id,
         fileName: uploadedFile.name,
+        snapshotsLink: sharedLinkUrl,
       }),
     };
   } catch (error) {
