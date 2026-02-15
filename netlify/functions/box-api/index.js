@@ -84,24 +84,36 @@ exports.handler = async (event) => {
       );
 
       if (!experimentFolder) {
-        experimentFolder = await client.folders.create(rootFolderId, experimentID);
+        experimentFolder = await client.folders.create(
+          rootFolderId,
+          experimentID,
+        );
       }
       const experimentFolderId = experimentFolder.id;
 
       // Step 2: Find or create participant folder inside session folder
-      let participantFolderItems = await client.folders.getItems(experimentFolderId, {
-        fields: ["id", "name", "type"],
-      });
+      let participantFolderItems = await client.folders.getItems(
+        experimentFolderId,
+        {
+          fields: ["id", "name", "type"],
+        },
+      );
       let participantFolder = participantFolderItems.entries?.find(
         (item) => item.type === "folder" && item.name === participantID,
       );
 
       if (!participantFolder) {
-        participantFolder = await client.folders.create(experimentFolderId, participantID);
+        participantFolder = await client.folders.create(
+          experimentFolderId,
+          participantID,
+        );
       }
       targetFolderId = participantFolder.id;
     } catch (folderErr) {
-      console.warn("Could not create/find folder structure:", folderErr.message);
+      console.warn(
+        "Could not create/find folder structure:",
+        folderErr.message,
+      );
       // Fall back to root if folder creation fails
       targetFolderId = rootFolderId;
     }
@@ -118,7 +130,7 @@ exports.handler = async (event) => {
     try {
       const folderWithSharedLink = await client.folders.update(targetFolderId, {
         shared_link: {
-          access: 'open', // 'open' = anyone with link, 'company' = company only
+          access: "open", // 'open' = anyone with link, 'company' = company only
           permissions: {
             can_download: false,
             can_preview: true,
@@ -127,7 +139,7 @@ exports.handler = async (event) => {
       });
       sharedLinkUrl = folderWithSharedLink.shared_link.url;
     } catch (linkError) {
-      console.warn('Could not create shared link:', linkError.message);
+      console.warn("Could not create shared link:", linkError.message);
       // Continue without shared link if it fails
     }
 
