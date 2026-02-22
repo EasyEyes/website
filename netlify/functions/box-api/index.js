@@ -59,10 +59,13 @@ exports.handler = async (event) => {
       const sdk = new BoxSDK({ clientID: "", clientSecret: "" });
       client = sdk.getBasicClient(process.env.BOX_DEVELOPER_TOKEN);
     } else {
-      // Fallback to JWT for enterprise accounts
       const boxConfig = JSON.parse(process.env.BOX_CONFIG);
       const sdk = BoxSDK.getPreconfiguredInstance(boxConfig);
-      client = sdk.getAppAuthClient("enterprise");
+      if (process.env.BOX_USER_ID) {
+        client = sdk.getAppAuthClient("user", process.env.BOX_USER_ID);
+      } else {
+        client = sdk.getAppAuthClient("enterprise");
+      }
     }
 
     const base64Data = image.replace(/^data:image\/\w+;base64,/, "");
