@@ -25,6 +25,13 @@ for = "/*"
 [headers.values]
 Access-Control-Allow-Origin = "*"
 
+# Rewrite /home to /home.html (keeps URL as /home)
+[[redirects]]
+from = "/home"
+to = "/home.html"
+status = 200
+force = true
+
 # Rewrite /compiler/* to /experiment/* (keeps URL as /compiler/)
 [[redirects]]
 from = "/compiler/*"
