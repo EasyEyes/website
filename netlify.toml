@@ -32,7 +32,14 @@ to = "/home.html"
 status = 200
 force = true
 
-# Rewrite /compiler/* to /experiment/* (keeps URL as /compiler/)
+# Redirect /experiment/* to /compiler/* (canonical route)
+[[redirects]]
+from = "/experiment/*"
+to = "/compiler/:splat"
+status = 301
+force = true
+
+# Rewrite /compiler/* to /experiment/* (serves content, keeps URL as /compiler/)
 [[redirects]]
 from = "/compiler/*"
 to = "/experiment/:splat"
