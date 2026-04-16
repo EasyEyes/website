@@ -17,7 +17,8 @@
     "update": "npm run update:sub && npm run update:git",
     "format": "prettier --write \"**/*.{js,json,md,html,css}\"",
     "start": "cd docs/experiment && npm start",
-    "netlify": "git submodule update --init --recursive && cd docs/experiment && npm run netlify"
+    "netlify": "git submodule update --init --recursive && cd docs/experiment && npm run netlify",
+    "analyze:phrases-undefined": "node docs/experiment/threshold/server/i18n-phrases-static-analysis.mjs undefined --root ."
   },
   "repository": {
     "type": "git",
