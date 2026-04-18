@@ -43,7 +43,11 @@ exports.handler = async (event, context) => {
     }
 
     return responseWrapper(statusCode, data);
-  } else if (task.includes("studies") && task.endsWith("studies/")) {
+  } else if (
+    task.includes("studies") &&
+    task.endsWith("studies/") &&
+    !task.includes("projects")
+  ) {
     // ! study
     try {
       const response = await fetch(`https://api.prolific.com/api/v1/${task}`, {
@@ -179,6 +183,43 @@ exports.handler = async (event, context) => {
       }
 
       data = await participantGroupsResponse.json();
+      statusCode = 200;
+    } catch (error) {
+      console.error("ERROR", error);
+
+      data = {
+        error: error.message,
+      };
+      statusCode = 500;
+    }
+
+    return responseWrapper(statusCode, data);
+  } else if (task.includes("projects") && task.includes("studies")) {
+    // ! list project studies (GET with pagination)
+    try {
+      let allStudies = [];
+      let url = `https://api.prolific.com/api/v1/${task}?limit=100&offset=0`;
+
+      while (url) {
+        const response = await fetch(url, {
+          method: "GET",
+          headers: {
+            ...event.headers,
+            host: "api.prolific.com",
+            "Access-Control-Allow-Origin": "*",
+          },
+        });
+
+        const page = await response.json();
+
+        if (page.results) {
+          allStudies = allStudies.concat(page.results);
+        }
+
+        url = page.next || null;
+      }
+
+      data = { results: allStudies };
       statusCode = 200;
     } catch (error) {
       console.error("ERROR", error);
