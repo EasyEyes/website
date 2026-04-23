@@ -124,6 +124,73 @@ exports.handler = async (event, context) => {
     }
 
     return responseWrapper(statusCode, data);
+  } else if (task.includes("filter-sets")) {
+    // ! filter sets (Prolific screener sets)
+    try {
+      const authToken = event.headers.authorization;
+
+      if (!authToken) {
+        return responseWrapper(401, { error: "Authorization token missing" });
+      }
+
+      // Step 1: Get workspace ID
+      const workspacesResponse = await fetch(
+        "https://api.prolific.com/api/v1/workspaces/",
+        {
+          method: "GET",
+          headers: {
+            Authorization: authToken,
+            "Content-Type": "application/json",
+          },
+        },
+      );
+
+      if (!workspacesResponse.ok) {
+        throw new Error(
+          `Failed to fetch workspaces: ${workspacesResponse.status} ${workspacesResponse.statusText}`,
+        );
+      }
+
+      const workspacesData = await workspacesResponse.json();
+      const workspaceId =
+        workspacesData.results?.[0]?.id || workspacesData[0]?.id;
+
+      if (!workspaceId) {
+        return responseWrapper(404, {
+          error: "No workspace found for this account",
+        });
+      }
+
+      // Step 2: Fetch filter sets for the workspace
+      const filterSetsResponse = await fetch(
+        `https://api.prolific.com/api/v1/filter-sets/?workspace_id=${workspaceId}`,
+        {
+          method: "GET",
+          headers: {
+            Authorization: authToken,
+            "Content-Type": "application/json",
+          },
+        },
+      );
+
+      if (!filterSetsResponse.ok) {
+        throw new Error(
+          `Failed to fetch filter sets: ${filterSetsResponse.status} ${filterSetsResponse.statusText}`,
+        );
+      }
+
+      data = await filterSetsResponse.json();
+      statusCode = 200;
+    } catch (error) {
+      console.error("ERROR", error);
+
+      data = {
+        error: error.message,
+      };
+      statusCode = 500;
+    }
+
+    return responseWrapper(statusCode, data);
   } else if (task.includes("participant-groups")) {
     // ! participant groups
     try {
