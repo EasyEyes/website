@@ -1,5 +1,7 @@
 #!/bin/sh
 
+set -e
+
 DEFAULT=$(tput setaf 7)
 RED=$(tput setaf 1)
 GREEN=$(tput setaf 2)
@@ -51,15 +53,22 @@ check() {
   fi
 }
 
+commit_if_changes() {
+  git add -A
+  if git diff --cached --quiet; then
+    echo "${YELLOW} No staged changes, skipping commit${DEFAULT}"
+  else
+    git commit -m "$2: $1"
+  fi
+}
+
 update_threshold() {
   printf "${GREEN}\n>>> UPDATING THRESHOLD\n\n${DEFAULT}"
   cd docs/experiment/threshold
 
   check
 
-  # git status
-  git add -A
-  git commit -m "$2: $1"
+  commit_if_changes "$1" "$2"
   git push
   cd ../../..
 }
@@ -70,9 +79,7 @@ update_threshold_scientist() {
 
   check
 
-  # git status
-  git add -A
-  git commit -m "$2: $1"
+  commit_if_changes "$1" "$2"
   git push
   cd ../..
 }
@@ -80,16 +87,28 @@ update_threshold_scientist() {
 update_website() {
   printf "${GREEN}\n>>> UPDATING WEBSITE\n\n${DEFAULT}"
   check
-  # git status
-  git add -A
-  git commit -m "$2: $1"
+  commit_if_changes "$1" "$2"
   git push
+}
+
+preflight_typecheck() {
+  printf "${GREEN}\n>>> PRE-FLIGHT TYPECHECK\n${DEFAULT}"
+  if [ "$UPDATE_DEPTH" = "2" ]; then
+    printf "${YELLOW} >>> threshold ${DEFAULT}\n"
+    (cd docs/experiment/threshold && npm run check:ts)
+  fi
+  if [ "$UPDATE_DEPTH" = "1" ] || [ "$UPDATE_DEPTH" = "2" ]; then
+    printf "${YELLOW} >>> threshold-scientist ${DEFAULT}\n"
+    (cd docs/experiment && npm run check:ts)
+  fi
+  printf "${GREEN} >>> typecheck OK${DEFAULT}\n"
 }
 
 #
 
 if [ $UPDATE_DEPTH = "1" ]; then
   echo "${YELLOW}>>> Update threshold-scientist AND website"
+  preflight_typecheck
   update_threshold_scientist "$1" "for threshold-scientist"
   update_website "$1" "for threshold-scientist"
 
@@ -99,6 +118,7 @@ elif [ $UPDATE_DEPTH = "0" ]; then
 
 elif [ $UPDATE_DEPTH = "2" ]; then
   echo "${YELLOW}>>> Update threshold AND threshold-scientist AND website"
+  preflight_typecheck
   update_threshold "$1" "for threshold"
   update_threshold_scientist "$1" "for threshold"
   update_website "$1" "for threshold"
