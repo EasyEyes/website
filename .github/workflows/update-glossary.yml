@@ -11,7 +11,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
         with:
-          ref: main
+          ref: ${{ github.head_ref || github.ref_name }}
           token: ${{ secrets.ci_token }}
           submodules: recursive
       - uses: actions/setup-node@v3
