@@ -27,11 +27,35 @@ jobs:
           --output docs/experiment/threshold/server/credentials.json \
           --decrypt docs/experiment/threshold/server/credentials.json.gpg
       - name: Fetch and update glossary
-        # continue-on-error: true
         run: |
           cd docs/experiment/threshold
           npm run glossary
-          git status
+
+      - name: Check for glossary changes
+        id: check
+        run: |
+          cd docs/experiment/threshold
+          if git diff --cached --quiet -- parameters/glossary.ts parameters/glossary-full.ts; then
+            echo "changed=false" >> $GITHUB_OUTPUT
+          else
+            echo "changed=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: No changes detected
+        if: steps.check.outputs.changed == 'false'
+        run: |
+          cat >> $GITHUB_STEP_SUMMARY << 'EOF'
+          ## ℹ️ No glossary changes detected
+
+          The glossary files are already in sync with the Google Sheet — no update was needed.
+
+          **If you're sure something is technically broken**, click the **Re-run all jobs** button at the top of this page to retry.
+          EOF
+
+      - name: Commit and push changes
+        if: steps.check.outputs.changed == 'true'
+        run: |
+          cd docs/experiment/threshold
           git add -A
           git commit -m 'github action: update glossary' --no-verify
           git remote set-url origin https://x-access-token:${{secrets.ci_token}}@github.com/EasyEyes/threshold
