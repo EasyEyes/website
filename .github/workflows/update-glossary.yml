@@ -13,6 +13,7 @@ jobs:
       - uses: actions/setup-node@v3
         with:
           node-version: 16
+          cache: 'npm'
       - name: Set commit account information
         run: |
           git config --global user.name "github-actions[bot]"
