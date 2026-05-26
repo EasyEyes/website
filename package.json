@@ -18,7 +18,9 @@
     "format": "prettier --write \"**/*.{js,json,md,html,css}\"",
     "start": "cd docs/experiment && npm start",
     "netlify": "git submodule update --init --recursive && cd docs/experiment && npm run netlify",
-    "analyze:phrases-undefined": "node docs/experiment/threshold/server/i18n-phrases-static-analysis.mjs undefined --root ."
+    "analyze:phrases-undefined": "node docs/experiment/threshold/server/i18n-phrases-static-analysis.mjs undefined --root .",
+    "test": "jest",
+    "test:watch": "jest --watch"
   },
   "repository": {
     "type": "git",
@@ -31,9 +33,14 @@
   },
   "homepage": "https://github.com/EasyEyes/website#readme",
   "devDependencies": {
+    "@babel/core": "^7.29.7",
+    "@babel/preset-env": "^7.29.7",
+    "@babel/preset-typescript": "^7.29.7",
+    "babel-jest": "^30.4.1",
     "debug": "^4.4.3",
     "eslint": "^8.53.0",
     "husky": "^8.0.3",
+    "jest": "^30.4.2",
     "lint-staged": "^15.0.2",
     "netlify-cli": "^23.13.0",
     "prettier": "^3.0.3"
