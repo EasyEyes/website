@@ -27,7 +27,10 @@ async function handleGet(): Promise<HandlerResponse> {
     ].join("\n");
     return {
       statusCode: 200,
-      headers: { "Content-Type": "application/javascript" },
+      headers: {
+        "Content-Type": "application/javascript",
+        "Cache-Control": "no-store",
+      },
       body,
     };
   } catch (err) {

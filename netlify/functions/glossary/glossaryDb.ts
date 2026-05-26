@@ -62,7 +62,7 @@ export async function writeGlossaryData(data: {
   superMatchingParams: string[];
 }): Promise<void> {
   const auth = authParam();
-  await Promise.all([
+  const [gRes, gfRes, smpRes] = await Promise.all([
     fetch(`${DB_URL}/glossary.json${auth}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
@@ -79,4 +79,20 @@ export async function writeGlossaryData(data: {
       body: JSON.stringify(data.superMatchingParams),
     }),
   ]);
+
+  const results = await Promise.all([
+    gRes.text(),
+    gfRes.text(),
+    smpRes.text(),
+  ]);
+
+  console.log(`[glossaryDb] glossary PUT status: ${gRes.status}`, results[0].slice(0, 200));
+  console.log(`[glossaryDb] glossaryFull PUT status: ${gfRes.status}`, results[1].slice(0, 200));
+  console.log(`[glossaryDb] superMatchingParams PUT status: ${smpRes.status}`, results[2].slice(0, 200));
+
+  if (!gRes.ok || !gfRes.ok || !smpRes.ok) {
+    throw new Error(
+      `Firebase write failed — glossary: ${gRes.status}, glossaryFull: ${gfRes.status}, superMatchingParams: ${smpRes.status}`,
+    );
+  }
 }
