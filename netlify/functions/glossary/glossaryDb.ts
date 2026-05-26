@@ -30,7 +30,7 @@ function decodeKeys(obj: unknown): unknown {
 }
 
 function authParam(): string {
-  const key = process.env.FIREBASE_API_KEY;
+  const key = process.env.FIREBASE_DB;
   return key ? `?auth=${key}` : "";
 }
 
