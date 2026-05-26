@@ -50,8 +50,9 @@ force = true
 # package = "@netlify/plugin-lighthouse"
 
 [dev]
-command = ""
+command = "npm start"
 port = 8888
+targetPort = 5500
 publish = "docs/"
 
 [functions]
