@@ -73,12 +73,25 @@ async function handlePost(event: HandlerEvent): Promise<HandlerResponse> {
 
   const rows = (parsed as { rows: string[][] }).rows;
   console.log(`[glossary] POST transforming ${rows.length} rows`);
+
+  const aboutRow = rows.find((r) => r[0] === "_about");
+  if (aboutRow) {
+    console.log("[glossary] _about raw row:", JSON.stringify(aboutRow));
+  }
+
   const transformed = transformRows(rows);
   console.log(
     `[glossary] POST transform result — glossary keys: ${
       Object.keys(transformed.glossary ?? {}).length
     }, glossaryFull rows: ${(transformed.glossaryFull ?? []).length}`,
   );
+
+  if (transformed.glossary["_about"]) {
+    console.log(
+      "[glossary] _about transformed entry:",
+      JSON.stringify(transformed.glossary["_about"]),
+    );
+  }
   await writeGlossaryData(transformed);
   console.log("[glossary] POST success — data written");
   return { statusCode: 200, body: "OK" };
