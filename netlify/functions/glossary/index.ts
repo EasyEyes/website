@@ -4,10 +4,12 @@ type NetlifyEvent = {
   httpMethod: string;
   headers: Record<string, string | undefined>;
   body: string | null;
+  queryStringParameters?: Record<string, string | undefined>;
 };
 
 type NetlifyResponse = {
   statusCode: number;
+  headers?: Record<string, string>;
   body: string;
 };
 
@@ -101,7 +103,69 @@ function bumpVersion(
   return `${major}.${minor + 1}`;
 }
 
+type GlossaryData = {
+  version: string;
+  glossary: Record<string, GlossaryEntry>;
+  glossaryFull: GlossaryEntry[];
+  superMatchingParams: string[];
+};
+
+async function getGlossaryData(version: string): Promise<GlossaryData | null> {
+  const glossary = (await firebaseGet(
+    `versions/${encodeFirebaseSegment(version)}/glossary`
+  )) as Record<string, GlossaryEntry> | null;
+  if (!glossary) return null;
+  return {
+    version,
+    glossary,
+    glossaryFull: Object.values(glossary),
+    superMatchingParams: Object.keys(glossary).filter((k) => k.includes("@")),
+  };
+}
+
+const JSON_HEADERS = { "Content-Type": "application/json" };
+
+function jsonOk(data: unknown): NetlifyResponse {
+  return { statusCode: 200, headers: JSON_HEADERS, body: JSON.stringify(data) };
+}
+
+function jsonErr(statusCode: number, message: string): NetlifyResponse {
+  return { statusCode, headers: JSON_HEADERS, body: JSON.stringify({ error: message }) };
+}
+
+async function handleGet(
+  event: NetlifyEvent
+): Promise<NetlifyResponse> {
+  const params = event.queryStringParameters ?? {};
+  const currentVersion = (await firebaseGet("currentVersion")) as string | null;
+
+  if (params.v !== undefined) {
+    const data = await getGlossaryData(params.v);
+    if (!data) return jsonErr(404, "Version not found");
+    return jsonOk(data);
+  }
+
+  if (params.username !== undefined && params.experiment !== undefined) {
+    const encodedUser = encodeFirebaseSegment(params.username);
+    const encodedExp = encodeFirebaseSegment(params.experiment);
+    const pinned = (await firebaseGet(
+      `users/${encodedUser}/${encodedExp}/glossaryVersion`
+    )) as string | null;
+    const version = pinned ?? currentVersion ?? "1.0";
+    const data = await getGlossaryData(version);
+    if (!data) return jsonErr(404, "Version not found");
+    return jsonOk(data);
+  }
+
+  if (!currentVersion) return jsonErr(404, "No current version");
+  const data = await getGlossaryData(currentVersion);
+  if (!data) return jsonErr(404, "Version not found");
+  return jsonOk(data);
+}
+
 export async function handler(event: NetlifyEvent): Promise<NetlifyResponse> {
+  if (event.httpMethod === "GET") return handleGet(event);
+
   const secret = event.headers["x-glossary-secret"];
   if (!secret || secret !== process.env.GLOSSARY_SECRET) {
     return { statusCode: 401, body: JSON.stringify({ error: "Unauthorized" }) };

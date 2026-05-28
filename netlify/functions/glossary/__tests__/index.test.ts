@@ -52,6 +52,15 @@ function makeEvent(overrides: {
   };
 }
 
+function makeGetEvent(queryStringParameters: Record<string, string> = {}) {
+  return {
+    httpMethod: "GET",
+    headers: {},
+    body: null,
+    queryStringParameters,
+  };
+}
+
 function mockFetch(responses: Array<{ url: RegExp | string; body: unknown }>) {
   (global as unknown as { fetch: jest.Mock }).fetch = jest.fn((url: string) => {
     const match = responses.find((r) =>
@@ -224,5 +233,130 @@ describe("POST /glossary — versioning", () => {
 
     expect(res.statusCode).toBe(200);
     expect(JSON.parse(res.body)).toEqual({ version: "3.0" });
+  });
+});
+
+const SAMPLE_GLOSSARY = {
+  _about: {
+    name: "_about",
+    availability: "now",
+    type: "text",
+    default: "",
+    explanation: "About.",
+    example: "Ex.",
+    categories: [],
+  },
+};
+
+describe("GET /glossary — response headers", () => {
+  test("all GET responses include Content-Type: application/json", async () => {
+    mockFetch([
+      { url: /currentVersion/, body: "1.0" },
+      { url: /versions\/1_dot_0\/glossary/, body: SAMPLE_GLOSSARY },
+    ]);
+
+    const res = await handler(makeGetEvent());
+    expect(res.statusCode).toBe(200);
+    expect((res as { headers?: Record<string, string> }).headers?.["Content-Type"]).toBe("application/json");
+  });
+});
+
+describe("GET /glossary — bare (no query params)", () => {
+  test("returns 200 with GlossaryData for the current version", async () => {
+    mockFetch([
+      { url: /currentVersion/, body: "1.0" },
+      { url: /versions\/1_dot_0\/glossary/, body: SAMPLE_GLOSSARY },
+    ]);
+
+    const res = await handler(makeGetEvent());
+    expect(res.statusCode).toBe(200);
+    const data = JSON.parse(res.body);
+    expect(data.version).toBe("1.0");
+    expect(data.glossary).toEqual(SAMPLE_GLOSSARY);
+  });
+
+  test("glossaryFull equals Object.values(glossary)", async () => {
+    mockFetch([
+      { url: /currentVersion/, body: "1.0" },
+      { url: /versions\/1_dot_0\/glossary/, body: SAMPLE_GLOSSARY },
+    ]);
+
+    const res = await handler(makeGetEvent());
+    const data = JSON.parse(res.body);
+    expect(data.glossaryFull).toEqual(Object.values(SAMPLE_GLOSSARY));
+  });
+
+  test("superMatchingParams contains exactly the keys with '@'", async () => {
+    const glossaryWithAt = {
+      ...SAMPLE_GLOSSARY,
+      "@fontSize": { name: "@fontSize", availability: "now", type: "numerical", default: "12", explanation: "", example: "", categories: [] },
+      "@spacing": { name: "@spacing", availability: "now", type: "numerical", default: "1", explanation: "", example: "", categories: [] },
+    };
+    mockFetch([
+      { url: /currentVersion/, body: "1.0" },
+      { url: /versions\/1_dot_0\/glossary/, body: glossaryWithAt },
+    ]);
+
+    const res = await handler(makeGetEvent());
+    const data = JSON.parse(res.body);
+    expect(data.superMatchingParams.sort()).toEqual(["@fontSize", "@spacing"]);
+  });
+});
+
+describe("GET /glossary?username=&experiment= — per-experiment version lookup", () => {
+  test("pinned version exists → returns that version's GlossaryData", async () => {
+    const pinnedGlossary = {
+      _about: { name: "_about", availability: "now", type: "text", default: "", explanation: "Pinned.", example: "", categories: [] },
+    };
+    mockFetch([
+      { url: /currentVersion/, body: "2.0" },
+      { url: /users\/alice\/myExp\/glossaryVersion/, body: "1.0" },
+      { url: /versions\/1_dot_0\/glossary/, body: pinnedGlossary },
+    ]);
+
+    const res = await handler(makeGetEvent({ username: "alice", experiment: "myExp" }));
+    expect(res.statusCode).toBe(200);
+    const data = JSON.parse(res.body);
+    expect(data.version).toBe("1.0");
+    expect(data.glossary).toEqual(pinnedGlossary);
+  });
+
+  test("no pin exists → falls back to current version silently", async () => {
+    mockFetch([
+      { url: /currentVersion/, body: "2.0" },
+      { url: /users\/alice\/newExp\/glossaryVersion/, body: null },
+      { url: /versions\/2_dot_0\/glossary/, body: SAMPLE_GLOSSARY },
+    ]);
+
+    const res = await handler(makeGetEvent({ username: "alice", experiment: "newExp" }));
+    expect(res.statusCode).toBe(200);
+    const data = JSON.parse(res.body);
+    expect(data.version).toBe("2.0");
+    expect(data.glossary).toEqual(SAMPLE_GLOSSARY);
+  });
+});
+
+describe("GET /glossary?v= — version lookup", () => {
+  test("unknown version → 404", async () => {
+    mockFetch([
+      { url: /currentVersion/, body: "1.0" },
+      { url: /versions\/9_dot_9\/glossary/, body: null },
+    ]);
+
+    const res = await handler(makeGetEvent({ v: "9.9" }));
+    expect(res.statusCode).toBe(404);
+  });
+
+  test("existing version → 200 with correct snapshot", async () => {
+    mockFetch([
+      { url: /currentVersion/, body: "2.0" },
+      { url: /versions\/1_dot_0\/glossary/, body: SAMPLE_GLOSSARY },
+    ]);
+
+    const res = await handler(makeGetEvent({ v: "1.0" }));
+    expect(res.statusCode).toBe(200);
+    const data = JSON.parse(res.body);
+    expect(data.version).toBe("1.0");
+    expect(data.glossary).toEqual(SAMPLE_GLOSSARY);
   });
 });
