@@ -302,6 +302,29 @@ describe("POST /glossary — boolean default coercion", () => {
     expect(body["aText"].default).toBe("Hello World");
     expect(body["aNumerical"].default).toBe("12.5");
   });
+
+  test("JS number defaults for numerical/integer types are stringified", async () => {
+    // Mimics the real bug: Excel cells typed as numbers arrive as JS numbers
+    // and previously got stored as numbers in Firebase, which then broke the
+    // compiler's `isNumeric` check (it rejects non-strings).
+    mockFetch([{ url: /currentVersion/, body: null }]);
+
+    const rows: unknown[][] = [
+      ["INPUT PARAMETER", "NOW", "TYPE", "DEFAULT", "EXPLANATION", "EXAMPLE", "CATEGORIES"],
+      ["instructionFontSizePt", "now", "numerical", 17, "expl", "ex", ""],
+      ["targetDurationSec", "now", "numerical", 0.15, "expl", "ex", ""],
+      ["conditionTrials", "now", "integer", 35, "expl", "ex", ""],
+    ];
+
+    const res = await handler(makeEvent({ body: JSON.stringify({ rows }) }));
+    expect(res.statusCode).toBe(200);
+    const body = glossaryPutBody();
+    expect(body["instructionFontSizePt"].default).toBe("17");
+    expect(body["targetDurationSec"].default).toBe("0.15");
+    expect(body["conditionTrials"].default).toBe("35");
+    // Confirm type is `string` not `number` post-coercion.
+    expect(typeof body["instructionFontSizePt"].default).toBe("string");
+  });
 });
 
 const SAMPLE_GLOSSARY = {

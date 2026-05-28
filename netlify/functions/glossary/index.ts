@@ -35,10 +35,16 @@ const COLUMN_MAP: Record<string, keyof Omit<GlossaryEntry, "categories">> = {
   EXAMPLE: "example",
 };
 
+// Cells from the AppScript arrive as native JSON types (string, number,
+// boolean, null) — not just strings. Coerce every scalar field we store to a
+// string so Firebase matches the typed shape GlossaryEntry advertises, and
+// downstream consumers (compiler, UI) can treat fields uniformly.
+const asString = (v: unknown): string => String(v ?? "");
+
 function transformRawRows(rows: string[][]): Record<string, GlossaryEntry> {
   if (rows.length < 2) return {};
 
-  const headers = rows[0].map((h) => h.trim().toUpperCase());
+  const headers = rows[0].map((h) => asString(h).trim().toUpperCase());
   const colIndex: Record<string, number> = {};
   headers.forEach((h, i) => {
     colIndex[h] = i;
@@ -48,29 +54,24 @@ function transformRawRows(rows: string[][]): Record<string, GlossaryEntry> {
 
   for (let i = 1; i < rows.length; i++) {
     const row = rows[i];
-    const name = row[colIndex["INPUT PARAMETER"] ?? 0] ?? "";
+    const name = asString(row[colIndex["INPUT PARAMETER"] ?? 0]);
     if (!name || name.includes("__")) continue;
 
-    const type = row[colIndex["TYPE"] ?? 2] ?? "";
-    const rawCategories = row[colIndex["CATEGORIES"] ?? 6] ?? "";
-
+    const type = asString(row[colIndex["TYPE"] ?? 2]);
+    const rawCategories = asString(row[colIndex["CATEGORIES"] ?? 6]);
     const rawDefault = row[colIndex["DEFAULT"] ?? 3];
-    // Excel native TRUE/FALSE cells arrive from the AppScript as JS booleans
-    // (when raw:true is used on the XLSX read). Coerce boolean defaults to the
-    // uppercase string form so the stored value matches the Excel display and
-    // downstream consumers (which treat defaults as strings) don't crash.
     const normalizedDefault =
       type === "boolean"
-        ? String(rawDefault ?? "").trim().toUpperCase()
-        : rawDefault ?? "";
+        ? asString(rawDefault).trim().toUpperCase()
+        : asString(rawDefault);
 
     const entry: GlossaryEntry = {
       name,
-      availability: row[colIndex["NOW"] ?? 1] ?? "",
+      availability: asString(row[colIndex["NOW"] ?? 1]),
       type,
       default: normalizedDefault,
-      explanation: row[colIndex["EXPLANATION"] ?? 4] ?? "",
-      example: row[colIndex["EXAMPLE"] ?? 5] ?? "",
+      explanation: asString(row[colIndex["EXPLANATION"] ?? 4]),
+      example: asString(row[colIndex["EXAMPLE"] ?? 5]),
       categories:
         type === "categorical" || type === "multicategorical"
           ? rawCategories.split(",").map((s) => s.trim())
