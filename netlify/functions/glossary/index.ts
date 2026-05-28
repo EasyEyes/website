@@ -82,6 +82,13 @@ async function firebaseGet(path: string): Promise<unknown> {
   return res.json();
 }
 
+async function firebaseGetKeys(path: string): Promise<Set<string>> {
+  const url = `${firebaseUrl(path)}&shallow=true`;
+  const res = await fetch(url);
+  const data = (await res.json()) as Record<string, true> | null;
+  return new Set(Object.keys(data ?? {}));
+}
+
 type FirebasePutResult = { ok: boolean; status: number; body: unknown };
 
 async function firebasePut(
@@ -250,11 +257,9 @@ export async function handler(event: NetlifyEvent): Promise<NetlifyResponse> {
   if (!currentVersion) {
     newVersion = "1.0";
   } else {
-    const existingGlossary = (await firebaseGet(
+    const existingKeys = await firebaseGetKeys(
       `versions/${encodeFirebaseSegment(currentVersion)}/glossary`
-    )) as Record<string, GlossaryEntry> | null;
-
-    const existingKeys = new Set(Object.keys(existingGlossary ?? {}));
+    );
     const incomingKeys = new Set(Object.keys(incoming));
     newVersion = bumpVersion(currentVersion, incomingKeys, existingKeys);
   }
