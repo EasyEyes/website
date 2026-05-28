@@ -160,6 +160,42 @@ async function getGlossaryData(version: string): Promise<GlossaryData | null> {
 
 const JSON_HEADERS = { "Content-Type": "application/json" };
 
+// Browser callers (Pavlovia experiment runtime, EasyEyes site, Netlify deploy
+// previews) need CORS headers. AppScript hits this endpoint server-side via
+// UrlFetchApp, which ignores CORS, so it continues to work regardless.
+const NETLIFY_PREVIEW_RE = /^https:\/\/[a-z0-9-]+--easyeyes\.netlify\.app$/;
+const STATIC_ALLOWED_ORIGINS = new Set([
+  "https://run.pavlovia.org",
+  "https://pavlovia.org",
+  "https://easyeyes.app",
+]);
+
+function isAllowedOrigin(origin: string | undefined): origin is string {
+  if (!origin) return false;
+  if (STATIC_ALLOWED_ORIGINS.has(origin)) return true;
+  return NETLIFY_PREVIEW_RE.test(origin);
+}
+
+function corsHeaders(origin: string | undefined): Record<string, string> {
+  if (!isAllowedOrigin(origin)) return {};
+  return {
+    "Access-Control-Allow-Origin": origin,
+    "Access-Control-Allow-Methods": "GET, PUT, POST, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type, x-glossary-secret",
+    Vary: "Origin",
+  };
+}
+
+function withCors(
+  response: NetlifyResponse,
+  origin: string | undefined
+): NetlifyResponse {
+  return {
+    ...response,
+    headers: { ...(response.headers ?? {}), ...corsHeaders(origin) },
+  };
+}
+
 function jsonOk(data: unknown): NetlifyResponse {
   return { statusCode: 200, headers: JSON_HEADERS, body: JSON.stringify(data) };
 }
@@ -239,11 +275,7 @@ async function handlePut(event: NetlifyEvent): Promise<NetlifyResponse> {
   return jsonOk({ version: currentVersion });
 }
 
-export async function handler(event: NetlifyEvent): Promise<NetlifyResponse> {
-  console.log(`[glossary] ${event.httpMethod} origin=${event.headers["origin"] ?? event.headers["Origin"] ?? "<none>"} qs=${JSON.stringify(event.queryStringParameters ?? {})}`);
-  if (event.httpMethod === "GET") return handleGet(event);
-  if (event.httpMethod === "PUT") return handlePut(event);
-
+async function handlePost(event: NetlifyEvent): Promise<NetlifyResponse> {
   const secret = event.headers["x-glossary-secret"];
   if (!secret || secret !== process.env.GLOSSARY_SECRET) {
     return { statusCode: 401, body: JSON.stringify({ error: "Unauthorized" }) };
@@ -312,4 +344,17 @@ export async function handler(event: NetlifyEvent): Promise<NetlifyResponse> {
   }
 
   return { statusCode: 200, body: JSON.stringify({ version: newVersion }) };
+}
+
+export async function handler(event: NetlifyEvent): Promise<NetlifyResponse> {
+  const origin = event.headers["origin"] ?? event.headers["Origin"];
+  console.log(`[glossary] ${event.httpMethod} origin=${origin ?? "<none>"} allowed=${isAllowedOrigin(origin)} qs=${JSON.stringify(event.queryStringParameters ?? {})}`);
+
+  if (event.httpMethod === "OPTIONS") {
+    return { statusCode: 204, headers: corsHeaders(origin), body: "" };
+  }
+
+  if (event.httpMethod === "GET") return withCors(await handleGet(event), origin);
+  if (event.httpMethod === "PUT") return withCors(await handlePut(event), origin);
+  return withCors(await handlePost(event), origin);
 }
