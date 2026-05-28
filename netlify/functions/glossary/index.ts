@@ -172,10 +172,13 @@ async function handleGet(
   event: NetlifyEvent
 ): Promise<NetlifyResponse> {
   const params = event.queryStringParameters ?? {};
+  console.log(`[glossary] GET params=${JSON.stringify(params)}`);
   const currentVersion = (await firebaseGet("currentVersion")) as string | null;
+  console.log(`[glossary] GET currentVersion=${currentVersion}`);
 
   if (params.v !== undefined) {
     const data = await getGlossaryData(params.v);
+    console.log(`[glossary] GET by v=${params.v} found=${!!data} entries=${data ? Object.keys(data.glossary).length : 0}`);
     if (!data) return jsonErr(404, "Version not found");
     return jsonOk(data);
   }
@@ -187,13 +190,18 @@ async function handleGet(
       `users/${encodedUser}/${encodedExp}/glossaryVersion`
     )) as string | null;
     const version = pinned ?? currentVersion ?? "1.0";
+    console.log(`[glossary] GET user=${params.username} exp=${params.experiment} pinned=${pinned} resolvedVersion=${version}`);
     const data = await getGlossaryData(version);
+    console.log(`[glossary] GET data found=${!!data} entries=${data ? Object.keys(data.glossary).length : 0}`);
     if (!data) return jsonErr(404, "Version not found");
-    return jsonOk(data);
+    const response = jsonOk(data);
+    console.log(`[glossary] GET responding 200 bodyBytes=${response.body.length}`);
+    return response;
   }
 
   if (!currentVersion) return jsonErr(404, "No current version");
   const data = await getGlossaryData(currentVersion);
+  console.log(`[glossary] GET fallback currentVersion data found=${!!data} entries=${data ? Object.keys(data.glossary).length : 0}`);
   if (!data) return jsonErr(404, "Version not found");
   return jsonOk(data);
 }
@@ -232,6 +240,7 @@ async function handlePut(event: NetlifyEvent): Promise<NetlifyResponse> {
 }
 
 export async function handler(event: NetlifyEvent): Promise<NetlifyResponse> {
+  console.log(`[glossary] ${event.httpMethod} origin=${event.headers["origin"] ?? event.headers["Origin"] ?? "<none>"} qs=${JSON.stringify(event.queryStringParameters ?? {})}`);
   if (event.httpMethod === "GET") return handleGet(event);
   if (event.httpMethod === "PUT") return handlePut(event);
 
