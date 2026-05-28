@@ -248,6 +248,88 @@ const SAMPLE_GLOSSARY = {
   },
 };
 
+function makePutEvent(body: unknown) {
+  return {
+    httpMethod: "PUT",
+    headers: {},
+    body: body === null ? null : JSON.stringify(body),
+    queryStringParameters: {},
+  };
+}
+
+describe("PUT /glossary — version pinning", () => {
+  test("null body → 400", async () => {
+    const res = await handler(makePutEvent(null));
+    expect(res.statusCode).toBe(400);
+  });
+
+  test("invalid JSON body → 400", async () => {
+    const res = await handler({
+      httpMethod: "PUT",
+      headers: {},
+      body: "{not-json",
+      queryStringParameters: {},
+    });
+    expect(res.statusCode).toBe(400);
+  });
+
+  test("body missing username → 400", async () => {
+    const res = await handler(makePutEvent({ experimentName: "myExp" }));
+    expect(res.statusCode).toBe(400);
+  });
+
+  test("body missing experimentName → 400", async () => {
+    const res = await handler(makePutEvent({ username: "alice" }));
+    expect(res.statusCode).toBe(400);
+  });
+
+  test("valid body writes current version to correct Firebase path and returns 200", async () => {
+    mockFetch([{ url: /currentVersion/, body: "1.5" }]);
+
+    const res = await handler(
+      makePutEvent({ username: "alice", experimentName: "myExp" })
+    );
+
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body)).toEqual({ version: "1.5" });
+
+    const puts = capturedPuts();
+    expect(
+      puts.some((p) =>
+        p.url.includes("/users/alice/myExp/glossaryVersion") &&
+        p.body === "1.5"
+      )
+    ).toBe(true);
+  });
+});
+
+describe("PUT /glossary — round-trip with GET", () => {
+  test("PUT pins version; subsequent GET ?username&experiment returns that version's GlossaryData", async () => {
+    const pinnedGlossary = {
+      _about: { name: "_about", availability: "now", type: "text", default: "", explanation: "Pinned.", example: "", categories: [] },
+    };
+
+    mockFetch([
+      { url: /currentVersion/, body: "1.5" },
+      { url: /users\/alice\/myExp\/glossaryVersion/, body: "1.5" },
+      { url: /versions\/1_dot_5\/glossary/, body: pinnedGlossary },
+    ]);
+
+    const putRes = await handler(
+      makePutEvent({ username: "alice", experimentName: "myExp" })
+    );
+    expect(putRes.statusCode).toBe(200);
+
+    const getRes = await handler(
+      makeGetEvent({ username: "alice", experiment: "myExp" })
+    );
+    expect(getRes.statusCode).toBe(200);
+    const data = JSON.parse(getRes.body);
+    expect(data.version).toBe("1.5");
+    expect(data.glossary).toEqual(pinnedGlossary);
+  });
+});
+
 describe("GET /glossary — response headers", () => {
   test("all GET responses include Content-Type: application/json", async () => {
     mockFetch([

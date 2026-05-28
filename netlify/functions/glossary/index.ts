@@ -163,8 +163,42 @@ async function handleGet(
   return jsonOk(data);
 }
 
+async function handlePut(event: NetlifyEvent): Promise<NetlifyResponse> {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(event.body ?? "");
+  } catch {
+    return jsonErr(400, "Invalid JSON");
+  }
+
+  if (
+    typeof parsed !== "object" ||
+    parsed === null ||
+    typeof (parsed as Record<string, unknown>).username !== "string" ||
+    typeof (parsed as Record<string, unknown>).experimentName !== "string"
+  ) {
+    return jsonErr(400, "Missing or invalid username or experimentName");
+  }
+
+  const { username, experimentName } = parsed as {
+    username: string;
+    experimentName: string;
+  };
+
+  const currentVersion = (await firebaseGet("currentVersion")) as string;
+  const encodedUser = encodeFirebaseSegment(username);
+  const encodedExp = encodeFirebaseSegment(experimentName);
+  await firebasePut(
+    `users/${encodedUser}/${encodedExp}/glossaryVersion`,
+    currentVersion
+  );
+
+  return jsonOk({ version: currentVersion });
+}
+
 export async function handler(event: NetlifyEvent): Promise<NetlifyResponse> {
   if (event.httpMethod === "GET") return handleGet(event);
+  if (event.httpMethod === "PUT") return handlePut(event);
 
   const secret = event.headers["x-glossary-secret"];
   if (!secret || secret !== process.env.GLOSSARY_SECRET) {
