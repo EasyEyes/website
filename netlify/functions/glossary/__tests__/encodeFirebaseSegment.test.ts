@@ -1,4 +1,4 @@
-import { encodeFirebaseSegment } from "../encodeFirebaseSegment";
+import { encodeFirebaseSegment, decodeFirebaseSegment } from "../encodeFirebaseSegment";
 
 describe("encodeFirebaseSegment", () => {
   test.each([
@@ -18,5 +18,28 @@ describe("encodeFirebaseSegment", () => {
 
   test("leaves plain alphanumeric strings unchanged", () => {
     expect(encodeFirebaseSegment("hello123")).toBe("hello123");
+  });
+
+  test("encodes dotted param name", () => {
+    expect(encodeFirebaseSegment("omitPsychoJS.window.monitorFramePeriodBool")).toBe(
+      "omitPsychoJS_dot_window_dot_monitorFramePeriodBool"
+    );
+  });
+});
+
+describe("decodeFirebaseSegment", () => {
+  test("round-trips through encode then decode", () => {
+    const original = "omitPsychoJS.window.monitorFramePeriodBool";
+    expect(decodeFirebaseSegment(encodeFirebaseSegment(original))).toBe(original);
+  });
+
+  test("decodes all special placeholders", () => {
+    expect(decodeFirebaseSegment("a_dot_b_hash_c_dollar_d_lbracket_e_rbracket_f_slash_g")).toBe(
+      "a.b#c$d[e]f/g"
+    );
+  });
+
+  test("leaves plain strings unchanged", () => {
+    expect(decodeFirebaseSegment("hello123")).toBe("hello123");
   });
 });

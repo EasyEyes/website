@@ -1,4 +1,4 @@
-import { encodeFirebaseSegment } from "./encodeFirebaseSegment";
+import { encodeFirebaseSegment, decodeFirebaseSegment } from "./encodeFirebaseSegment";
 
 type NetlifyEvent = {
   httpMethod: string;
@@ -67,7 +67,7 @@ function transformRawRows(rows: string[][]): Record<string, GlossaryEntry> {
           : [],
     };
 
-    result[name] = entry;
+    result[encodeFirebaseSegment(name)] = entry;
   }
 
   return result;
@@ -124,10 +124,14 @@ type GlossaryData = {
 };
 
 async function getGlossaryData(version: string): Promise<GlossaryData | null> {
-  const glossary = (await firebaseGet(
+  const raw = (await firebaseGet(
     `versions/${encodeFirebaseSegment(version)}/glossary`
   )) as Record<string, GlossaryEntry> | null;
-  if (!glossary) return null;
+  if (!raw) return null;
+  const glossary: Record<string, GlossaryEntry> = {};
+  for (const [k, v] of Object.entries(raw)) {
+    glossary[decodeFirebaseSegment(k)] = v;
+  }
   return {
     version,
     glossary,
