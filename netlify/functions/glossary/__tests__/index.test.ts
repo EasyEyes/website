@@ -236,6 +236,74 @@ describe("POST /glossary — versioning", () => {
   });
 });
 
+describe("POST /glossary — boolean default coercion", () => {
+  function glossaryPutBody(): Record<string, { default: unknown }> {
+    const put = capturedPuts().find((p) =>
+      /\/versions\/[^/]+\/glossary\.json/.test(p.url)
+    );
+    return (put?.body ?? {}) as Record<string, { default: unknown }>;
+  }
+
+  test("JS boolean true default for boolean type is stored as 'TRUE'", async () => {
+    mockFetch([{ url: /currentVersion/, body: null }]);
+
+    // Mimic AppScript sending raw JS booleans for Excel TRUE/FALSE cells.
+    const rows: unknown[][] = [
+      ["INPUT PARAMETER", "NOW", "TYPE", "DEFAULT", "EXPLANATION", "EXAMPLE", "CATEGORIES"],
+      ["needCookiesBool", "now", "boolean", true, "expl", "ex", ""],
+    ];
+
+    const res = await handler(makeEvent({ body: JSON.stringify({ rows }) }));
+    expect(res.statusCode).toBe(200);
+    expect(glossaryPutBody()["needCookiesBool"].default).toBe("TRUE");
+  });
+
+  test("JS boolean false default for boolean type is stored as 'FALSE'", async () => {
+    mockFetch([{ url: /currentVersion/, body: null }]);
+
+    const rows: unknown[][] = [
+      ["INPUT PARAMETER", "NOW", "TYPE", "DEFAULT", "EXPLANATION", "EXAMPLE", "CATEGORIES"],
+      ["simulateParticipantBool", "now", "boolean", false, "expl", "ex", ""],
+    ];
+
+    const res = await handler(makeEvent({ body: JSON.stringify({ rows }) }));
+    expect(res.statusCode).toBe(200);
+    expect(glossaryPutBody()["simulateParticipantBool"].default).toBe("FALSE");
+  });
+
+  test("lowercase string 'true'/'false' for boolean type is normalized to uppercase", async () => {
+    mockFetch([{ url: /currentVersion/, body: null }]);
+
+    const rows: unknown[][] = [
+      ["INPUT PARAMETER", "NOW", "TYPE", "DEFAULT", "EXPLANATION", "EXAMPLE", "CATEGORIES"],
+      ["aBool", "now", "boolean", "true", "expl", "ex", ""],
+      ["bBool", "now", "boolean", " False ", "expl", "ex", ""],
+    ];
+
+    const res = await handler(makeEvent({ body: JSON.stringify({ rows }) }));
+    expect(res.statusCode).toBe(200);
+    const body = glossaryPutBody();
+    expect(body["aBool"].default).toBe("TRUE");
+    expect(body["bBool"].default).toBe("FALSE");
+  });
+
+  test("non-boolean types preserve their default value untouched", async () => {
+    mockFetch([{ url: /currentVersion/, body: null }]);
+
+    const rows: unknown[][] = [
+      ["INPUT PARAMETER", "NOW", "TYPE", "DEFAULT", "EXPLANATION", "EXAMPLE", "CATEGORIES"],
+      ["aText", "now", "text", "Hello World", "expl", "ex", ""],
+      ["aNumerical", "now", "numerical", "12.5", "expl", "ex", ""],
+    ];
+
+    const res = await handler(makeEvent({ body: JSON.stringify({ rows }) }));
+    expect(res.statusCode).toBe(200);
+    const body = glossaryPutBody();
+    expect(body["aText"].default).toBe("Hello World");
+    expect(body["aNumerical"].default).toBe("12.5");
+  });
+});
+
 const SAMPLE_GLOSSARY = {
   _about: {
     name: "_about",

@@ -54,11 +54,21 @@ function transformRawRows(rows: string[][]): Record<string, GlossaryEntry> {
     const type = row[colIndex["TYPE"] ?? 2] ?? "";
     const rawCategories = row[colIndex["CATEGORIES"] ?? 6] ?? "";
 
+    const rawDefault = row[colIndex["DEFAULT"] ?? 3];
+    // Excel native TRUE/FALSE cells arrive from the AppScript as JS booleans
+    // (when raw:true is used on the XLSX read). Coerce boolean defaults to the
+    // uppercase string form so the stored value matches the Excel display and
+    // downstream consumers (which treat defaults as strings) don't crash.
+    const normalizedDefault =
+      type === "boolean"
+        ? String(rawDefault ?? "").trim().toUpperCase()
+        : rawDefault ?? "";
+
     const entry: GlossaryEntry = {
       name,
       availability: row[colIndex["NOW"] ?? 1] ?? "",
       type,
-      default: row[colIndex["DEFAULT"] ?? 3] ?? "",
+      default: normalizedDefault,
       explanation: row[colIndex["EXPLANATION"] ?? 4] ?? "",
       example: row[colIndex["EXAMPLE"] ?? 5] ?? "",
       categories:
