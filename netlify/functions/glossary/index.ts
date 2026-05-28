@@ -82,12 +82,25 @@ async function firebaseGet(path: string): Promise<unknown> {
   return res.json();
 }
 
-async function firebasePut(path: string, value: unknown): Promise<void> {
-  await fetch(firebaseUrl(path), {
+type FirebasePutResult = { ok: boolean; status: number; body: unknown };
+
+async function firebasePut(
+  path: string,
+  value: unknown
+): Promise<FirebasePutResult> {
+  const res = await fetch(firebaseUrl(path), {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(value),
   });
+  let body: unknown;
+  try {
+    body = await res.json();
+  } catch {
+    body = await res.text();
+  }
+  console.log(`[glossary] firebasePut ${path} → ${res.status}`, JSON.stringify(body));
+  return { ok: res.ok, status: res.status, body };
 }
 
 function bumpVersion(
@@ -243,8 +256,31 @@ export async function handler(event: NetlifyEvent): Promise<NetlifyResponse> {
   }
 
   const encodedVersion = encodeFirebaseSegment(newVersion);
-  await firebasePut(`versions/${encodedVersion}/glossary`, incoming);
-  await firebasePut("currentVersion", newVersion);
+  console.log(`[glossary] writing versions/${encodedVersion}/glossary (${Object.keys(incoming).length} entries)`);
+  const glossaryResult = await firebasePut(`versions/${encodedVersion}/glossary`, incoming);
+  if (!glossaryResult.ok) {
+    return {
+      statusCode: 502,
+      body: JSON.stringify({
+        error: "Firebase write failed for glossary",
+        firebaseStatus: glossaryResult.status,
+        firebaseBody: glossaryResult.body,
+      }),
+    };
+  }
+
+  console.log(`[glossary] writing currentVersion = ${newVersion}`);
+  const versionResult = await firebasePut("currentVersion", newVersion);
+  if (!versionResult.ok) {
+    return {
+      statusCode: 502,
+      body: JSON.stringify({
+        error: "Firebase write failed for currentVersion",
+        firebaseStatus: versionResult.status,
+        firebaseBody: versionResult.body,
+      }),
+    };
+  }
 
   return { statusCode: 200, body: JSON.stringify({ version: newVersion }) };
 }
