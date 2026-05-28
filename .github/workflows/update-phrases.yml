@@ -9,8 +9,8 @@ jobs:
   phrases:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-node@v3
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: 16
       - name: Set commit account information
@@ -63,7 +63,7 @@ jobs:
 
       - name: Notify Slack on success (phrases updated)
         if: success() && steps.fetch_phrases.outputs.phrases_updated == 'true'
-        uses: slackapi/slack-github-action@v2.1.1
+        uses: slackapi/slack-github-action@v3.0.1
         with:
           webhook: ${{ secrets.slack_webhook_url }}
           webhook-type: webhook-trigger
@@ -74,7 +74,7 @@ jobs:
 
       - name: Notify Slack on success (no changes)
         if: success() && steps.fetch_phrases.outputs.phrases_updated == 'false'
-        uses: slackapi/slack-github-action@v2.1.1
+        uses: slackapi/slack-github-action@v3.0.1
         with:
           webhook: ${{ secrets.slack_webhook_url }}
           webhook-type: webhook-trigger
@@ -86,7 +86,7 @@ jobs:
 
       - name: Notify Slack on failure
         if: failure()
-        uses: slackapi/slack-github-action@v2.1.1
+        uses: slackapi/slack-github-action@v3.0.1
         with:
           webhook: ${{ secrets.slack_webhook_url }}
           webhook-type: webhook-trigger
