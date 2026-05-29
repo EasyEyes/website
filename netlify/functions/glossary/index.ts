@@ -209,6 +209,13 @@ async function handleGet(
 ): Promise<NetlifyResponse> {
   const params = event.queryStringParameters ?? {};
   console.log(`[glossary] GET params=${JSON.stringify(params)}`);
+
+  if (params.versionOnly !== undefined) {
+    const version = (await firebaseGet("currentVersion")) as string | null;
+    console.log(`[glossary] GET versionOnly currentVersion=${version}`);
+    return jsonOk({ version });
+  }
+
   const currentVersion = (await firebaseGet("currentVersion")) as string | null;
   console.log(`[glossary] GET currentVersion=${currentVersion}`);
 

@@ -509,6 +509,31 @@ describe("GET /glossary?username=&experiment= — per-experiment version lookup"
   });
 });
 
+describe("GET /glossary?versionOnly=1 — lightweight version check", () => {
+  test("returns { version } without reading glossary data", async () => {
+    mockFetch([{ url: /currentVersion/, body: "2.0" }]);
+
+    const res = await handler(makeGetEvent({ versionOnly: "1" }));
+
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body)).toEqual({ version: "2.0" });
+
+    const fetchedUrls: string[] = (global as unknown as { fetch: jest.Mock }).fetch.mock.calls.map(
+      ([url]: [string]) => url
+    );
+    expect(fetchedUrls.some((u) => u.includes("/versions/"))).toBe(false);
+  });
+
+  test("returns { version: null } when Firebase has no currentVersion", async () => {
+    mockFetch([{ url: /currentVersion/, body: null }]);
+
+    const res = await handler(makeGetEvent({ versionOnly: "1" }));
+
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body)).toEqual({ version: null });
+  });
+});
+
 describe("GET /glossary?v= — version lookup", () => {
   test("unknown version → 404", async () => {
     mockFetch([
