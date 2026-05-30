@@ -1,4 +1,7 @@
-import { encodeFirebaseSegment, decodeFirebaseSegment } from "./encodeFirebaseSegment";
+import {
+  encodeFirebaseSegment,
+  decodeFirebaseSegment,
+} from "./encodeFirebaseSegment";
 
 type NetlifyEvent = {
   httpMethod: string;
@@ -23,8 +26,7 @@ type GlossaryEntry = {
   categories: string[];
 };
 
-const FIREBASE_ROOT =
-  "https://easyeyes-compiler-default-rtdb.firebaseio.com";
+const FIREBASE_ROOT = "https://easyeyes-compiler-default-rtdb.firebaseio.com";
 
 const COLUMN_MAP: Record<string, keyof Omit<GlossaryEntry, "categories">> = {
   "INPUT PARAMETER": "name",
@@ -104,7 +106,7 @@ type FirebasePutResult = { ok: boolean; status: number; body: unknown };
 
 async function firebasePut(
   path: string,
-  value: unknown
+  value: unknown,
 ): Promise<FirebasePutResult> {
   const res = await fetch(firebaseUrl(path), {
     method: "PUT",
@@ -117,14 +119,17 @@ async function firebasePut(
   } catch {
     body = await res.text();
   }
-  console.log(`[glossary] firebasePut ${path} → ${res.status}`, JSON.stringify(body));
+  console.log(
+    `[glossary] firebasePut ${path} → ${res.status}`,
+    JSON.stringify(body),
+  );
   return { ok: res.ok, status: res.status, body };
 }
 
 function bumpVersion(
   current: string,
   incomingKeys: Set<string>,
-  existingKeys: Set<string>
+  existingKeys: Set<string>,
 ): string {
   const [major, minor] = current.split(".").map(Number);
   const isMajor =
@@ -143,7 +148,7 @@ type GlossaryData = {
 
 async function getGlossaryData(version: string): Promise<GlossaryData | null> {
   const raw = (await firebaseGet(
-    `versions/${encodeFirebaseSegment(version)}/glossary`
+    `versions/${encodeFirebaseSegment(version)}/glossary`,
   )) as Record<string, GlossaryEntry> | null;
   if (!raw) return null;
   const glossary: Record<string, GlossaryEntry> = {};
@@ -168,6 +173,7 @@ const STATIC_ALLOWED_ORIGINS = new Set([
   "https://run.pavlovia.org",
   "https://pavlovia.org",
   "https://easyeyes.app",
+  "http://localhost:5500",
 ]);
 
 function isAllowedOrigin(origin: string | undefined): origin is string {
@@ -188,7 +194,7 @@ function corsHeaders(origin: string | undefined): Record<string, string> {
 
 function withCors(
   response: NetlifyResponse,
-  origin: string | undefined
+  origin: string | undefined,
 ): NetlifyResponse {
   return {
     ...response,
@@ -201,12 +207,14 @@ function jsonOk(data: unknown): NetlifyResponse {
 }
 
 function jsonErr(statusCode: number, message: string): NetlifyResponse {
-  return { statusCode, headers: JSON_HEADERS, body: JSON.stringify({ error: message }) };
+  return {
+    statusCode,
+    headers: JSON_HEADERS,
+    body: JSON.stringify({ error: message }),
+  };
 }
 
-async function handleGet(
-  event: NetlifyEvent
-): Promise<NetlifyResponse> {
+async function handleGet(event: NetlifyEvent): Promise<NetlifyResponse> {
   const params = event.queryStringParameters ?? {};
   console.log(`[glossary] GET params=${JSON.stringify(params)}`);
 
@@ -221,7 +229,11 @@ async function handleGet(
 
   if (params.v !== undefined) {
     const data = await getGlossaryData(params.v);
-    console.log(`[glossary] GET by v=${params.v} found=${!!data} entries=${data ? Object.keys(data.glossary).length : 0}`);
+    console.log(
+      `[glossary] GET by v=${params.v} found=${!!data} entries=${
+        data ? Object.keys(data.glossary).length : 0
+      }`,
+    );
     if (!data) return jsonErr(404, "Version not found");
     return jsonOk(data);
   }
@@ -230,21 +242,33 @@ async function handleGet(
     const encodedUser = encodeFirebaseSegment(params.username);
     const encodedExp = encodeFirebaseSegment(params.experiment);
     const pinned = (await firebaseGet(
-      `users/${encodedUser}/${encodedExp}/glossaryVersion`
+      `users/${encodedUser}/${encodedExp}/glossaryVersion`,
     )) as string | null;
     const version = pinned ?? currentVersion ?? "1.0";
-    console.log(`[glossary] GET user=${params.username} exp=${params.experiment} pinned=${pinned} resolvedVersion=${version}`);
+    console.log(
+      `[glossary] GET user=${params.username} exp=${params.experiment} pinned=${pinned} resolvedVersion=${version}`,
+    );
     const data = await getGlossaryData(version);
-    console.log(`[glossary] GET data found=${!!data} entries=${data ? Object.keys(data.glossary).length : 0}`);
+    console.log(
+      `[glossary] GET data found=${!!data} entries=${
+        data ? Object.keys(data.glossary).length : 0
+      }`,
+    );
     if (!data) return jsonErr(404, "Version not found");
     const response = jsonOk(data);
-    console.log(`[glossary] GET responding 200 bodyBytes=${response.body.length}`);
+    console.log(
+      `[glossary] GET responding 200 bodyBytes=${response.body.length}`,
+    );
     return response;
   }
 
   if (!currentVersion) return jsonErr(404, "No current version");
   const data = await getGlossaryData(currentVersion);
-  console.log(`[glossary] GET fallback currentVersion data found=${!!data} entries=${data ? Object.keys(data.glossary).length : 0}`);
+  console.log(
+    `[glossary] GET fallback currentVersion data found=${!!data} entries=${
+      data ? Object.keys(data.glossary).length : 0
+    }`,
+  );
   if (!data) return jsonErr(404, "Version not found");
   return jsonOk(data);
 }
@@ -276,7 +300,7 @@ async function handlePut(event: NetlifyEvent): Promise<NetlifyResponse> {
   const encodedExp = encodeFirebaseSegment(experimentName);
   await firebasePut(
     `users/${encodedUser}/${encodedExp}/glossaryVersion`,
-    currentVersion
+    currentVersion,
   );
 
   return jsonOk({ version: currentVersion });
@@ -317,15 +341,22 @@ async function handlePost(event: NetlifyEvent): Promise<NetlifyResponse> {
     newVersion = "1.0";
   } else {
     const existingKeys = await firebaseGetKeys(
-      `versions/${encodeFirebaseSegment(currentVersion)}/glossary`
+      `versions/${encodeFirebaseSegment(currentVersion)}/glossary`,
     );
     const incomingKeys = new Set(Object.keys(incoming));
     newVersion = bumpVersion(currentVersion, incomingKeys, existingKeys);
   }
 
   const encodedVersion = encodeFirebaseSegment(newVersion);
-  console.log(`[glossary] writing versions/${encodedVersion}/glossary (${Object.keys(incoming).length} entries)`);
-  const glossaryResult = await firebasePut(`versions/${encodedVersion}/glossary`, incoming);
+  console.log(
+    `[glossary] writing versions/${encodedVersion}/glossary (${
+      Object.keys(incoming).length
+    } entries)`,
+  );
+  const glossaryResult = await firebasePut(
+    `versions/${encodedVersion}/glossary`,
+    incoming,
+  );
   if (!glossaryResult.ok) {
     return {
       statusCode: 502,
@@ -355,13 +386,21 @@ async function handlePost(event: NetlifyEvent): Promise<NetlifyResponse> {
 
 export async function handler(event: NetlifyEvent): Promise<NetlifyResponse> {
   const origin = event.headers["origin"] ?? event.headers["Origin"];
-  console.log(`[glossary] ${event.httpMethod} origin=${origin ?? "<none>"} allowed=${isAllowedOrigin(origin)} qs=${JSON.stringify(event.queryStringParameters ?? {})}`);
+  console.log(
+    `[glossary] ${event.httpMethod} origin=${
+      origin ?? "<none>"
+    } allowed=${isAllowedOrigin(origin)} qs=${JSON.stringify(
+      event.queryStringParameters ?? {},
+    )}`,
+  );
 
   if (event.httpMethod === "OPTIONS") {
     return { statusCode: 204, headers: corsHeaders(origin), body: "" };
   }
 
-  if (event.httpMethod === "GET") return withCors(await handleGet(event), origin);
-  if (event.httpMethod === "PUT") return withCors(await handlePut(event), origin);
+  if (event.httpMethod === "GET")
+    return withCors(await handleGet(event), origin);
+  if (event.httpMethod === "PUT")
+    return withCors(await handlePut(event), origin);
   return withCors(await handlePost(event), origin);
 }
