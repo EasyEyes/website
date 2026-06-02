@@ -168,14 +168,25 @@ async function handleTranslate(
   >;
   const requestVersion = body.currentVersion as string;
 
+  console.log("[phrases/translate] input:", {
+    changedPhrases,
+    requestVersion,
+    changedCount: changedPhrases ? Object.keys(changedPhrases).length : 0,
+    colorMaskKeys: Object.keys(colorMask),
+    sentValuesKeys: Object.keys(sentValues),
+    skipSizeGuard,
+  });
+
   if (
     !changedPhrases ||
     typeof changedPhrases !== "object"
   ) {
+    console.log("[phrases/translate] error: missing changedPhrases");
     return jsonErr(400, "Missing changedPhrases");
   }
 
   if (!skipSizeGuard && Object.keys(changedPhrases).length > 50) {
+    console.log("[phrases/translate] error: too many changed phrases", Object.keys(changedPhrases).length);
     return jsonErr(
       400,
       "Too many changed phrases (max 50 per synchronous call)"
@@ -183,6 +194,8 @@ async function handleTranslate(
   }
 
   const firebaseVersion = await getCurrentVersion();
+  console.log("[phrases/translate] version check:", { requestVersion, firebaseVersion, match: requestVersion === firebaseVersion });
+
   if (requestVersion !== firebaseVersion) {
     return jsonErr(409, "Version conflict: currentVersion has advanced");
   }
@@ -190,6 +203,11 @@ async function handleTranslate(
   const prevVersioned = firebaseVersion
     ? await getVersionedPhrases(firebaseVersion)
     : null;
+
+  console.log("[phrases/translate] prevVersioned:", {
+    version: prevVersioned?.version ?? null,
+    phraseCount: prevVersioned ? Object.keys(prevVersioned.phrases).length : 0,
+  });
 
   const httpFetch: TranslateDeps["deeplFetch"] = (url, init) =>
     fetch(url, init as RequestInit) as unknown as ReturnType<
@@ -210,9 +228,18 @@ async function handleTranslate(
     deps
   );
 
+  console.log("[phrases/translate] translatedRows:", translatedRows);
+
   const newVersioned = buildNewVersion(prevVersioned, translatedRows, []);
 
+  console.log("[phrases/translate] buildNewVersion result:", {
+    isNull: newVersioned === null,
+    newVersion: newVersioned?.version ?? null,
+    newPhraseCount: newVersioned ? Object.keys(newVersioned.phrases).length : 0,
+  });
+
   if (newVersioned === null) {
+    console.log("[phrases/translate] no changes detected — returning existing version without Firebase write");
     return jsonOk({ newVersion: firebaseVersion, translatedRows });
   }
 
@@ -221,6 +248,7 @@ async function handleTranslate(
     `phrasesVersions/${encodedNewVersion}/phrases`,
     newVersioned.phrases
   );
+  console.log("[phrases/translate] Firebase PUT phrases:", { ok: phrasesResult.ok, status: phrasesResult.status });
   if (!phrasesResult.ok) {
     return jsonErr(502, "Firebase write failed for phrases");
   }
@@ -229,10 +257,12 @@ async function handleTranslate(
     "phrases/currentVersion",
     newVersioned.version
   );
+  console.log("[phrases/translate] Firebase PUT currentVersion:", { ok: versionResult.ok, status: versionResult.status, newVersion: newVersioned.version });
   if (!versionResult.ok) {
     return jsonErr(502, "Firebase write failed for currentVersion");
   }
 
+  console.log("[phrases/translate] success:", { newVersion: newVersioned.version, translatedRowCount: Object.keys(translatedRows).length });
   return jsonOk({ newVersion: newVersioned.version, translatedRows });
 }
 
@@ -250,14 +280,19 @@ async function handlePost(event: NetlifyEvent): Promise<NetlifyResponse> {
 
   const body = parsed as Record<string, unknown>;
 
+  console.log("[phrases/POST] action:", body.action);
+
   if (body.action === "diff") {
     const english = body.english as Record<string, string> | undefined;
     if (!english || typeof english !== "object") {
       return jsonErr(400, "Missing or invalid english field");
     }
+    console.log("[phrases/diff] input english count:", Object.keys(english).length);
     const version = await getCurrentVersion();
     const previousVersion = version ? await getVersionedPhrases(version) : null;
-    return jsonOk(diffEnglish(english, previousVersion));
+    const result = diffEnglish(english, previousVersion);
+    console.log("[phrases/diff] result:", result);
+    return jsonOk(result);
   }
 
   if (body.action === "translate") {
