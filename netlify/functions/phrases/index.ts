@@ -247,10 +247,20 @@ async function handleTranslate(
     return jsonOk({ newVersion: firebaseVersion, translatedRows });
   }
 
+  const FIREBASE_INVALID_KEY = /[.$#[\]/]|^$/;
+  const sanitizedPhrases = Object.fromEntries(
+    Object.entries(newVersioned.phrases).filter(([k]) => !FIREBASE_INVALID_KEY.test(k))
+  );
+  const droppedCount = Object.keys(newVersioned.phrases).length - Object.keys(sanitizedPhrases).length;
+  if (droppedCount > 0) {
+    const dropped = Object.keys(newVersioned.phrases).filter((k) => FIREBASE_INVALID_KEY.test(k));
+    console.warn("[phrases/translate] dropping invalid Firebase keys:", dropped);
+  }
+
   const encodedNewVersion = encodeFirebaseSegment(newVersioned.version);
   const phrasesResult = await firebasePut(
     `phrasesVersions/${encodedNewVersion}/phrases`,
-    newVersioned.phrases
+    sanitizedPhrases
   );
   console.log("[phrases/translate] Firebase PUT phrases:", { ok: phrasesResult.ok, status: phrasesResult.status, errorBody: phrasesResult.errorBody });
   if (!phrasesResult.ok) {
