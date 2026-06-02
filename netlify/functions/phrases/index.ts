@@ -250,7 +250,7 @@ async function handleTranslate(
   );
   console.log("[phrases/translate] Firebase PUT phrases:", { ok: phrasesResult.ok, status: phrasesResult.status });
   if (!phrasesResult.ok) {
-    return jsonErr(502, "Firebase write failed for phrases");
+    return jsonErr(502, `Firebase write failed for phrases (status ${phrasesResult.status})`);
   }
 
   const versionResult = await firebasePut(
@@ -259,7 +259,7 @@ async function handleTranslate(
   );
   console.log("[phrases/translate] Firebase PUT currentVersion:", { ok: versionResult.ok, status: versionResult.status, newVersion: newVersioned.version });
   if (!versionResult.ok) {
-    return jsonErr(502, "Firebase write failed for currentVersion");
+    return jsonErr(502, `Firebase write failed for currentVersion (status ${versionResult.status})`);
   }
 
   console.log("[phrases/translate] success:", { newVersion: newVersioned.version, translatedRowCount: Object.keys(translatedRows).length });
