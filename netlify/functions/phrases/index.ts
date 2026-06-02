@@ -1,3 +1,4 @@
+import { gzipSync } from "zlib";
 import { diffEnglish } from "./diffEnglish";
 import { translateCells } from "./translateCells";
 import { buildNewVersion } from "./buildNewVersion";
@@ -16,6 +17,7 @@ type NetlifyResponse = {
   statusCode: number;
   headers?: Record<string, string>;
   body: string;
+  isBase64Encoded?: boolean;
 };
 
 const FIREBASE_ROOT = "https://easyeyes-compiler-default-rtdb.firebaseio.com";
@@ -54,6 +56,16 @@ function withCors(
 
 function jsonOk(data: unknown): NetlifyResponse {
   return { statusCode: 200, headers: JSON_HEADERS, body: JSON.stringify(data) };
+}
+
+function jsonOkGzipped(data: unknown): NetlifyResponse {
+  const compressed = gzipSync(Buffer.from(JSON.stringify(data), "utf-8"));
+  return {
+    statusCode: 200,
+    headers: { "Content-Type": "application/json", "Content-Encoding": "gzip" },
+    body: compressed.toString("base64"),
+    isBase64Encoded: true,
+  };
 }
 
 function jsonErr(statusCode: number, message: string): NetlifyResponse {
@@ -99,14 +111,14 @@ async function handleGet(event: NetlifyEvent): Promise<NetlifyResponse> {
     if (!version) return jsonErr(404, "No pinned version");
     const data = await getVersionedPhrases(version);
     if (!data) return jsonErr(404, "Version not found");
-    return jsonOk(data);
+    return jsonOkGzipped(data);
   }
 
   const version = await getCurrentVersion();
   if (!version) return jsonErr(404, "No current version");
   const data = await getVersionedPhrases(version);
   if (!data) return jsonErr(404, "Version not found");
-  return jsonOk(data);
+  return jsonOkGzipped(data);
 }
 
 async function handlePut(event: NetlifyEvent): Promise<NetlifyResponse> {
