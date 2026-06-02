@@ -327,7 +327,7 @@ export async function handler(event: NetlifyEvent): Promise<NetlifyResponse> {
     return { statusCode: 204, headers: corsHeaders(origin), body: "" };
   }
 
-  if (event.httpMethod === "POST" || event.httpMethod === "PUT") {
+  if (event.httpMethod === "POST") {
     const expectedSecret = process.env.PHRASES_SECRET;
     const providedSecret =
       event.headers["x-phrases-secret"] ?? event.headers["X-Phrases-Secret"];
