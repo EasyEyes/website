@@ -35,13 +35,17 @@ async function firebaseGet(path: string): Promise<unknown> {
 async function firebasePut(
   path: string,
   value: unknown
-): Promise<{ ok: boolean; status: number }> {
+): Promise<{ ok: boolean; status: number; errorBody?: string }> {
   const res = await fetch(firebaseUrl(path), {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(value),
   });
-  return { ok: res.ok, status: res.status };
+  if (!res.ok) {
+    const errorBody = await res.text().catch(() => "(unreadable)");
+    return { ok: false, status: res.status, errorBody };
+  }
+  return { ok: true, status: res.status };
 }
 
 function withCors(
@@ -248,18 +252,18 @@ async function handleTranslate(
     `phrasesVersions/${encodedNewVersion}/phrases`,
     newVersioned.phrases
   );
-  console.log("[phrases/translate] Firebase PUT phrases:", { ok: phrasesResult.ok, status: phrasesResult.status });
+  console.log("[phrases/translate] Firebase PUT phrases:", { ok: phrasesResult.ok, status: phrasesResult.status, errorBody: phrasesResult.errorBody });
   if (!phrasesResult.ok) {
-    return jsonErr(502, `Firebase write failed for phrases (status ${phrasesResult.status})`);
+    return jsonErr(502, `Firebase write failed for phrases (status ${phrasesResult.status}): ${phrasesResult.errorBody ?? ""}`);
   }
 
   const versionResult = await firebasePut(
     "phrases/currentVersion",
     newVersioned.version
   );
-  console.log("[phrases/translate] Firebase PUT currentVersion:", { ok: versionResult.ok, status: versionResult.status, newVersion: newVersioned.version });
+  console.log("[phrases/translate] Firebase PUT currentVersion:", { ok: versionResult.ok, status: versionResult.status, errorBody: versionResult.errorBody, newVersion: newVersioned.version });
   if (!versionResult.ok) {
-    return jsonErr(502, `Firebase write failed for currentVersion (status ${versionResult.status})`);
+    return jsonErr(502, `Firebase write failed for currentVersion (status ${versionResult.status}): ${versionResult.errorBody ?? ""}`);
   }
 
   console.log("[phrases/translate] success:", { newVersion: newVersioned.version, translatedRowCount: Object.keys(translatedRows).length });
