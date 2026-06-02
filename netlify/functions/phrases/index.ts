@@ -247,7 +247,7 @@ async function handleTranslate(
     return jsonOk({ newVersion: firebaseVersion, translatedRows });
   }
 
-  const FIREBASE_INVALID_KEY = /[.$#[\]/]|^$/;
+  const FIREBASE_INVALID_KEY = /[.$#[\]/]|[\x00-\x1f\x7f]|^$/;
   const sanitizedPhrases = Object.fromEntries(
     Object.entries(newVersioned.phrases).filter(([k]) => !FIREBASE_INVALID_KEY.test(k))
   );
