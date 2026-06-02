@@ -111,7 +111,7 @@ async function translateGooglePhrase(
 
 export async function translateCells(
   changedPhrases: Record<string, string>,
-  colorMask: Record<string, Record<string, string>>,
+  colorMask: Record<string, Record<string, string | boolean>>,
   sentValues: Record<string, Record<string, string>>,
   deps: TranslateDeps
 ): Promise<PhraseMap> {
@@ -133,7 +133,9 @@ export async function translateCells(
       if (lang === "en") continue;
       const sentValue = sent[lang] ?? "";
 
-      if (color.toLowerCase() === "#ffffff") {
+      const isWhite =
+        typeof color === "boolean" ? !color : color.toLowerCase() === "#ffffff";
+      if (isWhite) {
         result[key][lang] = sentValue;
         continue;
       }

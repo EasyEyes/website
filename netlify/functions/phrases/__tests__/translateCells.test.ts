@@ -30,6 +30,50 @@ function deeplOk(texts: string[]): { status: number; body: unknown } {
   };
 }
 
+describe("translateCells — boolean colorMask (apps-script format)", () => {
+  test("boolean false → passthrough sentValue, no fetch calls", async () => {
+    const deeplFetch = jest.fn();
+    const deps: TranslateDeps = {
+      deeplFetch: deeplFetch as unknown as FetchLike,
+      googleFetch: jest.fn() as unknown as FetchLike,
+      googleApiKey: undefined,
+      deeplApiKey: "dkey",
+      sleep: noSleep,
+    };
+
+    const result = await translateCells(
+      { k1: "Hello" },
+      { k1: { fr: false } },
+      { k1: { fr: "Bonjour" } },
+      deps
+    );
+
+    expect(result.k1.fr).toBe("Bonjour");
+    expect(deeplFetch).not.toHaveBeenCalled();
+  });
+
+  test("boolean true → deeplFetch called", async () => {
+    const deeplFetch = makeDeeplFetch([deeplOk(["Bonjour"])]);
+    const deps: TranslateDeps = {
+      deeplFetch: deeplFetch as unknown as FetchLike,
+      googleFetch: jest.fn() as unknown as FetchLike,
+      googleApiKey: undefined,
+      deeplApiKey: "dkey",
+      sleep: noSleep,
+    };
+
+    const result = await translateCells(
+      { k1: "Hello" },
+      { k1: { fr: true } },
+      { k1: { fr: "" } },
+      deps
+    );
+
+    expect(result.k1.fr).toBe("[Bonjour]");
+    expect(deeplFetch).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe("translateCells — white cell passthrough", () => {
   test("#ffffff → returns sentValue, no fetch calls made", async () => {
     const deeplFetch = jest.fn();

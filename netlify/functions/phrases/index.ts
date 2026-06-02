@@ -160,7 +160,7 @@ async function handleTranslate(
   const changedPhrases = body.changedPhrases as Record<string, string>;
   const colorMask = (body.colorMask ?? {}) as Record<
     string,
-    Record<string, string>
+    Record<string, string | boolean>
   >;
   const sentValues = (body.sentValues ?? {}) as Record<
     string,
