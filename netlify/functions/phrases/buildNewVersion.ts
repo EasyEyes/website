@@ -16,7 +16,7 @@ export function buildNewVersion(
   const newPhrases: PhraseMap = { ...prev.phrases };
 
   for (const [key, row] of Object.entries(translatedCells)) {
-    newPhrases[key] = row;
+    newPhrases[key] = { ...newPhrases[key], ...row };
   }
 
   for (const key of removed) {
