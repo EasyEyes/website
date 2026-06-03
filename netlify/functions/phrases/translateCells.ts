@@ -22,7 +22,7 @@ async function callDeepL(
   targetLang: string,
   apiKey: string,
   deeplFetch: TranslateDeps["deeplFetch"],
-  sleep: (ms: number) => Promise<void>
+  sleep: (ms: number) => Promise<void>,
 ): Promise<string[] | null> {
   const baseUrl = deeplBaseUrl(apiKey);
   const RETRY_STATUSES = new Set([429, 456]);
@@ -62,7 +62,7 @@ async function translateForLanguage(
   jobs: DeeplJob[],
   deps: TranslateDeps,
   sleep: (ms: number) => Promise<void>,
-  result: PhraseMap
+  result: PhraseMap,
 ): Promise<void> {
   const BATCH_SIZE = 50;
 
@@ -73,7 +73,7 @@ async function translateForLanguage(
       toDeeplTargetLang(lang),
       deps.deeplApiKey,
       deps.deeplFetch,
-      sleep
+      sleep,
     );
 
     for (let j = 0; j < batch.length; j++) {
@@ -88,7 +88,7 @@ async function translateGooglePhrase(
   engText: string,
   sentValue: string,
   deps: TranslateDeps,
-  result: PhraseMap
+  result: PhraseMap,
 ): Promise<void> {
   const res = await deps.googleFetch(
     `https://translation.googleapis.com/language/translate/v2?key=${deps.googleApiKey}`,
@@ -96,7 +96,7 @@ async function translateGooglePhrase(
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ q: engText, target: "kn", format: "text" }),
-    }
+    },
   );
 
   if (res.ok) {
@@ -111,9 +111,9 @@ async function translateGooglePhrase(
 
 export async function translateCells(
   changedPhrases: Record<string, string>,
-  colorMask: Record<string, Record<string, string | boolean>>,
+  colorMask: Record<string, Record<string, string>>,
   sentValues: Record<string, Record<string, string>>,
-  deps: TranslateDeps
+  deps: TranslateDeps,
 ): Promise<PhraseMap> {
   const result: PhraseMap = {};
   const sleep = deps.sleep ?? (() => Promise.resolve());
@@ -123,7 +123,8 @@ export async function translateCells(
   }
 
   const deeplJobs = new Map<string, DeeplJob[]>();
-  const googleJobs: Array<{ key: string; engText: string; sentValue: string }> = [];
+  const googleJobs: Array<{ key: string; engText: string; sentValue: string }> =
+    [];
 
   for (const [key, engText] of Object.entries(changedPhrases)) {
     const mask = colorMask[key] ?? {};
@@ -133,9 +134,8 @@ export async function translateCells(
       if (lang === "en") continue;
       const sentValue = sent[lang] ?? "";
 
-      const isWhite =
-        typeof color === "boolean" ? !color : color.toLowerCase() === "#ffffff";
-      if (isWhite) {
+      const isCyan = color.toLowerCase() === "#00ffff";
+      if (!isCyan) {
         result[key][lang] = sentValue;
         continue;
       }
@@ -156,10 +156,10 @@ export async function translateCells(
 
   await Promise.all([
     ...[...deeplJobs.entries()].map(([lang, jobs]) =>
-      translateForLanguage(lang, jobs, deps, sleep, result)
+      translateForLanguage(lang, jobs, deps, sleep, result),
     ),
     ...googleJobs.map(({ key, engText, sentValue }) =>
-      translateGooglePhrase(key, engText, sentValue, deps, result)
+      translateGooglePhrase(key, engText, sentValue, deps, result),
     ),
   ]);
 

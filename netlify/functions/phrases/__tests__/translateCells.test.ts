@@ -30,8 +30,8 @@ function deeplOk(texts: string[]): { status: number; body: unknown } {
   };
 }
 
-describe("translateCells — boolean colorMask (apps-script format)", () => {
-  test("boolean false → passthrough sentValue, no fetch calls", async () => {
+describe("translateCells — hex colorMask (apps-script format)", () => {
+  test("non-cyan → passthrough sentValue, no fetch calls", async () => {
     const deeplFetch = jest.fn();
     const deps: TranslateDeps = {
       deeplFetch: deeplFetch as unknown as FetchLike,
@@ -43,7 +43,7 @@ describe("translateCells — boolean colorMask (apps-script format)", () => {
 
     const result = await translateCells(
       { k1: "Hello" },
-      { k1: { fr: false } },
+      { k1: { fr: "#ffffff" } },
       { k1: { fr: "Bonjour" } },
       deps
     );
@@ -52,7 +52,7 @@ describe("translateCells — boolean colorMask (apps-script format)", () => {
     expect(deeplFetch).not.toHaveBeenCalled();
   });
 
-  test("boolean true → deeplFetch called", async () => {
+  test("#00ffff → deeplFetch called", async () => {
     const deeplFetch = makeDeeplFetch([deeplOk(["Bonjour"])]);
     const deps: TranslateDeps = {
       deeplFetch: deeplFetch as unknown as FetchLike,
@@ -64,7 +64,7 @@ describe("translateCells — boolean colorMask (apps-script format)", () => {
 
     const result = await translateCells(
       { k1: "Hello" },
-      { k1: { fr: true } },
+      { k1: { fr: "#00ffff" } },
       { k1: { fr: "" } },
       deps
     );
@@ -100,7 +100,7 @@ describe("translateCells — white cell passthrough", () => {
 });
 
 describe("translateCells — DeepL basic path", () => {
-  test("non-white, non-kn cell → deeplFetch called on api.deepl.com/v3/translate", async () => {
+  test("cyan non-kn cell → deeplFetch called on api.deepl.com/v3/translate", async () => {
     const deeplFetch = makeDeeplFetch([deeplOk(["Hello"])]);
     const deps: TranslateDeps = {
       deeplFetch: deeplFetch as unknown as FetchLike,
@@ -112,7 +112,7 @@ describe("translateCells — DeepL basic path", () => {
 
     const result = await translateCells(
       { k1: "Hello" },
-      { k1: { fr: "#0000ff" } },
+      { k1: { fr: "#00ffff" } },
       { k1: { fr: "" } },
       deps
     );
@@ -141,7 +141,7 @@ describe("translateCells — kn + googleApiKey", () => {
 
     const result = await translateCells(
       { k1: "Hello" },
-      { k1: { kn: "#0000ff" } },
+      { k1: { kn: "#00ffff" } },
       { k1: { kn: "" } },
       deps
     );
@@ -166,7 +166,7 @@ describe("translateCells — kn without googleApiKey", () => {
 
     const result = await translateCells(
       { k1: "Hello" },
-      { k1: { kn: "#0000ff" } },
+      { k1: { kn: "#00ffff" } },
       { k1: { kn: "existing_kn" } },
       deps
     );
@@ -213,7 +213,7 @@ describe("translateCells — DeepL code mapping", () => {
 
     await translateCells(
       { k1: "Hello" },
-      { k1: { "zh-CN": "#0000ff" } },
+      { k1: { "zh-CN": "#00ffff" } },
       { k1: { "zh-CN": "" } },
       deps
     );
@@ -234,7 +234,7 @@ describe("translateCells — DeepL code mapping", () => {
 
     await translateCells(
       { k1: "Hello" },
-      { k1: { no: "#0000ff", "pt-pt": "#0000ff" } },
+      { k1: { no: "#00ffff", "pt-pt": "#00ffff" } },
       { k1: { no: "", "pt-pt": "" } },
       deps
     );
@@ -254,7 +254,7 @@ describe("translateCells — 50-text batching", () => {
     const sent: Record<string, Record<string, string>> = {};
     for (let i = 0; i < 51; i++) {
       phrases[`k${i}`] = `text ${i}`;
-      mask[`k${i}`] = { fr: "#0000ff" };
+      mask[`k${i}`] = { fr: "#00ffff" };
       sent[`k${i}`] = { fr: "" };
     }
 
@@ -291,7 +291,7 @@ describe("translateCells — language-parallel fan-out", () => {
 
     const result = await translateCells(
       { k1: "Hello" },
-      { k1: { fr: "#0000ff", es: "#0000ff" } },
+      { k1: { fr: "#00ffff", es: "#00ffff" } },
       { k1: { fr: "", es: "" } },
       deps
     );
@@ -319,7 +319,7 @@ describe("translateCells — 429 retry", () => {
 
     const result = await translateCells(
       { k1: "Hello" },
-      { k1: { fr: "#0000ff" } },
+      { k1: { fr: "#00ffff" } },
       { k1: { fr: "" } },
       deps
     );
@@ -347,7 +347,7 @@ describe("translateCells — 456 retry", () => {
 
     const result = await translateCells(
       { k1: "Hello" },
-      { k1: { es: "#0000ff" } },
+      { k1: { es: "#00ffff" } },
       { k1: { es: "" } },
       deps
     );
@@ -371,7 +371,7 @@ describe("translateCells — Free key (:fx suffix)", () => {
 
     await translateCells(
       { k1: "Hello" },
-      { k1: { fr: "#0000ff" } },
+      { k1: { fr: "#00ffff" } },
       { k1: { fr: "" } },
       deps
     );
@@ -393,7 +393,7 @@ describe("translateCells — Pro key (no :fx suffix)", () => {
 
     await translateCells(
       { k1: "Hello" },
-      { k1: { fr: "#0000ff" } },
+      { k1: { fr: "#00ffff" } },
       { k1: { fr: "" } },
       deps
     );
@@ -417,7 +417,7 @@ describe("translateCells — unmapped language fail-safe", () => {
 
     const result = await translateCells(
       { k1: "Hello" },
-      { k1: { xx: "#0000ff" } },
+      { k1: { xx: "#00ffff" } },
       { k1: { xx: "original_value" } },
       deps
     );
