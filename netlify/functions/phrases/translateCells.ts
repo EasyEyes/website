@@ -28,6 +28,7 @@ async function callDeepL(
   const RETRY_STATUSES = new Set([429, 456]);
 
   for (let attempt = 0; attempt < 3; attempt++) {
+    console.log("[deepl] request:", { targetLang, textCount: texts.length, texts, attempt });
     const res = await deeplFetch(`${baseUrl}/v3/translate`, {
       method: "POST",
       headers: {
@@ -37,21 +38,28 @@ async function callDeepL(
       body: JSON.stringify({ text: texts, target_lang: targetLang }),
     });
 
+    console.log("[deepl] response status:", res.status);
+
     if (res.ok) {
       const data = (await res.json()) as {
         translations: Array<{ text: string }>;
       };
-      return data.translations.map((t) => t.text);
+      const results = data.translations.map((t) => t.text);
+      console.log("[deepl] translations:", { targetLang, results });
+      return results;
     }
 
     if (RETRY_STATUSES.has(res.status)) {
+      console.log("[deepl] retryable status, sleeping:", res.status);
       await sleep(1000);
       continue;
     }
 
+    console.log("[deepl] non-retryable error, giving up:", res.status);
     return null;
   }
 
+  console.log("[deepl] all attempts exhausted for:", targetLang);
   return null;
 }
 
