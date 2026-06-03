@@ -100,7 +100,7 @@ describe("translateCells — white cell passthrough", () => {
 });
 
 describe("translateCells — DeepL basic path", () => {
-  test("cyan non-kn cell → deeplFetch called on api.deepl.com/v3/translate", async () => {
+  test("cyan non-kn cell → deeplFetch called on api.deepl.com/v2/translate", async () => {
     const deeplFetch = makeDeeplFetch([deeplOk(["Hello"])]);
     const deps: TranslateDeps = {
       deeplFetch: deeplFetch as unknown as FetchLike,
@@ -120,7 +120,7 @@ describe("translateCells — DeepL basic path", () => {
     expect(result.k1.fr).toBe("[Hello]");
     expect(result.k1.en).toBe("Hello");
     const [url, init] = deeplFetch.mock.calls[0];
-    expect(url).toContain("api.deepl.com/v3/translate");
+    expect(url).toContain("api.deepl.com/v2/translate");
     expect(JSON.parse(init.body).target_lang).toBe("FR");
   });
 });

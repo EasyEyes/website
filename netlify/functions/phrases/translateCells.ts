@@ -29,7 +29,7 @@ async function callDeepL(
 
   for (let attempt = 0; attempt < 3; attempt++) {
     console.log("[deepl] request:", { targetLang, textCount: texts.length, texts, attempt });
-    const res = await deeplFetch(`${baseUrl}/v3/translate`, {
+    const res = await deeplFetch(`${baseUrl}/v2/translate`, {
       method: "POST",
       headers: {
         Authorization: `DeepL-Auth-Key ${apiKey}`,
