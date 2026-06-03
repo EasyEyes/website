@@ -301,10 +301,11 @@ async function handlePost(event: NetlifyEvent): Promise<NetlifyResponse> {
     if (!english || typeof english !== "object") {
       return jsonErr(400, "Missing or invalid english field");
     }
+    const nonCyanValues = (body.nonCyanValues ?? {}) as Record<string, Record<string, string>>;
     console.log("[phrases/diff] input english count:", Object.keys(english).length);
     const version = await getCurrentVersion();
     const previousVersion = version ? await getVersionedPhrases(version) : null;
-    const result = diffEnglish(english, previousVersion);
+    const result = diffEnglish(english, previousVersion, nonCyanValues);
     console.log("[phrases/diff] result:", result);
     return jsonOk(result);
   }

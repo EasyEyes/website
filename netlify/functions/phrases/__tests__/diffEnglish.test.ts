@@ -64,6 +64,58 @@ describe("diffEnglish — new key", () => {
   });
 });
 
+describe("diffEnglish — nonCyanValues: unchanged non-cyan cells", () => {
+  test("identical non-cyan values → key not in changed", () => {
+    const prev: VersionedPhrases = {
+      version: "1.0",
+      phrases: { hello: { en: "Hello", fr: "Bonjour" } },
+    };
+    const result = diffEnglish(
+      { hello: "Hello" },
+      prev,
+      { hello: { fr: "Bonjour" } }
+    );
+    expect(result.changed).toEqual([]);
+  });
+});
+
+describe("diffEnglish — nonCyanValues: changed non-cyan cell", () => {
+  test("non-cyan value differs from Firebase → key in changed", () => {
+    const prev: VersionedPhrases = {
+      version: "1.0",
+      phrases: { hello: { en: "Hello", fr: "Bonjour" } },
+    };
+    const result = diffEnglish(
+      { hello: "Hello" },
+      prev,
+      { hello: { fr: "Au revoir" } }
+    );
+    expect(result.changed).toContain("hello");
+  });
+
+  test("non-cyan value absent from Firebase → key in changed", () => {
+    const prev: VersionedPhrases = {
+      version: "1.0",
+      phrases: { hello: { en: "Hello" } },
+    };
+    const result = diffEnglish(
+      { hello: "Hello" },
+      prev,
+      { hello: { fr: "Bonjour" } }
+    );
+    expect(result.changed).toContain("hello");
+  });
+
+  test("nonCyanValues omitted → no change detected when English matches", () => {
+    const prev: VersionedPhrases = {
+      version: "1.0",
+      phrases: { hello: { en: "Hello", fr: "Bonjour" } },
+    };
+    const result = diffEnglish({ hello: "Hello" }, prev);
+    expect(result.changed).toEqual([]);
+  });
+});
+
 describe("diffEnglish — mixed scenario", () => {
   test("changed + removed + new key all detected in one call", () => {
     const prev: VersionedPhrases = {
