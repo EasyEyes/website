@@ -90,14 +90,49 @@ function firebaseUrl(path: string): string {
   return `${FIREBASE_ROOT}/${path}.json?auth=${process.env.FIREBASE_DB}`;
 }
 
+// Firebase is a live dependency in the request path. A slow or degraded
+// Firebase must fail fast (well under Netlify's 10s function timeout) and
+// recover from transient blips, rather than hanging until Netlify kills the
+// invocation and returns an opaque 502. Each attempt is bounded by an
+// AbortController; reads retry once with a short backoff, writes never retry
+// (to avoid duplicate PUTs).
+async function fetchWithTimeout(
+  url: string,
+  options: RequestInit = {},
+  timeoutMs = 5000,
+  retries = 1,
+): Promise<Response> {
+  let lastErr: unknown;
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      return await fetch(url, { ...options, signal: controller.signal });
+    } catch (err) {
+      lastErr = err;
+      if (attempt < retries)
+        await new Promise((r) => setTimeout(r, 250 * (attempt + 1)));
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+  throw lastErr;
+}
+
 async function firebaseGet(path: string): Promise<unknown> {
-  const res = await fetch(firebaseUrl(path));
-  return res.json();
+  const res = await fetchWithTimeout(firebaseUrl(path));
+  if (!res.ok) throw new Error(`Firebase GET ${path} → ${res.status}`);
+  try {
+    return await res.json();
+  } catch {
+    throw new Error(`Firebase GET ${path} returned a non-JSON body`);
+  }
 }
 
 async function firebaseGetKeys(path: string): Promise<Set<string>> {
   const url = `${firebaseUrl(path)}&shallow=true`;
-  const res = await fetch(url);
+  const res = await fetchWithTimeout(url);
+  if (!res.ok) throw new Error(`Firebase GET (shallow) ${path} → ${res.status}`);
   const data = (await res.json()) as Record<string, true> | null;
   return new Set(Object.keys(data ?? {}));
 }
@@ -108,11 +143,16 @@ async function firebasePut(
   path: string,
   value: unknown,
 ): Promise<FirebasePutResult> {
-  const res = await fetch(firebaseUrl(path), {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(value),
-  });
+  const res = await fetchWithTimeout(
+    firebaseUrl(path),
+    {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(value),
+    },
+    5000,
+    0,
+  );
   let body: unknown;
   try {
     body = await res.json();
@@ -165,6 +205,18 @@ async function getGlossaryData(version: string): Promise<GlossaryData | null> {
 
 const JSON_HEADERS = { "Content-Type": "application/json" };
 
+// Cache directives keyed to the immutability of each response shape. A specific
+// version (`?v=`) never changes once published, so it is cached forever; the
+// version probe (`?versionOnly=1`) is the freshness oracle and must never be
+// cached; the bare "current" response is only used for initial display, so a
+// short window with stale-while-revalidate is enough. `Netlify-CDN-Cache-Control`
+// drives Netlify's edge; `Cache-Control` drives the browser.
+const CACHE = {
+  none: "no-store",
+  immutable: "public, max-age=31536000, immutable",
+  short: "public, max-age=60, stale-while-revalidate=86400",
+} as const;
+
 // Browser callers (Pavlovia experiment runtime, EasyEyes site, Netlify deploy
 // previews) need CORS headers. AppScript hits this endpoint server-side via
 // UrlFetchApp, which ignores CORS, so it continues to work regardless.
@@ -202,14 +254,22 @@ function withCors(
   };
 }
 
-function jsonOk(data: unknown): NetlifyResponse {
-  return { statusCode: 200, headers: JSON_HEADERS, body: JSON.stringify(data) };
+function jsonOk(data: unknown, cache: string = CACHE.none): NetlifyResponse {
+  return {
+    statusCode: 200,
+    headers: {
+      ...JSON_HEADERS,
+      "Cache-Control": cache,
+      "Netlify-CDN-Cache-Control": cache,
+    },
+    body: JSON.stringify(data),
+  };
 }
 
 function jsonErr(statusCode: number, message: string): NetlifyResponse {
   return {
     statusCode,
-    headers: JSON_HEADERS,
+    headers: { ...JSON_HEADERS, "Cache-Control": CACHE.none },
     body: JSON.stringify({ error: message }),
   };
 }
@@ -221,7 +281,7 @@ async function handleGet(event: NetlifyEvent): Promise<NetlifyResponse> {
   if (params.versionOnly !== undefined) {
     const version = (await firebaseGet("currentVersion")) as string | null;
     console.log(`[glossary] GET versionOnly currentVersion=${version}`);
-    return jsonOk({ version });
+    return jsonOk({ version }, CACHE.none);
   }
 
   const currentVersion = (await firebaseGet("currentVersion")) as string | null;
@@ -235,7 +295,8 @@ async function handleGet(event: NetlifyEvent): Promise<NetlifyResponse> {
       }`,
     );
     if (!data) return jsonErr(404, "Version not found");
-    return jsonOk(data);
+    // A specific version is immutable — safe to cache indefinitely.
+    return jsonOk(data, CACHE.immutable);
   }
 
   if (params.username !== undefined && params.experiment !== undefined) {
@@ -255,7 +316,8 @@ async function handleGet(event: NetlifyEvent): Promise<NetlifyResponse> {
       }`,
     );
     if (!data) return jsonErr(404, "Version not found");
-    const response = jsonOk(data);
+    // Resolution depends on the mutable per-experiment pin, so don't cache.
+    const response = jsonOk(data, CACHE.none);
     console.log(
       `[glossary] GET responding 200 bodyBytes=${response.body.length}`,
     );
@@ -270,7 +332,10 @@ async function handleGet(event: NetlifyEvent): Promise<NetlifyResponse> {
     }`,
   );
   if (!data) return jsonErr(404, "Version not found");
-  return jsonOk(data);
+  // "Current" is ambiguous and changes on publish; keep the window short and
+  // let the version probe drive correctness. The Select File flow fetches by
+  // explicit `?v=` instead of relying on this branch.
+  return jsonOk(data, CACHE.short);
 }
 
 async function handlePut(event: NetlifyEvent): Promise<NetlifyResponse> {
@@ -398,9 +463,19 @@ export async function handler(event: NetlifyEvent): Promise<NetlifyResponse> {
     return { statusCode: 204, headers: corsHeaders(origin), body: "" };
   }
 
-  if (event.httpMethod === "GET")
-    return withCors(await handleGet(event), origin);
-  if (event.httpMethod === "PUT")
-    return withCors(await handlePut(event), origin);
-  return withCors(await handlePost(event), origin);
+  try {
+    if (event.httpMethod === "GET")
+      return withCors(await handleGet(event), origin);
+    if (event.httpMethod === "PUT")
+      return withCors(await handlePut(event), origin);
+    return withCors(await handlePost(event), origin);
+  } catch (err) {
+    // Fail in a controlled way (503) instead of letting the rejection surface
+    // as Netlify's opaque 502. The body is never cached, so clients can retry.
+    console.error(`[glossary] ${event.httpMethod} failed:`, err);
+    return withCors(
+      jsonErr(503, "Glossary backend temporarily unavailable"),
+      origin,
+    );
+  }
 }
