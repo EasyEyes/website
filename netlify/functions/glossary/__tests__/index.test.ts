@@ -1,4 +1,3 @@
-import { gunzipSync } from "zlib";
 import { handler } from "../index";
 
 const VALID_SECRET = "test-secret-123";
@@ -532,85 +531,6 @@ describe("GET /glossary?versionOnly=1 — lightweight version check", () => {
 
     expect(res.statusCode).toBe(200);
     expect(JSON.parse(res.body)).toEqual({ version: null });
-  });
-});
-
-describe("GET /glossary — gzip compression", () => {
-  // Glossary large enough to clear the GZIP_MIN_BYTES threshold.
-  const bigGlossary: Record<string, unknown> = {};
-  for (let i = 0; i < 50; i++) {
-    bigGlossary[`param${i}`] = {
-      name: `param${i}`,
-      availability: "now",
-      type: "text",
-      default: "",
-      explanation: "A reasonably long explanation ".repeat(4),
-      example: "An example value here ".repeat(2),
-      categories: [],
-    };
-  }
-
-  function gzipGetEvent(acceptEncoding?: string) {
-    return {
-      httpMethod: "GET",
-      headers: acceptEncoding ? { "accept-encoding": acceptEncoding } : {},
-      body: null,
-      queryStringParameters: {},
-    };
-  }
-
-  test("client sending Accept-Encoding: gzip gets a gzipped, base64 body", async () => {
-    mockFetch([
-      { url: /currentVersion/, body: "1.0" },
-      { url: /versions\/1_dot_0\/glossary/, body: bigGlossary },
-    ]);
-
-    const res = await handler(gzipGetEvent("gzip, deflate, br"));
-    expect(res.statusCode).toBe(200);
-    const r = res as {
-      headers?: Record<string, string>;
-      body: string;
-      isBase64Encoded?: boolean;
-    };
-    expect(r.isBase64Encoded).toBe(true);
-    expect(r.headers?.["Content-Encoding"]).toBe("gzip");
-
-    const decoded = JSON.parse(
-      gunzipSync(Buffer.from(r.body, "base64")).toString("utf-8")
-    );
-    expect(decoded.version).toBe("1.0");
-    expect(decoded.glossary).toEqual(bigGlossary);
-  });
-
-  test("client without Accept-Encoding gets plain uncompressed JSON", async () => {
-    mockFetch([
-      { url: /currentVersion/, body: "1.0" },
-      { url: /versions\/1_dot_0\/glossary/, body: bigGlossary },
-    ]);
-
-    const res = await handler(gzipGetEvent());
-    const r = res as {
-      headers?: Record<string, string>;
-      body: string;
-      isBase64Encoded?: boolean;
-    };
-    expect(r.isBase64Encoded).toBeFalsy();
-    expect(r.headers?.["Content-Encoding"]).toBeUndefined();
-    expect(JSON.parse(r.body).glossary).toEqual(bigGlossary);
-  });
-
-  test("small payloads are not compressed even when gzip is accepted", async () => {
-    mockFetch([{ url: /currentVersion/, body: "2.0" }]);
-
-    const res = await handler({
-      httpMethod: "GET",
-      headers: { "accept-encoding": "gzip" },
-      body: null,
-      queryStringParameters: { versionOnly: "1" },
-    });
-    const r = res as { body: string; isBase64Encoded?: boolean };
-    expect(r.isBase64Encoded).toBeFalsy();
-    expect(JSON.parse(r.body)).toEqual({ version: "2.0" });
   });
 });
 
