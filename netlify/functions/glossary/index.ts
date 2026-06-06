@@ -1,3 +1,4 @@
+import { gzipSync } from "zlib";
 import {
   encodeFirebaseSegment,
   decodeFirebaseSegment,
@@ -14,6 +15,7 @@ type NetlifyResponse = {
   statusCode: number;
   headers?: Record<string, string>;
   body: string;
+  isBase64Encoded?: boolean;
 };
 
 type GlossaryEntry = {
@@ -214,6 +216,48 @@ function jsonErr(statusCode: number, message: string): NetlifyResponse {
   };
 }
 
+// Netlify does not gzip function-returned bodies automatically, so the full
+// glossary payload (hundreds of entries, duplicated across glossary +
+// glossaryFull) ships uncompressed unless we do it here. Compress in-function
+// and hand Netlify a base64 body with Content-Encoding: gzip; clients that
+// advertise gzip transparently decompress. Only payloads large enough to
+// benefit are compressed — tiny { version } / error bodies are left as-is.
+const GZIP_MIN_BYTES = 1024;
+
+function clientAcceptsGzip(event: NetlifyEvent): boolean {
+  const accept =
+    event.headers["accept-encoding"] ?? event.headers["Accept-Encoding"];
+  return typeof accept === "string" && /\bgzip\b/.test(accept);
+}
+
+function gzipResponse(
+  response: NetlifyResponse,
+  event: NetlifyEvent,
+): NetlifyResponse {
+  if (
+    response.isBase64Encoded ||
+    !clientAcceptsGzip(event) ||
+    Buffer.byteLength(response.body, "utf-8") < GZIP_MIN_BYTES
+  ) {
+    return response;
+  }
+  const compressed = gzipSync(Buffer.from(response.body, "utf-8")).toString(
+    "base64",
+  );
+  return {
+    ...response,
+    headers: {
+      ...(response.headers ?? {}),
+      "Content-Encoding": "gzip",
+      Vary: response.headers?.Vary
+        ? `${response.headers.Vary}, Accept-Encoding`
+        : "Accept-Encoding",
+    },
+    body: compressed,
+    isBase64Encoded: true,
+  };
+}
+
 async function handleGet(event: NetlifyEvent): Promise<NetlifyResponse> {
   const params = event.queryStringParameters ?? {};
   console.log(`[glossary] GET params=${JSON.stringify(params)}`);
@@ -399,7 +443,7 @@ export async function handler(event: NetlifyEvent): Promise<NetlifyResponse> {
   }
 
   if (event.httpMethod === "GET")
-    return withCors(await handleGet(event), origin);
+    return gzipResponse(withCors(await handleGet(event), origin), event);
   if (event.httpMethod === "PUT")
     return withCors(await handlePut(event), origin);
   return withCors(await handlePost(event), origin);
