@@ -2,6 +2,7 @@ import {
   encodeFirebaseSegment,
   decodeFirebaseSegment,
 } from "./encodeFirebaseSegment";
+import { isAllowedOrigin, corsHeaders } from "../shared/cors";
 
 type NetlifyEvent = {
   httpMethod: string;
@@ -217,40 +218,18 @@ const CACHE = {
   short: "public, max-age=60, stale-while-revalidate=86400",
 } as const;
 
+const GLOSSARY_ALLOWED_HEADERS = "Content-Type, x-glossary-secret";
+
 // Browser callers (Pavlovia experiment runtime, EasyEyes site, Netlify deploy
 // previews) need CORS headers. AppScript hits this endpoint server-side via
 // UrlFetchApp, which ignores CORS, so it continues to work regardless.
-const NETLIFY_PREVIEW_RE = /^https:\/\/[a-z0-9-]+--easyeyes\.netlify\.app$/;
-const STATIC_ALLOWED_ORIGINS = new Set([
-  "https://run.pavlovia.org",
-  "https://pavlovia.org",
-  "https://easyeyes.app",
-  "http://localhost:5500",
-]);
-
-function isAllowedOrigin(origin: string | undefined): origin is string {
-  if (!origin) return false;
-  if (STATIC_ALLOWED_ORIGINS.has(origin)) return true;
-  return NETLIFY_PREVIEW_RE.test(origin);
-}
-
-function corsHeaders(origin: string | undefined): Record<string, string> {
-  if (!isAllowedOrigin(origin)) return {};
-  return {
-    "Access-Control-Allow-Origin": origin,
-    "Access-Control-Allow-Methods": "GET, PUT, POST, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type, x-glossary-secret",
-    Vary: "Origin",
-  };
-}
-
 function withCors(
   response: NetlifyResponse,
   origin: string | undefined,
 ): NetlifyResponse {
   return {
     ...response,
-    headers: { ...(response.headers ?? {}), ...corsHeaders(origin) },
+    headers: { ...(response.headers ?? {}), ...corsHeaders(origin, GLOSSARY_ALLOWED_HEADERS) },
   };
 }
 
@@ -460,7 +439,7 @@ export async function handler(event: NetlifyEvent): Promise<NetlifyResponse> {
   );
 
   if (event.httpMethod === "OPTIONS") {
-    return { statusCode: 204, headers: corsHeaders(origin), body: "" };
+    return { statusCode: 204, headers: corsHeaders(origin, GLOSSARY_ALLOWED_HEADERS), body: "" };
   }
 
   try {
