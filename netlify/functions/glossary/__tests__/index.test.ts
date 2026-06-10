@@ -434,6 +434,50 @@ describe("GET /glossary — response headers", () => {
   });
 });
 
+describe("GET /glossary — cache directives", () => {
+  const cacheOf = (res: unknown) =>
+    (res as { headers?: Record<string, string> }).headers?.["Cache-Control"];
+
+  test("?versionOnly=1 is never cached", async () => {
+    mockFetch([{ url: /currentVersion/, body: "2.0" }]);
+    const res = await handler(makeGetEvent({ versionOnly: "1" }));
+    expect(cacheOf(res)).toBe("no-store");
+  });
+
+  test("?v=<version> is cached immutably", async () => {
+    mockFetch([
+      { url: /currentVersion/, body: "2.0" },
+      { url: /versions\/1_dot_0\/glossary/, body: SAMPLE_GLOSSARY },
+    ]);
+    const res = await handler(makeGetEvent({ v: "1.0" }));
+    expect(res.statusCode).toBe(200);
+    expect(cacheOf(res)).toBe("public, max-age=31536000, immutable");
+  });
+
+  test("bare current uses a short, revalidating window", async () => {
+    mockFetch([
+      { url: /currentVersion/, body: "1.0" },
+      { url: /versions\/1_dot_0\/glossary/, body: SAMPLE_GLOSSARY },
+    ]);
+    const res = await handler(makeGetEvent());
+    expect(cacheOf(res)).toBe("public, max-age=60, stale-while-revalidate=86400");
+  });
+});
+
+describe("GET /glossary — failure handling", () => {
+  test("a Firebase failure returns a controlled, uncached 503 (not an opaque 502)", async () => {
+    (global as unknown as { fetch: jest.Mock }).fetch = jest.fn(() =>
+      Promise.reject(new Error("Firebase unreachable"))
+    );
+
+    const res = await handler(makeGetEvent());
+
+    expect(res.statusCode).toBe(503);
+    expect((res as { headers?: Record<string, string> }).headers?.["Cache-Control"]).toBe("no-store");
+    expect(JSON.parse(res.body).error).toMatch(/temporarily unavailable/i);
+  });
+});
+
 describe("GET /glossary — bare (no query params)", () => {
   test("returns 200 with GlossaryData for the current version", async () => {
     mockFetch([
