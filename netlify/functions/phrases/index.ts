@@ -27,20 +27,59 @@ function firebaseUrl(path: string): string {
   return `${FIREBASE_ROOT}/${path}.json?auth=${process.env.FIREBASE_DB}`;
 }
 
+// Firebase is a live dependency in the request path. A slow or degraded
+// Firebase must fail fast (well under Netlify's 10s function timeout) and
+// recover from transient blips, rather than hanging until Netlify kills the
+// invocation and returns an opaque 502. Each attempt is bounded by an
+// AbortController; reads retry once with a short backoff, writes never retry
+// (to avoid duplicate PUTs).
+async function fetchWithTimeout(
+  url: string,
+  options: RequestInit = {},
+  timeoutMs = 5000,
+  retries = 1
+): Promise<Response> {
+  let lastErr: unknown;
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      return await fetch(url, { ...options, signal: controller.signal });
+    } catch (err) {
+      lastErr = err;
+      if (attempt < retries)
+        await new Promise((r) => setTimeout(r, 250 * (attempt + 1)));
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+  throw lastErr;
+}
+
 async function firebaseGet(path: string): Promise<unknown> {
-  const res = await fetch(firebaseUrl(path));
-  return res.json();
+  const res = await fetchWithTimeout(firebaseUrl(path));
+  if (!res.ok) throw new Error(`Firebase GET ${path} → ${res.status}`);
+  try {
+    return await res.json();
+  } catch {
+    throw new Error(`Firebase GET ${path} returned a non-JSON body`);
+  }
 }
 
 async function firebasePut(
   path: string,
   value: unknown
 ): Promise<{ ok: boolean; status: number; errorBody?: string }> {
-  const res = await fetch(firebaseUrl(path), {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(value),
-  });
+  const res = await fetchWithTimeout(
+    firebaseUrl(path),
+    {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(value),
+    },
+    5000,
+    0
+  );
   if (!res.ok) {
     const errorBody = await res.text().catch(() => "(unreadable)");
     return { ok: false, status: res.status, errorBody };
@@ -58,15 +97,44 @@ function withCors(
   };
 }
 
-function jsonOk(data: unknown): NetlifyResponse {
-  return { statusCode: 200, headers: JSON_HEADERS, body: JSON.stringify(data) };
+// Cache directives keyed to the immutability of each response shape. A specific
+// version (`?v=`) never changes once published, so it is cached forever; the
+// version probe (`?versionOnly=1`) is the freshness oracle and the pinned-version
+// resolution (`?pinned`) depends on the mutable pin, so neither is ever cached;
+// the bare "current" response is only used for initial display, so a short
+// window with stale-while-revalidate is enough. `Netlify-CDN-Cache-Control`
+// drives Netlify's edge; `Cache-Control` drives the browser.
+const CACHE = {
+  none: "no-store",
+  immutable: "public, max-age=31536000, immutable",
+  short: "public, max-age=60, stale-while-revalidate=86400",
+} as const;
+
+function jsonOk(data: unknown, cache: string = CACHE.none): NetlifyResponse {
+  return {
+    statusCode: 200,
+    headers: {
+      ...JSON_HEADERS,
+      "Cache-Control": cache,
+      "Netlify-CDN-Cache-Control": cache,
+    },
+    body: JSON.stringify(data),
+  };
 }
 
-function jsonOkGzipped(data: unknown): NetlifyResponse {
+function jsonOkGzipped(
+  data: unknown,
+  cache: string = CACHE.none
+): NetlifyResponse {
   const compressed = gzipSync(Buffer.from(JSON.stringify(data), "utf-8"));
   return {
     statusCode: 200,
-    headers: { "Content-Type": "application/json", "Content-Encoding": "gzip" },
+    headers: {
+      "Content-Type": "application/json",
+      "Content-Encoding": "gzip",
+      "Cache-Control": cache,
+      "Netlify-CDN-Cache-Control": cache,
+    },
     body: compressed.toString("base64"),
     isBase64Encoded: true,
   };
@@ -75,7 +143,7 @@ function jsonOkGzipped(data: unknown): NetlifyResponse {
 function jsonErr(statusCode: number, message: string): NetlifyResponse {
   return {
     statusCode,
-    headers: JSON_HEADERS,
+    headers: { ...JSON_HEADERS, "Cache-Control": CACHE.none },
     body: JSON.stringify({ error: message }),
   };
 }
@@ -99,11 +167,23 @@ async function handleGet(event: NetlifyEvent): Promise<NetlifyResponse> {
   const params = event.queryStringParameters ?? {};
 
   if (params.versionOnly !== undefined) {
+    // The freshness oracle the compiler relies on — must never be cached.
     const version = await getCurrentVersion();
-    return jsonOk({ version });
+    return jsonOk({ version }, CACHE.none);
+  }
+
+  if (params.v !== undefined) {
+    // A specific version is immutable once published — cache it forever at the
+    // edge and in the browser. This is the participant hot path.
+    const data = await getVersionedPhrases(params.v);
+    if (!data) return jsonErr(404, "Version not found");
+    return jsonOkGzipped(data, CACHE.immutable);
   }
 
   if (params.pinned !== undefined) {
+    // Resolve the (mutable) per-experiment pin to a version only. The caller
+    // then fetches the immutable payload by explicit `?v=<version>`. Resolution
+    // depends on the mutable pin, so don't cache.
     const slashIdx = params.pinned.indexOf("/");
     const username = params.pinned.slice(0, slashIdx);
     const experiment = params.pinned.slice(slashIdx + 1);
@@ -113,16 +193,16 @@ async function handleGet(event: NetlifyEvent): Promise<NetlifyResponse> {
       `users/${encodedUser}/${encodedExp}/phrasesVersion`
     )) as string | null;
     if (!version) return jsonErr(404, "No pinned version");
-    const data = await getVersionedPhrases(version);
-    if (!data) return jsonErr(404, "Version not found");
-    return jsonOkGzipped(data);
+    return jsonOk({ version }, CACHE.none);
   }
 
+  // "Current" changes on publish; keep the window short and let the version
+  // probe drive correctness. Participants fetch by explicit `?v=` instead.
   const version = await getCurrentVersion();
   if (!version) return jsonErr(404, "No current version");
   const data = await getVersionedPhrases(version);
   if (!data) return jsonErr(404, "Version not found");
-  return jsonOkGzipped(data);
+  return jsonOkGzipped(data, CACHE.short);
 }
 
 async function handlePut(event: NetlifyEvent): Promise<NetlifyResponse> {
@@ -337,9 +417,22 @@ export async function handler(event: NetlifyEvent): Promise<NetlifyResponse> {
     }
   }
 
-  if (event.httpMethod === "GET") return withCors(await handleGet(event), origin);
-  if (event.httpMethod === "PUT") return withCors(await handlePut(event), origin);
-  if (event.httpMethod === "POST") return withCors(await handlePost(event), origin);
+  try {
+    if (event.httpMethod === "GET")
+      return withCors(await handleGet(event), origin);
+    if (event.httpMethod === "PUT")
+      return withCors(await handlePut(event), origin);
+    if (event.httpMethod === "POST")
+      return withCors(await handlePost(event), origin);
 
-  return jsonErr(405, "Method not allowed");
+    return jsonErr(405, "Method not allowed");
+  } catch (err) {
+    // Fail in a controlled way (503) instead of letting the rejection surface
+    // as Netlify's opaque 502. The body is never cached, so clients can retry.
+    console.error(`[phrases] ${event.httpMethod} failed:`, err);
+    return withCors(
+      jsonErr(503, "Phrases backend temporarily unavailable"),
+      origin
+    );
+  }
 }

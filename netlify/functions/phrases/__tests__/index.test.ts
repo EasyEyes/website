@@ -1,7 +1,17 @@
+import { gunzipSync } from "zlib";
 import { handler } from "../index";
 import type { PhraseMap } from "../types";
 
 const FIREBASE_DB = "firebase-db-secret";
+const PHRASES_SECRET = "phrases-secret";
+
+// Gzipped responders return a base64 body; decode it back to the JSON payload.
+function decodeBody(res: { body: string; isBase64Encoded?: boolean }): unknown {
+  if (res.isBase64Encoded) {
+    return JSON.parse(gunzipSync(Buffer.from(res.body, "base64")).toString("utf-8"));
+  }
+  return JSON.parse(res.body);
+}
 
 const SAMPLE_PHRASES: PhraseMap = {
   hello: { en: "Hello", fr: "Bonjour" },
@@ -29,7 +39,7 @@ function makePutEvent(body: unknown) {
 function makePostEvent(body: unknown) {
   return {
     httpMethod: "POST",
-    headers: {},
+    headers: { "x-phrases-secret": PHRASES_SECRET },
     body: body === null ? null : JSON.stringify(body),
     queryStringParameters: {},
   };
@@ -52,10 +62,13 @@ function mockFetch(responses: MockResponse[]) {
       );
       const ok = match?.ok ?? true;
       const status = match?.status ?? 200;
+      const body = match?.body ?? null;
       return Promise.resolve({
         ok,
         status,
-        json: () => Promise.resolve(match?.body ?? null),
+        json: () => Promise.resolve(body),
+        text: () =>
+          Promise.resolve(typeof body === "string" ? body : JSON.stringify(body)),
       });
     }
   );
@@ -74,6 +87,7 @@ function capturedPuts(): Array<{ url: string; body: unknown }> {
 beforeEach(() => {
   process.env.FIREBASE_DB = FIREBASE_DB;
   process.env.DEEPL_API_KEY = "test-deepl-key";
+  process.env.PHRASES_SECRET = PHRASES_SECRET;
   delete process.env.GOOGLE_API_KEY;
   jest.resetAllMocks();
 });
@@ -90,7 +104,7 @@ describe("GET /phrases — bare (no query params)", () => {
     const res = await handler(makeGetEvent());
 
     expect(res.statusCode).toBe(200);
-    const data = JSON.parse(res.body);
+    const data = decodeBody(res) as { version: string; phrases: PhraseMap };
     expect(data.version).toBe("1.0");
     expect(data.phrases).toEqual(SAMPLE_PHRASES);
   });
@@ -142,19 +156,18 @@ describe("GET /phrases?versionOnly=1", () => {
 // ── GET /phrases?pinned=<user>/<experiment> ────────────────────────────────────
 
 describe("GET /phrases?pinned=<user>/<experiment>", () => {
-  test("reads users/<u>/<e>/phrasesVersion and returns that version's data", async () => {
-    const pinnedPhrases: PhraseMap = { hello: { en: "Hello", de: "Hallo" } };
-    mockFetch([
-      { url: /users\/alice\/myExp\/phrasesVersion/, body: "1.5" },
-      { url: /phrasesVersions\/1_dot_5\/phrases/, body: pinnedPhrases },
-    ]);
+  test("resolves users/<u>/<e>/phrasesVersion and returns just { version } (no payload)", async () => {
+    mockFetch([{ url: /users\/alice\/myExp\/phrasesVersion/, body: "1.5" }]);
 
     const res = await handler(makeGetEvent({ pinned: "alice/myExp" }));
 
     expect(res.statusCode).toBe(200);
-    const data = JSON.parse(res.body);
-    expect(data.version).toBe("1.5");
-    expect(data.phrases).toEqual(pinnedPhrases);
+    expect(JSON.parse(res.body)).toEqual({ version: "1.5" });
+
+    const fetchedUrls: string[] = (
+      global as unknown as { fetch: jest.Mock }
+    ).fetch.mock.calls.map(([url]: [string]) => url);
+    expect(fetchedUrls.some((u) => u.includes("phrasesVersions"))).toBe(false);
   });
 
   test("returns 404 when no pinned version stored", async () => {
@@ -162,6 +175,127 @@ describe("GET /phrases?pinned=<user>/<experiment>", () => {
 
     const res = await handler(makeGetEvent({ pinned: "alice/noPin" }));
     expect(res.statusCode).toBe(404);
+  });
+});
+
+// ── GET /phrases?v=<version> ───────────────────────────────────────────────────
+
+describe("GET /phrases?v=<version>", () => {
+  test("returns the gzipped { version, phrases } payload for that exact version", async () => {
+    mockFetch([
+      { url: /phrasesVersions\/2_dot_0\/phrases/, body: SAMPLE_PHRASES },
+    ]);
+
+    const res = await handler(makeGetEvent({ v: "2.0" }));
+
+    expect(res.statusCode).toBe(200);
+    expect(res.isBase64Encoded).toBe(true);
+    const data = decodeBody(res) as { version: string; phrases: PhraseMap };
+    expect(data.version).toBe("2.0");
+    expect(data.phrases).toEqual(SAMPLE_PHRASES);
+
+    // Resolved directly by version — never reads currentVersion or a pin.
+    const fetchedUrls: string[] = (
+      global as unknown as { fetch: jest.Mock }
+    ).fetch.mock.calls.map(([url]: [string]) => url);
+    expect(fetchedUrls.some((u) => u.includes("currentVersion"))).toBe(false);
+  });
+
+  test("returns 404 when that version has no phrases", async () => {
+    mockFetch([{ url: /phrasesVersions\/9_dot_9\/phrases/, body: null }]);
+
+    const res = await handler(makeGetEvent({ v: "9.9" }));
+    expect(res.statusCode).toBe(404);
+  });
+});
+
+// ── Cache directives ───────────────────────────────────────────────────────────
+
+describe("GET /phrases — cache directives", () => {
+  const cacheOf = (res: unknown) =>
+    (res as { headers?: Record<string, string> }).headers?.["Cache-Control"];
+  const cdnCacheOf = (res: unknown) =>
+    (res as { headers?: Record<string, string> }).headers?.[
+      "Netlify-CDN-Cache-Control"
+    ];
+
+  test("?versionOnly=1 is never cached", async () => {
+    mockFetch([{ url: /phrases\/currentVersion/, body: "2.0" }]);
+    const res = await handler(makeGetEvent({ versionOnly: "1" }));
+    expect(cacheOf(res)).toBe("no-store");
+    expect(cdnCacheOf(res)).toBe("no-store");
+  });
+
+  test("?v=<version> is cached immutably", async () => {
+    mockFetch([
+      { url: /phrasesVersions\/1_dot_0\/phrases/, body: SAMPLE_PHRASES },
+    ]);
+    const res = await handler(makeGetEvent({ v: "1.0" }));
+    expect(res.statusCode).toBe(200);
+    expect(cacheOf(res)).toBe("public, max-age=31536000, immutable");
+    expect(cdnCacheOf(res)).toBe("public, max-age=31536000, immutable");
+  });
+
+  test("?pinned resolves to { version } and is never cached", async () => {
+    mockFetch([{ url: /users\/alice\/myExp\/phrasesVersion/, body: "1.5" }]);
+    const res = await handler(makeGetEvent({ pinned: "alice/myExp" }));
+    expect(cacheOf(res)).toBe("no-store");
+  });
+
+  test("bare current uses a short, revalidating window", async () => {
+    mockFetch([
+      { url: /phrases\/currentVersion/, body: "1.0" },
+      { url: /phrasesVersions\/1_dot_0\/phrases/, body: SAMPLE_PHRASES },
+    ]);
+    const res = await handler(makeGetEvent());
+    expect(cacheOf(res)).toBe(
+      "public, max-age=60, stale-while-revalidate=86400"
+    );
+  });
+});
+
+// ── Failure handling ───────────────────────────────────────────────────────────
+
+describe("GET /phrases — failure handling", () => {
+  const cacheOf = (res: unknown) =>
+    (res as { headers?: Record<string, string> }).headers?.["Cache-Control"];
+
+  test("a Firebase failure returns a controlled, uncached 503 (not an opaque 502)", async () => {
+    (global as unknown as { fetch: jest.Mock }).fetch = jest.fn(() =>
+      Promise.reject(new Error("Firebase unreachable"))
+    );
+
+    const res = await handler(makeGetEvent());
+
+    expect(res.statusCode).toBe(503);
+    expect(cacheOf(res)).toBe("no-store");
+    expect(JSON.parse(res.body).error).toMatch(/temporarily unavailable/i);
+  });
+
+  test("a Firebase write non-2xx still yields the explicit 502 with the error body", async () => {
+    mockFetch([
+      { url: /phrases\/currentVersion/, body: "1.0" },
+      { url: /phrasesVersions\/1_dot_0\/phrases/, body: SAMPLE_PHRASES },
+      {
+        url: /phrasesVersions\/1_dot_1\/phrases/,
+        body: "permission denied",
+        ok: false,
+        status: 401,
+      },
+    ]);
+
+    const res = await handler(
+      makePostEvent({
+        action: "translate",
+        changedPhrases: { hello: "Hello updated" },
+        colorMask: {},
+        sentValues: {},
+        currentVersion: "1.0",
+      })
+    );
+
+    expect(res.statusCode).toBe(502);
+    expect(JSON.parse(res.body).error).toMatch(/permission denied/i);
   });
 });
 
