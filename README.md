@@ -52,6 +52,19 @@ npm run git "commit message" n
 
 ## Threshold Local Development
 
+## Running locally
+
+Use `netlify dev` to run the app locally so that both the client and the Netlify Functions back-end are served together:
+
+```bash
+netlify dev
+```
+
+- **Client** (webpack dev server) runs on port **5500**.
+- **Back-end** (Netlify Functions) runs on port **8888**.
+
+Open the client-side URL (http://localhost:5500) in your browser.
+
 ### Scientist Page
 
 ```shell

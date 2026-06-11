@@ -11,14 +11,10 @@
     "git": "sh scripts/git-update.sh",
     "update:git": "git add -A && git commit -m 'update' && git push",
     "update:sub": "cd docs/experiment && npm run update:git && cd ../..",
-    "update:phrases": "cd docs/experiment/threshold && npm run phrases && cd ../../.. && npm run git 'update phrases' 2",
-    "update:glossary": "cd docs/experiment/threshold && npm run glossary && cd ../../.. && npm run git 'update glossary' 2",
-    "update:fetch": "cd docs/experiment/threshold && npm run fetch && cd ../../.. && npm run git 'update fetch' 2",
     "update": "npm run update:sub && npm run update:git",
     "format": "prettier --write \"**/*.{js,json,md,html,css}\"",
     "start": "cd docs/experiment && npm start",
-    "netlify": "git submodule update --init --recursive && cd docs/experiment && npm run netlify",
-    "analyze:phrases-undefined": "node docs/experiment/threshold/server/i18n-phrases-static-analysis.mjs undefined --root ."
+    "netlify": "git submodule update --init --recursive && cd docs/experiment && npm run netlify"
   },
   "repository": {
     "type": "git",

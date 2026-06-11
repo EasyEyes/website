@@ -1,0 +1,14 @@
+{
+  "name": "formspree-quota",
+  "version": "1.0.0",
+  "description": "Reports how much of the monthly Formspree submission quota has been used.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "EasyEyes",
+  "license": "MIT",
+  "dependencies": {
+    "node-fetch": "^3.3.0"
+  }
+}
