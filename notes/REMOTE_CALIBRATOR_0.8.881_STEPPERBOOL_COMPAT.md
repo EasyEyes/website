@@ -6,7 +6,7 @@
 **Audience:** EasyEyes dev team
 
 > **Why this exists in one line.** When `_stepperBool=FALSE`, the compiler pins the
-> experiment to an *old* remote-calibrator (the only build with the non-stepper distance
+> experiment to an _old_ remote-calibrator (the only build with the non-stepper distance
 > flow). The current `threshold.min.js` feeds RC phrases via the new phrases API, which
 > the old `0.8.88` couldn't consume correctly. `0.8.881` is `0.8.88` taught to speak the
 > new phrases API — and nothing else.
@@ -67,14 +67,15 @@ Old `0.8.88` `src/i18n/loadPhrases.js`:
 
 ```js
 const PHRASES_URL =
-  'https://cdn.jsdelivr.net/gh/EasyEyes/remote-calibrator@latest/src/i18n/phrases.js'
+  "https://cdn.jsdelivr.net/gh/EasyEyes/remote-calibrator@latest/src/i18n/phrases.js";
 
 const loadPhrases = async (customizedLanguagePhrasesJSON = null) => {
-  const { remoteCalibratorPhrases } = await import(PHRASES_URL) // base table
-  Object.assign(phrases, remoteCalibratorPhrases)
-  if (customizedLanguagePhrasesJSON)                            // experiment overlay
-    Object.assign(phrases, customizedLanguagePhrasesJSON)
-}
+  const { remoteCalibratorPhrases } = await import(PHRASES_URL); // base table
+  Object.assign(phrases, remoteCalibratorPhrases);
+  if (customizedLanguagePhrasesJSON)
+    // experiment overlay
+    Object.assign(phrases, customizedLanguagePhrasesJSON);
+};
 ```
 
 Every released RC `0.8.50`–`0.9.139` fetches that `@latest` file at run time. Two problems
@@ -87,10 +88,10 @@ when paired with the new phrases arch:
 
 ### 3b. Language-key scheme change (the `en` vs `en-US` issue)
 
-| | English | Chinese | Portuguese | UK English |
-|---|---|---|---|---|
-| **New phrases API** | `en` | `zh-CN`, `zh-TW` | `pt`, `pt-pt` | *(none)* |
-| **Old RC base `phrases.js`** | `en-US`, `en-UK` | `zh-CN`, `zh-HK` | `pt` | `en-UK` |
+|                              | English          | Chinese          | Portuguese    | UK English |
+| ---------------------------- | ---------------- | ---------------- | ------------- | ---------- |
+| **New phrases API**          | `en`             | `zh-CN`, `zh-TW` | `pt`, `pt-pt` | _(none)_   |
+| **Old RC base `phrases.js`** | `en-US`, `en-UK` | `zh-CN`, `zh-HK` | `pt`          | `en-UK`    |
 
 `looseSetLanguage` resolves the display language `L` from the loaded `EE_languageNameNative`
 keys; `readi18nPhrases` (threshold) and RC then index `phrases[key][L]` **strictly** (throws
@@ -114,7 +115,7 @@ Built from a `v0.8.88` worktree; `package.json` version → `0.8.881`.
 ### Edit 1 — `src/i18n/loadPhrases.js`: overlay-only
 
 ```js
-import { phrases } from './schema'
+import { phrases } from "./schema";
 
 // 0.8.881: Phrases come solely from the EasyEyes phrases API, passed in via
 // rc.init({ languagePhrasesJSON }). The legacy base-table fetch from
@@ -122,10 +123,10 @@ import { phrases } from './schema'
 // old en-US key scheme collide with the new API). The API table is complete.
 const loadPhrases = async (customizedLanguagePhrasesJSON = null) => {
   if (customizedLanguagePhrasesJSON)
-    Object.assign(phrases, customizedLanguagePhrasesJSON)
-}
+    Object.assign(phrases, customizedLanguagePhrasesJSON);
+};
 
-export { loadPhrases }
+export { loadPhrases };
 ```
 
 `schema.js` still exports `export const phrases = {}`, so `phrases` is defined and filled
@@ -147,10 +148,10 @@ at `screenSize.js:150` (initial render) and `:239` (continue/repeat render). The
 
 ## 5. Path X vs Path Y — why both halves matter
 
-| | Serves | Mechanism |
-|---|---|---|
+|                                        | Serves                                                             | Mechanism                                                                                                                        |
+| -------------------------------------- | ------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------- |
 | **Path X** (keep `phrases.js` in repo) | **already-deployed** experiments running old RC `0.8.50`–`0.9.139` | their frozen RC still runtime-fetches `@latest/.../phrases.js`; the file (old `en-US` scheme) matches their old `en-US` overlays |
-| **Path Y** (`0.8.881`, this note) | **newly-compiled** `stepperBool=FALSE` experiments | overlay-only build consumes the new `en`-scheme API directly; no base, no collision |
+| **Path Y** (`0.8.881`, this note)      | **newly-compiled** `stepperBool=FALSE` experiments                 | overlay-only build consumes the new `en`-scheme API directly; no base, no collision                                              |
 
 A **single `phrases.js` cannot serve both schemes** — old overlays are `en-US`, new overlays
 are `en`. That's why new compiles get a patched RC (Path Y) while old experiments keep the
@@ -164,12 +165,12 @@ unmodified `0.8.88` + the retained base file (Path X). **Do not delete
 
 All `stepperBool=FALSE` references point at the patched build; `stepperBool=TRUE` is unchanged.
 
-| File | `stepperBool=FALSE` | `stepperBool=TRUE` |
-|---|---|---|
-| `index-stepper-bool.html:109` | `@0.8.881/lib/RemoteCalibrator.min.js` | — |
-| `examples/buildExamples.ts` (`rcVersion`, ~L138–141) | `@0.8.881/lib/RemoteCalibrator.min.js` | `@latest` |
-| `index.html:110` | — | `@0.9.140-beta.0/lib/RemoteCalibrator.min.js` |
-| `components/multiple-displays/peripheralDisplay.html:10` | — | `@0.9.140-beta.0/lib/RemoteCalibrator.min.js` |
+| File                                                     | `stepperBool=FALSE`                    | `stepperBool=TRUE`                            |
+| -------------------------------------------------------- | -------------------------------------- | --------------------------------------------- |
+| `index-stepper-bool.html:109`                            | `@0.8.881/lib/RemoteCalibrator.min.js` | —                                             |
+| `examples/buildExamples.ts` (`rcVersion`, ~L138–141)     | `@0.8.881/lib/RemoteCalibrator.min.js` | `@latest`                                     |
+| `index.html:110`                                         | —                                      | `@0.9.140-beta.0/lib/RemoteCalibrator.min.js` |
+| `components/multiple-displays/peripheralDisplay.html:10` | —                                      | `@0.9.140-beta.0/lib/RemoteCalibrator.min.js` |
 
 ---
 
@@ -206,7 +207,7 @@ All `stepperBool=FALSE` references point at the patched build; `stepperBool=TRUE
       size step shows the USB-A/USB-C/card **dropdown**, not literal `xxx`.
 - [ ] Non-English language renders RC calibration strings (no blanks / no "Phrase … not
       defined" errors).
-- [ ] An already-deployed *old* experiment still loads (Path X: `phrases.js` present at
+- [ ] An already-deployed _old_ experiment still loads (Path X: `phrases.js` present at
       `@latest`).
 
 ---
