@@ -218,6 +218,14 @@ const CACHE = {
   short: "public, max-age=60, stale-while-revalidate=86400",
 } as const;
 
+// CORS responses carry a per-origin `Access-Control-Allow-Origin`, but Netlify's
+// CDN keys cached responses on the query string only by default. Without this,
+// the first request to fill an immutable (`?v=`) entry freezes whatever ACAO it
+// had — including the empty header from a no-Origin/non-allowed request — and
+// serves it to every origin for a year, breaking CORS. Keying on Origin too
+// gives each origin its own cache slot with its own correct ACAO header.
+const NETLIFY_VARY = "query, header=Origin";
+
 const GLOSSARY_ALLOWED_HEADERS = "Content-Type, x-glossary-secret";
 
 // Browser callers (Pavlovia experiment runtime, EasyEyes site, Netlify deploy
@@ -240,6 +248,7 @@ function jsonOk(data: unknown, cache: string = CACHE.none): NetlifyResponse {
       ...JSON_HEADERS,
       "Cache-Control": cache,
       "Netlify-CDN-Cache-Control": cache,
+      "Netlify-Vary": NETLIFY_VARY,
     },
     body: JSON.stringify(data),
   };
