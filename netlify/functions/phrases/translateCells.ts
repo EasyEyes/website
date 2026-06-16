@@ -35,7 +35,7 @@ async function callDeepL(
         Authorization: `DeepL-Auth-Key ${apiKey}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ text: texts, target_lang: targetLang }),
+      body: JSON.stringify({ text: texts, target_lang: targetLang, source_lang: "EN" }),
     });
 
     console.log("[deepl] response status:", res.status);
