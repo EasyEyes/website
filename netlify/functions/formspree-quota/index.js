@@ -1,5 +1,3 @@
-import fetch from "node-fetch";
-
 // Reports how much of our monthly Formspree submission quota has been used.
 //
 // Used by the EasyEyes compiler to enrich the "LOGGING CAUTION" warning with a
