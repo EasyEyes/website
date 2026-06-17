@@ -1,4 +1,5 @@
-import fetch from "node-fetch";
+// Uses Node 18's built-in global fetch (NODE_VERSION=18.17.0), so no node-fetch
+// dependency is required.
 
 // Reports slow-changing GitHub values shown in the EasyEyes compiler footer:
 // the threshold repo's star count and license, and the latest commit URL of the
