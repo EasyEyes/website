@@ -4,6 +4,18 @@ import {
 } from "./encodeFirebaseSegment";
 import { isAllowedOrigin, corsHeaders } from "../shared/cors";
 
+// Bundled at deploy time by generate-static-responses.mjs.
+// Served instead of Firebase when STATIC_MODE=true.
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const staticGlossary: {
+  version: string;
+  glossary: Record<string, GlossaryEntry>;
+  glossaryFull: GlossaryEntry[];
+  superMatchingParams: string[];
+} | null = (() => {
+  try { return require("./static-glossary.json"); } catch { return null; }
+})();
+
 type NetlifyEvent = {
   httpMethod: string;
   headers: Record<string, string | undefined>;
@@ -265,6 +277,16 @@ function jsonErr(statusCode: number, message: string): NetlifyResponse {
 async function handleGet(event: NetlifyEvent): Promise<NetlifyResponse> {
   const params = event.queryStringParameters ?? {};
   console.log(`[glossary] GET params=${JSON.stringify(params)}`);
+
+  if (process.env.STATIC_MODE === "true") {
+    if (!staticGlossary || Object.keys(staticGlossary.glossary).length === 0)
+      return jsonErr(503, "Static glossary not available — run generate-static-responses.mjs first");
+    if (params.versionOnly !== undefined)
+      return jsonOk({ version: staticGlossary.version }, CACHE.none);
+    if (params.v !== undefined)
+      return jsonOk(staticGlossary, CACHE.none);
+    return jsonOk(staticGlossary, CACHE.none);
+  }
 
   if (params.versionOnly !== undefined) {
     const version = (await firebaseGet("currentVersion")) as string | null;

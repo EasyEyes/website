@@ -6,6 +6,17 @@ import { encodeFirebaseSegment } from "../glossary/encodeFirebaseSegment";
 import { corsHeaders } from "../shared/cors";
 import type { VersionedPhrases, PhraseMap, TranslateDeps } from "./types";
 
+// Bundled at deploy time by generate-static-responses.mjs.
+// Served instead of Firebase when STATIC_MODE=true.
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const staticPhrases: { version: string; phrases: PhraseMap } | null = (() => {
+  try {
+    return require("./static-phrases.json");
+  } catch {
+    return null;
+  }
+})();
+
 type NetlifyEvent = {
   httpMethod: string;
   headers: Record<string, string | undefined>;
@@ -37,7 +48,7 @@ async function fetchWithTimeout(
   url: string,
   options: RequestInit = {},
   timeoutMs = 5000,
-  retries = 1
+  retries = 1,
 ): Promise<Response> {
   let lastErr: unknown;
   for (let attempt = 0; attempt <= retries; attempt++) {
@@ -68,7 +79,7 @@ async function firebaseGet(path: string): Promise<unknown> {
 
 async function firebasePut(
   path: string,
-  value: unknown
+  value: unknown,
 ): Promise<{ ok: boolean; status: number; errorBody?: string }> {
   const res = await fetchWithTimeout(
     firebaseUrl(path),
@@ -78,7 +89,7 @@ async function firebasePut(
       body: JSON.stringify(value),
     },
     5000,
-    0
+    0,
   );
   if (!res.ok) {
     const errorBody = await res.text().catch(() => "(unreadable)");
@@ -89,7 +100,7 @@ async function firebasePut(
 
 function withCors(
   response: NetlifyResponse,
-  origin: string | undefined
+  origin: string | undefined,
 ): NetlifyResponse {
   return {
     ...response,
@@ -133,7 +144,7 @@ function jsonOk(data: unknown, cache: string = CACHE.none): NetlifyResponse {
 
 function jsonOkGzipped(
   data: unknown,
-  cache: string = CACHE.none
+  cache: string = CACHE.none,
 ): NetlifyResponse {
   const compressed = gzipSync(Buffer.from(JSON.stringify(data), "utf-8"));
   return {
@@ -163,11 +174,11 @@ async function getCurrentVersion(): Promise<string | null> {
 }
 
 async function getVersionedPhrases(
-  version: string
+  version: string,
 ): Promise<VersionedPhrases | null> {
   const encoded = encodeFirebaseSegment(version);
   const phrases = (await firebaseGet(
-    `phrasesVersions/${encoded}/phrases`
+    `phrasesVersions/${encoded}/phrases`,
   )) as PhraseMap | null;
   if (!phrases) return null;
   return { version, phrases };
@@ -175,6 +186,20 @@ async function getVersionedPhrases(
 
 async function handleGet(event: NetlifyEvent): Promise<NetlifyResponse> {
   const params = event.queryStringParameters ?? {};
+
+  if (process.env.STATIC_MODE === "true") {
+    if (!staticPhrases || Object.keys(staticPhrases.phrases).length === 0)
+      return jsonErr(
+        503,
+        "Static phrases not available — run generate-static-responses.mjs first",
+      );
+    if (params.versionOnly !== undefined)
+      return jsonOk({ version: staticPhrases.version }, CACHE.none);
+    if (params.pinned !== undefined)
+      return jsonOk({ version: staticPhrases.version }, CACHE.none);
+    if (params.v !== undefined) return jsonOkGzipped(staticPhrases, CACHE.none);
+    return jsonOkGzipped(staticPhrases, CACHE.none);
+  }
 
   if (params.versionOnly !== undefined) {
     // The freshness oracle the compiler relies on — must never be cached.
@@ -200,7 +225,7 @@ async function handleGet(event: NetlifyEvent): Promise<NetlifyResponse> {
     const encodedUser = encodeFirebaseSegment(username);
     const encodedExp = encodeFirebaseSegment(experiment);
     const version = (await firebaseGet(
-      `users/${encodedUser}/${encodedExp}/phrasesVersion`
+      `users/${encodedUser}/${encodedExp}/phrasesVersion`,
     )) as string | null;
     if (!version) return jsonErr(404, "No pinned version");
     return jsonOk({ version }, CACHE.none);
@@ -242,14 +267,17 @@ async function handlePut(event: NetlifyEvent): Promise<NetlifyResponse> {
 
   const encodedUser = encodeFirebaseSegment(username);
   const encodedExp = encodeFirebaseSegment(experimentName);
-  await firebasePut(`users/${encodedUser}/${encodedExp}/phrasesVersion`, version);
+  await firebasePut(
+    `users/${encodedUser}/${encodedExp}/phrasesVersion`,
+    version,
+  );
 
   return jsonOk({ version });
 }
 
 async function handleTranslate(
   body: Record<string, unknown>,
-  skipSizeGuard: boolean
+  skipSizeGuard: boolean,
 ): Promise<NetlifyResponse> {
   const changedPhrases = body.changedPhrases as Record<string, string>;
   const colorMask = (body.colorMask ?? {}) as Record<
@@ -271,24 +299,28 @@ async function handleTranslate(
     skipSizeGuard,
   });
 
-  if (
-    !changedPhrases ||
-    typeof changedPhrases !== "object"
-  ) {
+  if (!changedPhrases || typeof changedPhrases !== "object") {
     console.log("[phrases/translate] error: missing changedPhrases");
     return jsonErr(400, "Missing changedPhrases");
   }
 
   if (!skipSizeGuard && Object.keys(changedPhrases).length > 50) {
-    console.log("[phrases/translate] error: too many changed phrases", Object.keys(changedPhrases).length);
+    console.log(
+      "[phrases/translate] error: too many changed phrases",
+      Object.keys(changedPhrases).length,
+    );
     return jsonErr(
       400,
-      "Too many changed phrases (max 50 per synchronous call)"
+      "Too many changed phrases (max 50 per synchronous call)",
     );
   }
 
   const firebaseVersion = await getCurrentVersion();
-  console.log("[phrases/translate] version check:", { requestVersion, firebaseVersion, match: requestVersion === firebaseVersion });
+  console.log("[phrases/translate] version check:", {
+    requestVersion,
+    firebaseVersion,
+    match: requestVersion === firebaseVersion,
+  });
 
   if (requestVersion !== firebaseVersion) {
     return jsonErr(409, "Version conflict: currentVersion has advanced");
@@ -319,7 +351,7 @@ async function handleTranslate(
     changedPhrases,
     colorMask,
     sentValues,
-    deps
+    deps,
   );
 
   console.log("[phrases/translate] translatedRows:", translatedRows);
@@ -333,40 +365,73 @@ async function handleTranslate(
   });
 
   if (newVersioned === null) {
-    console.log("[phrases/translate] no changes detected — returning existing version without Firebase write");
+    console.log(
+      "[phrases/translate] no changes detected — returning existing version without Firebase write",
+    );
     return jsonOk({ newVersion: firebaseVersion, translatedRows });
   }
 
   const FIREBASE_INVALID_KEY = /[.$#[\]/]|[\x00-\x1f\x7f]|^$/;
   const sanitizedPhrases = Object.fromEntries(
-    Object.entries(newVersioned.phrases).filter(([k]) => !FIREBASE_INVALID_KEY.test(k))
+    Object.entries(newVersioned.phrases).filter(
+      ([k]) => !FIREBASE_INVALID_KEY.test(k),
+    ),
   );
-  const droppedCount = Object.keys(newVersioned.phrases).length - Object.keys(sanitizedPhrases).length;
+  const droppedCount =
+    Object.keys(newVersioned.phrases).length -
+    Object.keys(sanitizedPhrases).length;
   if (droppedCount > 0) {
-    const dropped = Object.keys(newVersioned.phrases).filter((k) => FIREBASE_INVALID_KEY.test(k));
-    console.warn("[phrases/translate] dropping invalid Firebase keys:", dropped);
+    const dropped = Object.keys(newVersioned.phrases).filter((k) =>
+      FIREBASE_INVALID_KEY.test(k),
+    );
+    console.warn(
+      "[phrases/translate] dropping invalid Firebase keys:",
+      dropped,
+    );
   }
 
   const encodedNewVersion = encodeFirebaseSegment(newVersioned.version);
   const phrasesResult = await firebasePut(
     `phrasesVersions/${encodedNewVersion}/phrases`,
-    sanitizedPhrases
+    sanitizedPhrases,
   );
-  console.log("[phrases/translate] Firebase PUT phrases:", { ok: phrasesResult.ok, status: phrasesResult.status, errorBody: phrasesResult.errorBody });
+  console.log("[phrases/translate] Firebase PUT phrases:", {
+    ok: phrasesResult.ok,
+    status: phrasesResult.status,
+    errorBody: phrasesResult.errorBody,
+  });
   if (!phrasesResult.ok) {
-    return jsonErr(502, `Firebase write failed for phrases (status ${phrasesResult.status}): ${phrasesResult.errorBody ?? ""}`);
+    return jsonErr(
+      502,
+      `Firebase write failed for phrases (status ${phrasesResult.status}): ${
+        phrasesResult.errorBody ?? ""
+      }`,
+    );
   }
 
   const versionResult = await firebasePut(
     "phrases/currentVersion",
-    newVersioned.version
+    newVersioned.version,
   );
-  console.log("[phrases/translate] Firebase PUT currentVersion:", { ok: versionResult.ok, status: versionResult.status, errorBody: versionResult.errorBody, newVersion: newVersioned.version });
+  console.log("[phrases/translate] Firebase PUT currentVersion:", {
+    ok: versionResult.ok,
+    status: versionResult.status,
+    errorBody: versionResult.errorBody,
+    newVersion: newVersioned.version,
+  });
   if (!versionResult.ok) {
-    return jsonErr(502, `Firebase write failed for currentVersion (status ${versionResult.status}): ${versionResult.errorBody ?? ""}`);
+    return jsonErr(
+      502,
+      `Firebase write failed for currentVersion (status ${
+        versionResult.status
+      }): ${versionResult.errorBody ?? ""}`,
+    );
   }
 
-  console.log("[phrases/translate] success:", { newVersion: newVersioned.version, translatedRowCount: Object.keys(translatedRows).length });
+  console.log("[phrases/translate] success:", {
+    newVersion: newVersioned.version,
+    translatedRowCount: Object.keys(translatedRows).length,
+  });
   return jsonOk({ newVersion: newVersioned.version, translatedRows });
 }
 
@@ -391,8 +456,14 @@ async function handlePost(event: NetlifyEvent): Promise<NetlifyResponse> {
     if (!english || typeof english !== "object") {
       return jsonErr(400, "Missing or invalid english field");
     }
-    const nonCyanValues = (body.nonCyanValues ?? {}) as Record<string, Record<string, string>>;
-    console.log("[phrases/diff] input english count:", Object.keys(english).length);
+    const nonCyanValues = (body.nonCyanValues ?? {}) as Record<
+      string,
+      Record<string, string>
+    >;
+    console.log(
+      "[phrases/diff] input english count:",
+      Object.keys(english).length,
+    );
     const version = await getCurrentVersion();
     const previousVersion = version ? await getVersionedPhrases(version) : null;
     const result = diffEnglish(english, previousVersion, nonCyanValues);
@@ -442,7 +513,7 @@ export async function handler(event: NetlifyEvent): Promise<NetlifyResponse> {
     console.error(`[phrases] ${event.httpMethod} failed:`, err);
     return withCors(
       jsonErr(503, "Phrases backend temporarily unavailable"),
-      origin
+      origin,
     );
   }
 }
