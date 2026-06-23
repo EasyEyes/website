@@ -52,13 +52,6 @@ export async function handler(event: NetlifyEvent): Promise<NetlifyResponse> {
     return withCors(jsonErr(405, "Method not allowed"), origin);
   }
 
-  const expectedSecret = process.env.PHRASES_SECRET;
-  const providedSecret =
-    event.headers["x-phrases-secret"] ?? event.headers["X-Phrases-Secret"];
-  if (!expectedSecret || providedSecret !== expectedSecret) {
-    return withCors(jsonErr(401, "Unauthorized"), origin);
-  }
-
   let parsed: unknown;
   try {
     parsed = JSON.parse(event.body ?? "");
