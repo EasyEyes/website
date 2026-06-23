@@ -40,12 +40,27 @@ function deeplBaseUrl(apiKey: string): string {
 
 function isCyan(cell: XLSX.CellObject | undefined): boolean {
   if (!cell?.s) return false;
-  const rgb: string | undefined = (cell.s as { fgColor?: { rgb?: string } })
-    .fgColor?.rgb;
+  const rgb = (cell.s as { fgColor?: { rgb?: string } }).fgColor?.rgb;
   if (!rgb) return false;
-  const upper = rgb.toUpperCase();
-  // SheetJS strips the alpha byte on read: Excel's FF00FFFF becomes "00FFFF"
-  return upper === "00FFFF" || upper === "FF00FFFF";
+
+  // Normalize to 6-digit RRGGBB (SheetJS may give 6 or 8 chars)
+  const hex = rgb.replace(/[^0-9A-Fa-f]/g, "");
+  let r: number, g: number, b: number;
+  if (hex.length === 6) {
+    r = parseInt(hex.slice(0, 2), 16);
+    g = parseInt(hex.slice(2, 4), 16);
+    b = parseInt(hex.slice(4, 6), 16);
+  } else if (hex.length === 8) {
+    // SheetJS uses AARRGGBB
+    r = parseInt(hex.slice(2, 4), 16);
+    g = parseInt(hex.slice(4, 6), 16);
+    b = parseInt(hex.slice(6, 8), 16);
+  } else {
+    return false;
+  }
+
+  // Cyan range: low red, high green, high blue
+  return r < 50 && g > 200 && b > 200;
 }
 
 async function callDeepL(
@@ -173,10 +188,14 @@ export async function translatePhraseFile(
 
       for (let r = range.s.r; r <= range.e.r; r++) {
         if (r === langCodeRow) continue;
-        const cell = ws[XLSX.utils.encode_cell({ r, c })];
-        // TODO: restore cyan check once style detection is fixed
-        // if (!isCyan(cell)) continue;
-        if (cell && cell.v !== undefined && String(cell.v).trim() !== "") continue;
+        const addr = XLSX.utils.encode_cell({ r, c });
+        const cell = ws[addr];
+        const bg = (cell?.s as { fgColor?: { rgb?: string } } | undefined)
+          ?.fgColor?.rgb;
+        console.log(
+          `[bg-check] ${addr} t=${cell?.t ?? "undefined"} fgColor=${bg ?? "none"} isCyan=${isCyan(cell)}`
+        );
+        if (!isCyan(cell)) continue;
         // Source text comes from column B (index 1) of the same row
         const srcCell = ws[XLSX.utils.encode_cell({ r, c: 1 })];
         const srcText = srcCell ? String(srcCell.v) : "";
