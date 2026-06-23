@@ -58,6 +58,13 @@ async function callDeepL(
   const baseUrl = deeplBaseUrl(deps.deeplApiKey);
   const RETRY_STATUSES = new Set([429, 456]);
 
+  const requestBody = {
+    text: texts,
+    source_lang: sourceLang.toUpperCase(),
+    target_lang: toDeeplTargetLang(targetLang),
+  };
+  console.log(`[DeepL] request to ${targetLang}:`, JSON.stringify(requestBody));
+
   for (let attempt = 0; attempt < 3; attempt++) {
     const res = await deps.deeplFetch(`${baseUrl}/v2/translate`, {
       method: "POST",
@@ -65,19 +72,21 @@ async function callDeepL(
         Authorization: `DeepL-Auth-Key ${deps.deeplApiKey}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        text: texts,
-        source_lang: sourceLang.toUpperCase(),
-        target_lang: toDeeplTargetLang(targetLang),
-      }),
+      body: JSON.stringify(requestBody),
     });
+
+    console.log(`[DeepL] response status for ${targetLang}: ${res.status}`);
 
     if (res.ok) {
       const data = (await res.json()) as {
         translations: Array<{ text: string }>;
       };
+      console.log(`[DeepL] response body for ${targetLang}:`, JSON.stringify(data));
       return data.translations.map((t) => t.text);
     }
+
+    const errBody = await res.json().catch(() => null);
+    console.log(`[DeepL] error body for ${targetLang}:`, JSON.stringify(errBody));
 
     if (RETRY_STATUSES.has(res.status)) {
       await sleep(1000);
@@ -147,6 +156,7 @@ export async function translatePhraseFile(
   // Column 1 (B) = source language
   const sourceCell = ws[XLSX.utils.encode_cell({ r: langCodeRow, c: 1 })];
   const sourceLang = sourceCell ? String(sourceCell.v) : "en";
+  console.log(`[translate] ~LanguageCode row index: ${langCodeRow}, sourceLang: ${sourceLang}, sheet range: ${ws["!ref"]}`);
 
   // Collect target language columns (index 2+)
   type ColJob = { colIdx: number; langCode: string; rows: number[]; texts: string[] };
@@ -164,7 +174,9 @@ export async function translatePhraseFile(
       for (let r = range.s.r; r <= range.e.r; r++) {
         if (r === langCodeRow) continue;
         const cell = ws[XLSX.utils.encode_cell({ r, c })];
-        if (!isCyan(cell)) continue;
+        // TODO: restore cyan check once style detection is fixed
+        // if (!isCyan(cell)) continue;
+        if (cell && cell.v !== undefined && String(cell.v).trim() !== "") continue;
         // Source text comes from column B (index 1) of the same row
         const srcCell = ws[XLSX.utils.encode_cell({ r, c: 1 })];
         const srcText = srcCell ? String(srcCell.v) : "";
@@ -172,6 +184,7 @@ export async function translatePhraseFile(
         texts.push(srcText);
       }
 
+      console.log(`[translate] col ${c} lang="${langCode}": ${rows.length} cells queued for translation`);
       if (langCode === "kn") {
         g = { colIdx: c, langCode, rows, texts };
       } else {
@@ -193,7 +206,8 @@ export async function translatePhraseFile(
         for (let j = 0; j < batchRows.length; j++) {
           const addr = XLSX.utils.encode_cell({ r: batchRows[j], c: colIdx });
           const existing = ws[addr] ?? { t: "s" };
-          ws[addr] = { ...existing, v: translated[j], w: translated[j] };
+          ws[addr] = { ...existing, t: "s", v: translated[j], w: translated[j] };
+          console.log(`[translate] wrote ${addr} (${langCode}): "${translated[j]}"`);
         }
       }
     })
@@ -207,7 +221,7 @@ export async function translatePhraseFile(
         const translated = await callGoogle(text, deps);
         const addr = XLSX.utils.encode_cell({ r: rows[i], c: colIdx });
         const existing = ws[addr] ?? { t: "s" };
-        ws[addr] = { ...existing, v: translated, w: translated };
+        ws[addr] = { ...existing, t: "s", v: translated, w: translated };
       })
     );
   }
