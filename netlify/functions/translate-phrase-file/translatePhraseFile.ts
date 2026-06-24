@@ -433,8 +433,9 @@ export async function translatePhraseFile(
   }
 
   // Locate the sheet XML and shared-strings files inside the ZIP
-  const rawSheetPath = (wb.Directory as { sheets?: string[] }).sheets?.[0]
-    ?? "/xl/worksheets/sheet1.xml";
+  const rawSheetPath =
+    (wb as unknown as { Directory?: { sheets?: string[] } }).Directory
+      ?.sheets?.[0] ?? "/xl/worksheets/sheet1.xml";
   const sheetPath = rawSheetPath.startsWith("/") ? rawSheetPath.slice(1) : rawSheetPath;
 
   let ssPath = "";
