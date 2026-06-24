@@ -483,6 +483,44 @@ describe("Kannada (kn) column → Google Translate", () => {
 });
 
 // ---------------------------------------------------------------------------
+// Behavior 7a: cyan fill is preserved on translated cells (regression for
+//   SheetJS write silently dropping custom fill colors via hardcoded styles.xml)
+// ---------------------------------------------------------------------------
+
+describe("cyan fill preserved after translation", () => {
+  test("translated cell retains cyan background (s attribute + styles.xml intact)", async () => {
+    const buf = buildPhraseXlsx({
+      sourceCode: "en",
+      symbols: ["~Greeting"],
+      sourceCells: [{ value: "Hello" }],
+      targetColumns: [{ code: "fr", cells: [{ value: "", cyan: true }] }],
+    });
+
+    const deeplFetch = makeDeeplFetch([deeplOk(["Bonjour"])]);
+    const deps: Deps = {
+      deeplFetch: deeplFetch as unknown as Deps["deeplFetch"],
+      googleFetch: jest.fn() as unknown as Deps["googleFetch"],
+      deeplApiKey: "dkey",
+      sleep: noSleep,
+    };
+
+    const out = await translatePhraseFile(buf, deps);
+
+    // Value must be translated
+    expect(readCell(out, "C2")).toBe("[Bonjour]");
+
+    // Cyan fill must survive the round-trip (SheetJS write dropped it before the fix)
+    const wb2 = XLSX.read(out, { type: "buffer", cellStyles: true });
+    const ws2 = wb2.Sheets[wb2.SheetNames[0]];
+    const cell = ws2["C2"];
+    const rgb  = (cell?.s as { fgColor?: { rgb?: string } } | undefined)?.fgColor?.rgb ?? "";
+    // Accept both 6-char "00FFFF" and 8-char "FF00FFFF" representations
+    const hex = rgb.replace(/[^0-9A-Fa-f]/g, "");
+    expect(hex.slice(-6).toUpperCase()).toBe("00FFFF");
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Behavior 7: multiple target language columns → all translated independently
 // ---------------------------------------------------------------------------
 
