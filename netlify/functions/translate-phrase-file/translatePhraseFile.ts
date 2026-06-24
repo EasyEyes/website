@@ -218,10 +218,10 @@ function deeplBaseUrl(apiKey: string): string {
     : "https://api.deepl.com";
 }
 
-function isCyan(cell: XLSX.CellObject | undefined): boolean {
-  if (!cell?.s) return false;
+function isWhiteOrNoColor(cell: XLSX.CellObject | undefined): boolean {
+  if (!cell?.s) return true;
   const rgb = (cell.s as { fgColor?: { rgb?: string } }).fgColor?.rgb;
-  if (!rgb) return false;
+  if (!rgb) return true;
 
   // Normalize to 6-digit RRGGBB (SheetJS may give 6 or 8 chars)
   const hex = rgb.replace(/[^0-9A-Fa-f]/g, "");
@@ -236,11 +236,11 @@ function isCyan(cell: XLSX.CellObject | undefined): boolean {
     g = parseInt(hex.slice(4, 6), 16);
     b = parseInt(hex.slice(6, 8), 16);
   } else {
-    return false;
+    return true;
   }
 
-  // Cyan range: low red, high green, high blue
-  return r < 50 && g > 200 && b > 200;
+  // White: all channels at maximum
+  return r === 255 && g === 255 && b === 255;
 }
 
 async function callDeepL(
@@ -334,11 +334,11 @@ export async function translatePhraseFile(
   const ws = wb.Sheets[wb.SheetNames[0]];
   const range = XLSX.utils.decode_range(ws["!ref"] ?? "A1");
 
-  // Find the ~LanguageCode row
+  // Find the LanguageCode row (with or without leading ~)
   let langCodeRow = -1;
   for (let r = range.s.r; r <= range.e.r; r++) {
     const cell = ws[XLSX.utils.encode_cell({ r, c: 0 })];
-    if (cell && String(cell.v).toLowerCase() === "~languagecode") {
+    if (cell && String(cell.v).replace(/^~/, "").toLowerCase() === "languagecode") {
       langCodeRow = r;
       break;
     }
@@ -346,14 +346,14 @@ export async function translatePhraseFile(
 
   if (langCodeRow === -1) {
     throw new Error(
-      'Phrase file is missing the required "~LanguageCode" row.'
+      'Phrase file is missing the required "LanguageCode" row.'
     );
   }
 
   // Column 1 (B) = source language
   const sourceCell = ws[XLSX.utils.encode_cell({ r: langCodeRow, c: 1 })];
   const sourceLang = sourceCell ? String(sourceCell.v) : "en";
-  console.log(`[translate] ~LanguageCode row index: ${langCodeRow}, sourceLang: ${sourceLang}, sheet range: ${ws["!ref"]}`);
+  console.log(`[translate] LanguageCode row index: ${langCodeRow}, sourceLang: ${sourceLang}, sheet range: ${ws["!ref"]}`);
 
   // Collect target language columns (index 2+)
   type ColJob = { colIdx: number; langCode: string; rows: number[]; texts: string[] };
@@ -374,10 +374,11 @@ export async function translatePhraseFile(
         const cell = ws[addr];
         const bg = (cell?.s as { fgColor?: { rgb?: string } } | undefined)
           ?.fgColor?.rgb;
+        const shouldTranslate = isWhiteOrNoColor(cell);
         console.log(
-          `[bg-check] ${addr} t=${cell?.t ?? "undefined"} fgColor=${bg ?? "none"} isCyan=${isCyan(cell)}`
+          `[bg-check] ${addr} t=${cell?.t ?? "undefined"} fgColor=${bg ?? "none"} shouldTranslate=${shouldTranslate}`
         );
-        if (!isCyan(cell)) continue;
+        if (!shouldTranslate) continue;
         // Source text comes from column B (index 1) of the same row
         const srcCell = ws[XLSX.utils.encode_cell({ r, c: 1 })];
         const srcText = srcCell ? String(srcCell.v) : "";

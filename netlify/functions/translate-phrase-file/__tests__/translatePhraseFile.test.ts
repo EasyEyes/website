@@ -112,7 +112,7 @@ function makeZip(entries: Array<{ name: string; data: string | Buffer }>): Buffe
   return Buffer.concat([...localParts, cdBuf, eocdr]);
 }
 
-type CellSpec = { value: string; cyan?: boolean };
+type CellSpec = { value: string; colored?: boolean };
 type ColumnSpec = { code: string; cells: CellSpec[] };
 
 /**
@@ -175,7 +175,7 @@ function buildPhraseXlsx(opts: {
 
     const sc = sourceCells[ri];
     if (sc) {
-      const styleAttr = sc.cyan ? ' s="1"' : "";
+      const styleAttr = sc.colored ? ' s="1"' : "";
       cells.push(
         `<c r="${colLetters[1]}${rowNum}" t="s"${styleAttr}><v>${si(sc.value)}</v></c>`
       );
@@ -184,7 +184,7 @@ function buildPhraseXlsx(opts: {
     targetColumns.forEach((col, ci) => {
       const c = col.cells[ri];
       if (c !== undefined) {
-        const styleAttr = c.cyan ? ' s="1"' : "";
+        const styleAttr = c.colored ? ' s="1"' : "";
         cells.push(
           `<c r="${colLetters[2 + ci]}${rowNum}" t="s"${styleAttr}><v>${si(c.value)}</v></c>`
         );
@@ -276,13 +276,13 @@ function readCell(buf: Buffer, cellAddr: string): string {
 // Behaviors
 // ---------------------------------------------------------------------------
 
-describe("cyan cell in target column → translated via DeepL", () => {
-  test("output xlsx has DeepL result in the cyan French cell", async () => {
+describe("white/no-color cell in target column → translated via DeepL", () => {
+  test("output xlsx has DeepL result in the white French cell", async () => {
     const buf = buildPhraseXlsx({
       sourceCode: "en",
       symbols: ["~Greeting"],
       sourceCells: [{ value: "Hello" }],
-      targetColumns: [{ code: "fr", cells: [{ value: "", cyan: true }] }],
+      targetColumns: [{ code: "fr", cells: [{ value: "" }] }],
     });
 
     const deeplFetch = makeDeeplFetch([deeplOk(["Bonjour"])]);
@@ -309,13 +309,13 @@ describe("cyan cell in target column → translated via DeepL", () => {
 // Behavior 2: source column (index 1) skipped even if cyan
 // ---------------------------------------------------------------------------
 
-describe("source column skipped even when cyan", () => {
-  test("DeepL not called for cyan cell in source column", async () => {
+describe("source column skipped regardless of color", () => {
+  test("DeepL not called for colored cell in source column", async () => {
     const buf = buildPhraseXlsx({
       sourceCode: "en",
       symbols: ["~Greeting"],
-      sourceCells: [{ value: "Hello", cyan: true }], // source col B is cyan
-      targetColumns: [{ code: "fr", cells: [{ value: "", cyan: true }] }],
+      sourceCells: [{ value: "Hello", colored: true }], // source col B has color but is always skipped
+      targetColumns: [{ code: "fr", cells: [{ value: "" }] }],
     });
 
     const deeplFetch = makeDeeplFetch([deeplOk(["Bonjour"])]);
@@ -341,14 +341,14 @@ describe("source column skipped even when cyan", () => {
 // Behavior 3: non-cyan cell in target column → unchanged, DeepL not called
 // ---------------------------------------------------------------------------
 
-describe("non-cyan cell in target column → unchanged", () => {
-  test("white cell value preserved, DeepL not called", async () => {
+describe("colored cell in target column → unchanged", () => {
+  test("colored cell value preserved, DeepL not called", async () => {
     const buf = buildPhraseXlsx({
       sourceCode: "en",
       symbols: ["~Greeting"],
       sourceCells: [{ value: "Hello" }],
       targetColumns: [
-        { code: "fr", cells: [{ value: "Bonjour existant", cyan: false }] },
+        { code: "fr", cells: [{ value: "Bonjour existant", colored: true }] },
       ],
     });
 
@@ -371,8 +371,8 @@ describe("non-cyan cell in target column → unchanged", () => {
 // Behavior 4: missing ~LanguageCode row → throws with descriptive message
 // ---------------------------------------------------------------------------
 
-describe("missing ~LanguageCode row", () => {
-  test("throws with ~LanguageCode in message", async () => {
+describe("missing LanguageCode row", () => {
+  test("throws with LanguageCode in message", async () => {
     // Build a valid xlsx but with no ~LanguageCode row
     const buf = buildPhraseXlsx({
       sourceCode: "en",
@@ -394,7 +394,7 @@ describe("missing ~LanguageCode row", () => {
     };
 
     await expect(translatePhraseFile(patched, deps)).rejects.toThrow(
-      /~LanguageCode/i
+      /LanguageCode/i
     );
   });
 });
@@ -409,7 +409,7 @@ describe("DeepL failure → throws", () => {
       sourceCode: "en",
       symbols: ["~Greeting"],
       sourceCells: [{ value: "Hello" }],
-      targetColumns: [{ code: "fr", cells: [{ value: "", cyan: true }] }],
+      targetColumns: [{ code: "fr", cells: [{ value: "" }] }],
     });
 
     const deeplFetch = makeDeeplFetch([{ status: 500, body: null }]);
@@ -428,7 +428,7 @@ describe("DeepL failure → throws", () => {
       sourceCode: "en",
       symbols: ["~Greeting"],
       sourceCells: [{ value: "Hello" }],
-      targetColumns: [{ code: "fr", cells: [{ value: "", cyan: true }] }],
+      targetColumns: [{ code: "fr", cells: [{ value: "" }] }],
     });
 
     // Always 429 → 3 attempts then throw
@@ -456,12 +456,12 @@ describe("DeepL failure → throws", () => {
 // ---------------------------------------------------------------------------
 
 describe("Kannada (kn) column → Google Translate", () => {
-  test("kn cyan cell uses googleFetch, deeplFetch not called", async () => {
+  test("kn white/no-color cell uses googleFetch, deeplFetch not called", async () => {
     const buf = buildPhraseXlsx({
       sourceCode: "en",
       symbols: ["~Greeting"],
       sourceCells: [{ value: "Hello" }],
-      targetColumns: [{ code: "kn", cells: [{ value: "", cyan: true }] }],
+      targetColumns: [{ code: "kn", cells: [{ value: "" }] }],
     });
 
     const deeplFetch = jest.fn();
@@ -483,17 +483,26 @@ describe("Kannada (kn) column → Google Translate", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Behavior 7a: cyan fill is preserved on translated cells (regression for
-//   SheetJS write silently dropping custom fill colors via hardcoded styles.xml)
+// Behavior 7a: colored cell fill is preserved (not corrupted) when other cells
+//   in the same sheet ARE translated via zip patching (regression for SheetJS
+//   write silently dropping all fill styles via hardcoded styles.xml)
 // ---------------------------------------------------------------------------
 
-describe("cyan fill preserved after translation", () => {
-  test("translated cell retains cyan background (s attribute + styles.xml intact)", async () => {
+describe("colored fill preserved after zip patching", () => {
+  test("colored cell retains fill when other cells in same sheet are translated", async () => {
     const buf = buildPhraseXlsx({
       sourceCode: "en",
-      symbols: ["~Greeting"],
-      sourceCells: [{ value: "Hello" }],
-      targetColumns: [{ code: "fr", cells: [{ value: "", cyan: true }] }],
+      symbols: ["~Greeting", "~Farewell"],
+      sourceCells: [{ value: "Hello" }, { value: "Goodbye" }],
+      targetColumns: [
+        {
+          code: "fr",
+          cells: [
+            { value: "" },                         // white → translated
+            { value: "Au revoir", colored: true }, // colored → not translated, fill preserved
+          ],
+        },
+      ],
     });
 
     const deeplFetch = makeDeeplFetch([deeplOk(["Bonjour"])]);
@@ -506,13 +515,16 @@ describe("cyan fill preserved after translation", () => {
 
     const out = await translatePhraseFile(buf, deps);
 
-    // Value must be translated
+    // C2: white cell → translated
     expect(readCell(out, "C2")).toBe("[Bonjour]");
 
-    // Cyan fill must survive the round-trip (SheetJS write dropped it before the fix)
+    // C3: colored cell → not translated, value preserved
+    expect(readCell(out, "C3")).toBe("Au revoir");
+
+    // C3 fill must survive the round-trip (SheetJS write dropped it before the fix)
     const wb2 = XLSX.read(out, { type: "buffer", cellStyles: true });
     const ws2 = wb2.Sheets[wb2.SheetNames[0]];
-    const cell = ws2["C2"];
+    const cell = ws2["C3"];
     const rgb  = (cell?.s as { fgColor?: { rgb?: string } } | undefined)?.fgColor?.rgb ?? "";
     // Accept both 6-char "00FFFF" and 8-char "FF00FFFF" representations
     const hex = rgb.replace(/[^0-9A-Fa-f]/g, "");
@@ -525,14 +537,14 @@ describe("cyan fill preserved after translation", () => {
 // ---------------------------------------------------------------------------
 
 describe("multiple target columns → each translated", () => {
-  test("fr and es columns both get their cyan cells translated", async () => {
+  test("fr and es columns both get their white/no-color cells translated", async () => {
     const buf = buildPhraseXlsx({
       sourceCode: "en",
       symbols: ["~Greeting"],
       sourceCells: [{ value: "Hello" }],
       targetColumns: [
-        { code: "fr", cells: [{ value: "", cyan: true }] },
-        { code: "es", cells: [{ value: "", cyan: true }] },
+        { code: "fr", cells: [{ value: "" }] },
+        { code: "es", cells: [{ value: "" }] },
       ],
     });
 
