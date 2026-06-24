@@ -15,7 +15,8 @@
     "format": "prettier --write \"**/*.{js,json,md,html,css}\"",
     "start": "cd docs/experiment && npm start",
     "netlify": "git submodule update --init --recursive && cd docs/experiment && npm run netlify",
-    "i18n:local": "node scripts/fetch-i18n-local.mjs"
+    "i18n:local": "node scripts/fetch-i18n-local.mjs",
+    "glossary:local": "node scripts/fetch-glossary-local.mjs"
   },
   "repository": {
     "type": "git",
