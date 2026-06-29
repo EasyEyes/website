@@ -260,6 +260,10 @@ async function handleTranslate(
     string,
     Record<string, string>
   >;
+  const nonCyanPhrases = (body.nonCyanPhrases ?? {}) as Record<
+    string,
+    Record<string, string>
+  >;
   const requestVersion = body.currentVersion as string;
 
   console.log("[phrases/translate] input:", {
@@ -323,6 +327,20 @@ async function handleTranslate(
   );
 
   console.log("[phrases/translate] translatedRows:", translatedRows);
+
+  // Merge non-cyan updates: for keys not already handled by translateCells,
+  // store any values that differ from what is currently in Firebase.
+  const prevPhrases = prevVersioned?.phrases ?? {};
+  for (const [key, langVals] of Object.entries(nonCyanPhrases)) {
+    if (key in changedPhrases) continue;
+    const prevRow = prevPhrases[key] ?? {};
+    for (const [lang, val] of Object.entries(langVals)) {
+      if (prevRow[lang] !== val) {
+        if (!translatedRows[key]) translatedRows[key] = {};
+        translatedRows[key][lang] = val;
+      }
+    }
+  }
 
   const newVersioned = buildNewVersion(prevVersioned, translatedRows, []);
 
@@ -391,11 +409,10 @@ async function handlePost(event: NetlifyEvent): Promise<NetlifyResponse> {
     if (!english || typeof english !== "object") {
       return jsonErr(400, "Missing or invalid english field");
     }
-    const nonCyanValues = (body.nonCyanValues ?? {}) as Record<string, Record<string, string>>;
     console.log("[phrases/diff] input english count:", Object.keys(english).length);
     const version = await getCurrentVersion();
     const previousVersion = version ? await getVersionedPhrases(version) : null;
-    const result = diffEnglish(english, previousVersion, nonCyanValues);
+    const result = diffEnglish(english, previousVersion);
     console.log("[phrases/diff] result:", result);
     return jsonOk(result);
   }

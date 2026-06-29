@@ -446,6 +446,82 @@ describe("POST /phrases { action: 'translate' } — happy path", () => {
   });
 });
 
+// ── POST /phrases { action: "translate" } + nonCyanPhrases ───────────────────
+
+describe("POST /phrases { action: 'translate' } — nonCyanPhrases", () => {
+  test("non-cyan value that differs from Firebase is stored in a new version", async () => {
+    mockFetch([
+      { url: /phrases\/currentVersion/, body: "1.0" },
+      { url: /phrasesVersions\/1_dot_0\/phrases/, body: SAMPLE_PHRASES },
+    ]);
+
+    const res = await handler(
+      makePostEvent({
+        action: "translate",
+        changedPhrases: {},
+        colorMask: {},
+        sentValues: {},
+        nonCyanPhrases: { hello: { fr: "Salut" } },
+        currentVersion: "1.0",
+      })
+    );
+
+    expect(res.statusCode).toBe(200);
+    const data = JSON.parse(res.body);
+    expect(data.newVersion).toBe("1.1");
+
+    const puts = capturedPuts();
+    expect(puts.some((p) => p.url.includes("phrasesVersions/1_dot_1/phrases"))).toBe(true);
+    const phrasesPut = puts.find((p) => p.url.includes("phrasesVersions/1_dot_1/phrases"));
+    expect((phrasesPut?.body as Record<string, Record<string, string>>).hello?.fr).toBe("Salut");
+  });
+
+  test("non-cyan value identical to Firebase creates no new version", async () => {
+    mockFetch([
+      { url: /phrases\/currentVersion/, body: "1.0" },
+      { url: /phrasesVersions\/1_dot_0\/phrases/, body: SAMPLE_PHRASES },
+    ]);
+
+    const res = await handler(
+      makePostEvent({
+        action: "translate",
+        changedPhrases: {},
+        colorMask: {},
+        sentValues: {},
+        nonCyanPhrases: { hello: { fr: "Bonjour" } },
+        currentVersion: "1.0",
+      })
+    );
+
+    expect(res.statusCode).toBe(200);
+    const data = JSON.parse(res.body);
+    expect(data.newVersion).toBe("1.0");
+    expect(capturedPuts()).toHaveLength(0);
+  });
+
+  test("non-cyan update skips keys already in changedPhrases", async () => {
+    mockFetch([
+      { url: /phrases\/currentVersion/, body: "1.0" },
+      { url: /phrasesVersions\/1_dot_0\/phrases/, body: SAMPLE_PHRASES },
+    ]);
+
+    const res = await handler(
+      makePostEvent({
+        action: "translate",
+        changedPhrases: { hello: "Hello updated" },
+        colorMask: {},
+        sentValues: {},
+        nonCyanPhrases: { hello: { fr: "Salut" } },
+        currentVersion: "1.0",
+      })
+    );
+
+    expect(res.statusCode).toBe(200);
+    const data = JSON.parse(res.body);
+    expect(data.translatedRows.hello?.fr).toBeUndefined();
+  });
+});
+
 // ── POST /phrases { action: "fullResync" } ────────────────────────────────────
 
 describe("POST /phrases { action: 'fullResync' }", () => {
