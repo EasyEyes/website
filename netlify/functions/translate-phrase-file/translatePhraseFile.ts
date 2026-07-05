@@ -298,6 +298,28 @@ async function callDeepL(
   );
 }
 
+// Q&A phrases are encoded as "SHORTCUT|correctAnswer|question|answer1|answer2|...".
+// DeepL is not reliable about leaving the SHORTCUT token (and pipes) untouched when
+// it's sent inline with the sentence — it sometimes strips it entirely (observed for
+// e.g. "PRED||Is there anything..." losing its "PRED||" prefix). So instead of trusting
+// DeepL to preserve non-language scaffolding, we carve the cell into segments, translate
+// only the natural-language ones, and rejoin with the original pipes.
+function splitForTranslation(
+  text: string
+): { segments: string[]; translatable: boolean[] } {
+  const segments = text.split("|");
+  if (segments.length === 1) {
+    return { segments, translatable: [true] };
+  }
+  const translatable = segments.map((seg, i) => {
+    if (i === 0) return false; // shortcut/nickname token, never translate
+    const trimmed = seg.trim();
+    if (trimmed === "" || /^\d+$/.test(trimmed)) return false; // placeholder or numeric answer option
+    return true;
+  });
+  return { segments, translatable };
+}
+
 async function callGoogle(text: string, deps: Deps): Promise<string> {
   const res = await deps.googleFetch(
     `https://translation.googleapis.com/language/translate/v2?key=${deps.googleApiKey}`,
@@ -404,16 +426,42 @@ export async function translatePhraseFile(
 
   await Promise.all(
     deeplCols.map(async ({ colIdx, langCode, rows, texts }) => {
-      for (let i = 0; i < texts.length; i += BATCH) {
-        const batchTexts = texts.slice(i, i + BATCH);
-        const batchRows  = rows.slice(i, i + BATCH);
-        const translated = await callDeepL(batchTexts, sourceLang, langCode, deps);
-        for (let j = 0; j < batchRows.length; j++) {
-          const addr = XLSX.utils.encode_cell({ r: batchRows[j], c: colIdx });
-          cellUpdates.set(addr, translated[j]);
-          console.log(`[translate] queued ${addr} (${langCode}): "${translated[j]}"`);
-        }
+      const parsed = texts.map(splitForTranslation);
+
+      // Flatten every translatable segment across all rows in this column into
+      // one list, so the SHORTCUT tokens and numeric answer options never reach
+      // DeepL and batching stays within DeepL's per-request text limit.
+      type Piece = { rowIdx: number; segIdx: number; text: string };
+      const pieces: Piece[] = [];
+      parsed.forEach(({ segments, translatable }, rowIdx) => {
+        segments.forEach((seg, segIdx) => {
+          if (translatable[segIdx]) pieces.push({ rowIdx, segIdx, text: seg });
+        });
+      });
+
+      const translatedBySeg = new Map<string, string>(); // `${rowIdx}:${segIdx}` -> text
+      for (let i = 0; i < pieces.length; i += BATCH) {
+        const batch = pieces.slice(i, i + BATCH);
+        const translated = await callDeepL(
+          batch.map((p) => p.text),
+          sourceLang,
+          langCode,
+          deps
+        );
+        batch.forEach((p, j) =>
+          translatedBySeg.set(`${p.rowIdx}:${p.segIdx}`, translated[j])
+        );
       }
+
+      parsed.forEach(({ segments }, rowIdx) => {
+        const finalSegments = segments.map(
+          (seg, segIdx) => translatedBySeg.get(`${rowIdx}:${segIdx}`) ?? seg
+        );
+        const result = finalSegments.join("|");
+        const addr = XLSX.utils.encode_cell({ r: rows[rowIdx], c: colIdx });
+        cellUpdates.set(addr, result);
+        console.log(`[translate] queued ${addr} (${langCode}): "${result}"`);
+      });
     })
   );
 
