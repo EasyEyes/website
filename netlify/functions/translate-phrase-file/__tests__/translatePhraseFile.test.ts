@@ -536,6 +536,95 @@ describe("colored fill preserved after zip patching", () => {
 // Behavior 7: multiple target language columns → all translated independently
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Behavior 8: questionAndAnswer-style cells (SHORTCUT|correctAnswer|question|
+//   answer1|answer2|...) must keep the shortcut and numeric answers untouched,
+//   sending only the natural-language segments to DeepL, then reassembling
+//   with the original pipes. Regression test for DeepL silently dropping the
+//   shortcut prefix on some rows (e.g. "PRED||Is there anything...") while
+//   preserving it on others in the same batch.
+// ---------------------------------------------------------------------------
+
+describe("questionAndAnswer cell → shortcut and numeric options preserved", () => {
+  test("choice question: shortcut + numbers untouched, question translated", async () => {
+    const buf = buildPhraseXlsx({
+      sourceCode: "en",
+      symbols: ["~Q"],
+      sourceCells: [
+        { value: "BTYSFL||Is beauty useful?|7|6|5|4|3|2|1" },
+      ],
+      targetColumns: [{ code: "fr", cells: [{ value: "" }] }],
+    });
+
+    const deeplFetch = makeDeeplFetch([deeplOk(["La beauté est-elle utile ?"])]);
+    const deps: Deps = {
+      deeplFetch: deeplFetch as unknown as Deps["deeplFetch"],
+      googleFetch: jest.fn() as unknown as Deps["googleFetch"],
+      deeplApiKey: "dkey",
+      sleep: noSleep,
+    };
+
+    const out = await translatePhraseFile(buf, deps);
+
+    // Only the question segment should have been sent to DeepL — not the
+    // shortcut, not the numeric answer options.
+    const body = JSON.parse(deeplFetch.mock.calls[0][1].body);
+    expect(body.text).toEqual(["Is beauty useful?"]);
+
+    // Reassembled cell keeps SHORTCUT and numbers verbatim, question translated.
+    // (deeplOk() wraps the mocked translation in "[...]".)
+    expect(readCell(out, "C2")).toBe(
+      "BTYSFL||[La beauté est-elle utile ?]|7|6|5|4|3|2|1"
+    );
+  });
+
+  test("freeform question with no pipes at all after shortcut||: shortcut preserved", async () => {
+    const buf = buildPhraseXlsx({
+      sourceCode: "en",
+      symbols: ["~Q"],
+      sourceCells: [{ value: "PRED||Is there anything about you?" }],
+      targetColumns: [{ code: "fr", cells: [{ value: "" }] }],
+    });
+
+    const deeplFetch = makeDeeplFetch([deeplOk(["Y a-t-il quelque chose ?"])]);
+    const deps: Deps = {
+      deeplFetch: deeplFetch as unknown as Deps["deeplFetch"],
+      googleFetch: jest.fn() as unknown as Deps["googleFetch"],
+      deeplApiKey: "dkey",
+      sleep: noSleep,
+    };
+
+    const out = await translatePhraseFile(buf, deps);
+
+    const body = JSON.parse(deeplFetch.mock.calls[0][1].body);
+    expect(body.text).toEqual(["Is there anything about you?"]);
+    expect(readCell(out, "C2")).toBe("PRED||[Y a-t-il quelque chose ?]");
+  });
+
+  test("plain sentence with no pipes is translated as a whole, unaffected", async () => {
+    const buf = buildPhraseXlsx({
+      sourceCode: "en",
+      symbols: ["~Greeting"],
+      sourceCells: [{ value: "Hello" }],
+      targetColumns: [{ code: "fr", cells: [{ value: "" }] }],
+    });
+
+    const deeplFetch = makeDeeplFetch([deeplOk(["Bonjour"])]);
+    const deps: Deps = {
+      deeplFetch: deeplFetch as unknown as Deps["deeplFetch"],
+      googleFetch: jest.fn() as unknown as Deps["googleFetch"],
+      deeplApiKey: "dkey",
+      sleep: noSleep,
+    };
+
+    const out = await translatePhraseFile(buf, deps);
+
+    const body = JSON.parse(deeplFetch.mock.calls[0][1].body);
+    expect(body.text).toEqual(["Hello"]);
+    expect(readCell(out, "C2")).toBe("[Bonjour]");
+  });
+});
+
 describe("multiple target columns → each translated", () => {
   test("fr and es columns both get their white/no-color cells translated", async () => {
     const buf = buildPhraseXlsx({
