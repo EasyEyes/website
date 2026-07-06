@@ -1,3 +1,4 @@
+import { segmentHtmlTags, rejoinHtmlTagSegments } from "../shared/htmlTagSegments";
 import type { PhraseMap, TranslateDeps } from "./types";
 
 const DEEPL_CODE_MAP: Record<string, string> = {
@@ -74,21 +75,54 @@ async function translateForLanguage(
 ): Promise<void> {
   const BATCH_SIZE = 50;
 
-  for (let i = 0; i < jobs.length; i += BATCH_SIZE) {
-    const batch = jobs.slice(i, i + BATCH_SIZE);
+  // HTML tags in a phrase (span, br, strong, small, a, ...) must never reach
+  // DeepL as translatable prose, so each job is segmented at tag boundaries
+  // first; only the "text" segments are flattened, batched, and translated.
+  const jobSegments = jobs.map((job) => segmentHtmlTags(job.engText));
+
+  type Piece = { jobIdx: number; segIdx: number; text: string };
+  const pieces: Piece[] = [];
+  jobSegments.forEach((segments, jobIdx) => {
+    segments.forEach((seg, segIdx) => {
+      if (seg.type === "text") pieces.push({ jobIdx, segIdx, text: seg.value });
+    });
+  });
+
+  const translatedBySeg = new Map<string, string>(); // `${jobIdx}:${segIdx}` -> text
+
+  for (let i = 0; i < pieces.length; i += BATCH_SIZE) {
+    const batch = pieces.slice(i, i + BATCH_SIZE);
     const translations = await callDeepL(
-      batch.map((j) => j.engText),
+      batch.map((p) => p.text),
       toDeeplTargetLang(lang),
       deps.deeplApiKey,
       deps.deeplFetch,
       sleep,
     );
 
-    for (let j = 0; j < batch.length; j++) {
-      const { key, sentValue } = batch[j];
-      result[key][lang] = translations?.[j] ?? sentValue;
-    }
+    if (translations === null) continue;
+    batch.forEach((p, j) => translatedBySeg.set(`${p.jobIdx}:${p.segIdx}`, translations[j]));
   }
+
+  jobs.forEach((job, jobIdx) => {
+    const segments = jobSegments[jobIdx];
+    const textSegIdxs = segments
+      .map((seg, segIdx) => (seg.type === "text" ? segIdx : -1))
+      .filter((segIdx) => segIdx !== -1);
+    const allTranslated = textSegIdxs.every((segIdx) =>
+      translatedBySeg.has(`${jobIdx}:${segIdx}`),
+    );
+
+    if (!allTranslated) {
+      result[job.key][lang] = job.sentValue;
+      return;
+    }
+
+    const translatedTexts = textSegIdxs.map(
+      (segIdx) => translatedBySeg.get(`${jobIdx}:${segIdx}`)!,
+    );
+    result[job.key][lang] = rejoinHtmlTagSegments(segments, translatedTexts);
+  });
 }
 
 async function translateGooglePhrase(

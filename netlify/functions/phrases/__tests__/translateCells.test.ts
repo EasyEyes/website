@@ -404,6 +404,52 @@ describe("translateCells — Pro key (no :fx suffix)", () => {
   });
 });
 
+describe("translateCells — HTML tag protection", () => {
+  test("span-wrapped icon → tag intact and correctly positioned after translation", async () => {
+    const deeplFetch = makeDeeplFetch([deeplOk(["▼"])]);
+    const deps: TranslateDeps = {
+      deeplFetch: deeplFetch as unknown as FetchLike,
+      googleFetch: jest.fn() as unknown as FetchLike,
+      googleApiKey: undefined,
+      deeplApiKey: "dkey",
+      sleep: noSleep,
+    };
+
+    const result = await translateCells(
+      { k1: '<span style="font-style: normal">▼</span>' },
+      { k1: { fr: "#00ffff" } },
+      { k1: { fr: "" } },
+      deps,
+    );
+
+    expect(result.k1.fr).toBe('<span style="font-style: normal">[▼]</span>');
+    // Only the wrapped text is sent to DeepL, never the tag markup.
+    expect(JSON.parse(deeplFetch.mock.calls[0][1].body).text).toEqual(["▼"]);
+  });
+
+  test("cell with multiple tags → each translated segment rejoined in place, tags untouched", async () => {
+    const deeplFetch = makeDeeplFetch([deeplOk(["See ", "this citation", " for details."])]);
+    const deps: TranslateDeps = {
+      deeplFetch: deeplFetch as unknown as FetchLike,
+      googleFetch: jest.fn() as unknown as FetchLike,
+      googleApiKey: undefined,
+      deeplApiKey: "dkey",
+      sleep: noSleep,
+    };
+
+    const result = await translateCells(
+      { k1: 'See <a href="https://example.com/citation">this citation</a> for details.' },
+      { k1: { fr: "#00ffff" } },
+      { k1: { fr: "" } },
+      deps,
+    );
+
+    expect(result.k1.fr).toBe(
+      '[See ]<a href="https://example.com/citation">[this citation]</a>[ for details.]',
+    );
+  });
+});
+
 describe("translateCells — unmapped language fail-safe", () => {
   test("DeepL 400 for unknown lang code → falls back to sentValue", async () => {
     const deeplFetch = makeDeeplFetch([{ status: 400, body: null }]);
