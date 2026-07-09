@@ -20,6 +20,18 @@ function makeGetEvent(queryStringParameters: Record<string, string> = {}) {
   };
 }
 
+function makePostEvent(
+  body: unknown,
+  headers: Record<string, string> = {}
+) {
+  return {
+    httpMethod: "POST",
+    headers,
+    body: JSON.stringify(body),
+    queryStringParameters: {},
+  };
+}
+
 type MockResponse = {
   url: RegExp | string;
   body: unknown;
@@ -129,6 +141,97 @@ describe("GET /release-manifest?list=1", () => {
   });
 });
 
+// ── POST /release-manifest (publish a release) ──────────────────────────────────
+
+describe("POST /release-manifest — secret gate", () => {
+  test("rejects a request with no secret header", async () => {
+    const res = await handler(
+      makePostEvent({ release: "2026-06-19", entry: SAMPLE_ENTRY })
+    );
+
+    expect(res.statusCode).toBe(401);
+    expect(JSON.parse(res.body).error).toBeDefined();
+  });
+
+  test("rejects a request with the wrong secret", async () => {
+    process.env.RELEASE_MANIFEST_SECRET = "correct-secret";
+
+    const res = await handler(
+      makePostEvent(
+        { release: "2026-06-19", entry: SAMPLE_ENTRY },
+        { "x-release-manifest-secret": "wrong-secret" }
+      )
+    );
+
+    expect(res.statusCode).toBe(401);
+  });
+});
+
+describe("POST /release-manifest — publish a release", () => {
+  beforeEach(() => {
+    process.env.RELEASE_MANIFEST_SECRET = "correct-secret";
+  });
+
+  test("writes the entry and advances latest in a single atomic call", async () => {
+    mockFetch([{ url: /releaseManifest\.json/, body: null }]);
+
+    const res = await handler(
+      makePostEvent(
+        { release: "2026-06-19", entry: SAMPLE_ENTRY },
+        { "x-release-manifest-secret": "correct-secret" }
+      )
+    );
+
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body)).toEqual({
+      release: "2026-06-19",
+      entry: SAMPLE_ENTRY,
+    });
+
+    const fetchMock = (global as unknown as { fetch: jest.Mock }).fetch;
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toMatch(/releaseManifest\.json/);
+    expect(init.method).toBe("PATCH");
+    expect(JSON.parse(init.body)).toEqual({
+      "entries/2026-06-19": SAMPLE_ENTRY,
+      latest: "2026-06-19",
+    });
+  });
+
+  test("rejects a release id that is missing", async () => {
+    mockFetch([{ url: /releaseManifest\.json/, body: null }]);
+
+    const res = await handler(
+      makePostEvent(
+        { entry: SAMPLE_ENTRY },
+        { "x-release-manifest-secret": "correct-secret" }
+      )
+    );
+
+    expect(res.statusCode).toBe(400);
+    const fetchMock = (global as unknown as { fetch: jest.Mock }).fetch;
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  test("rejects an entry missing a required field", async () => {
+    mockFetch([{ url: /releaseManifest\.json/, body: null }]);
+    const { changelog, ...incompleteEntry } = SAMPLE_ENTRY;
+
+    const res = await handler(
+      makePostEvent(
+        { release: "2026-06-19", entry: incompleteEntry },
+        { "x-release-manifest-secret": "correct-secret" }
+      )
+    );
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body).error).toMatch(/entry/i);
+    const fetchMock = (global as unknown as { fetch: jest.Mock }).fetch;
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
 // ── Failure handling ───────────────────────────────────────────────────────────
 
 describe("GET /release-manifest — failure handling", () => {
@@ -142,6 +245,32 @@ describe("GET /release-manifest — failure handling", () => {
     expect(res.statusCode).toBe(503);
     expect(res.headers?.["Cache-Control"]).toBe("no-store");
     expect(JSON.parse(res.body).error).toMatch(/temporarily unavailable/i);
+  });
+});
+
+describe("POST /release-manifest — failure handling", () => {
+  beforeEach(() => {
+    process.env.RELEASE_MANIFEST_SECRET = "correct-secret";
+  });
+
+  test("a failed Firebase write is reported loudly, not swallowed as success", async () => {
+    (global as unknown as { fetch: jest.Mock }).fetch = jest.fn(() =>
+      Promise.resolve({
+        ok: false,
+        status: 500,
+        text: () => Promise.resolve("internal error"),
+      })
+    );
+
+    const res = await handler(
+      makePostEvent(
+        { release: "2026-06-19", entry: SAMPLE_ENTRY },
+        { "x-release-manifest-secret": "correct-secret" }
+      )
+    );
+
+    expect(res.statusCode).toBe(502);
+    expect(JSON.parse(res.body).error).toMatch(/2026-06-19/);
   });
 });
 

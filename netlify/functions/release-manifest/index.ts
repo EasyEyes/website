@@ -35,6 +35,25 @@ async function firebaseGet(path: string): Promise<unknown> {
   }
 }
 
+// A multi-location update to a single parent applies atomically in Firebase
+// RTDB — either every path in `updates` is written, or none is. That's what
+// keeps the manifest entry and the `latest` pointer from ever diverging.
+async function firebasePatch(
+  path: string,
+  updates: Record<string, unknown>
+): Promise<{ ok: boolean; status: number; errorBody?: string }> {
+  const res = await fetch(firebaseUrl(path), {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(updates),
+  });
+  if (!res.ok) {
+    const errorBody = await res.text().catch(() => "(unreadable)");
+    return { ok: false, status: res.status, errorBody };
+  }
+  return { ok: true, status: res.status };
+}
+
 // Cache directives keyed to the immutability of each response shape. A
 // published release's manifest entry never changes, so it is cached forever;
 // `latest` and `listReleases` depend on the mutable pointer, so neither is
@@ -126,6 +145,66 @@ async function handleGet(event: NetlifyEvent): Promise<NetlifyResponse> {
   return jsonErr(400, "Missing query parameter");
 }
 
+async function handlePost(event: NetlifyEvent): Promise<NetlifyResponse> {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(event.body ?? "");
+  } catch {
+    return jsonErr(400, "Invalid JSON");
+  }
+
+  if (typeof parsed !== "object" || parsed === null) {
+    return jsonErr(400, "Invalid request body");
+  }
+
+  const { release, entry } = parsed as {
+    release?: unknown;
+    entry?: unknown;
+  };
+
+  if (typeof release !== "string" || !release) {
+    return jsonErr(400, "Missing or invalid release");
+  }
+
+  if (!isManifestEntry(entry)) {
+    return jsonErr(
+      400,
+      "Missing or invalid entry (requires engineVersion, glossaryVersion, phrasesVersion, gitSha, changelog as strings)"
+    );
+  }
+
+  const encoded = encodeFirebaseSegment(release);
+  const result = await firebasePatch("releaseManifest", {
+    [`entries/${encoded}`]: entry,
+    latest: release,
+  });
+
+  if (!result.ok) {
+    return jsonErr(
+      502,
+      `Firebase write failed for release ${release} (status ${result.status}): ${result.errorBody ?? ""}`
+    );
+  }
+
+  return jsonOk({ release, entry });
+}
+
+const MANIFEST_ENTRY_FIELDS = [
+  "engineVersion",
+  "glossaryVersion",
+  "phrasesVersion",
+  "gitSha",
+  "changelog",
+] as const;
+
+function isManifestEntry(value: unknown): value is ManifestEntry {
+  if (typeof value !== "object" || value === null) return false;
+  const record = value as Record<string, unknown>;
+  return MANIFEST_ENTRY_FIELDS.every(
+    (field) => typeof record[field] === "string" && record[field] !== ""
+  );
+}
+
 export async function handler(event: NetlifyEvent): Promise<NetlifyResponse> {
   const origin = event.headers["origin"] ?? event.headers["Origin"];
 
@@ -133,9 +212,21 @@ export async function handler(event: NetlifyEvent): Promise<NetlifyResponse> {
     return { statusCode: 204, headers: corsHeaders(origin), body: "" };
   }
 
+  if (event.httpMethod === "POST") {
+    const expectedSecret = process.env.RELEASE_MANIFEST_SECRET;
+    const providedSecret =
+      event.headers["x-release-manifest-secret"] ??
+      event.headers["X-Release-Manifest-Secret"];
+    if (!expectedSecret || providedSecret !== expectedSecret) {
+      return withCors(jsonErr(401, "Unauthorized"), origin);
+    }
+  }
+
   try {
     if (event.httpMethod === "GET")
       return withCors(await handleGet(event), origin);
+    if (event.httpMethod === "POST")
+      return withCors(await handlePost(event), origin);
 
     return jsonErr(405, "Method not allowed");
   } catch (err) {
