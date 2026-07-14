@@ -17,13 +17,10 @@ describe("compiler deployment notification", () => {
       },
     } as never);
 
-    expect(writeNotification).toHaveBeenCalledWith(
-      "deployments/compiler/production",
-      {
-        deploymentId: "deploy-123",
-        publishedAt,
-      },
-    );
+    expect(writeNotification).toHaveBeenCalledWith({
+      deploymentId: "deploy-123",
+      publishedAt,
+    });
   });
 
   it.each([
@@ -63,6 +60,38 @@ describe("compiler deployment notification", () => {
         publishedAt: "2026-07-14T09:10:11.123Z",
       },
     ],
+    [
+      "deployment id containing HTML",
+      {
+        id: '<script>alert("deployment input")</script>',
+        context: "production",
+        publishedAt: "2026-07-14T09:10:11.123Z",
+      },
+    ],
+    [
+      "deployment id containing a path",
+      {
+        id: "deploy/../../production",
+        context: "production",
+        publishedAt: "2026-07-14T09:10:11.123Z",
+      },
+    ],
+    [
+      "invalid publication time",
+      {
+        id: "deploy-123",
+        context: "production",
+        publishedAt: "not-a-timestamp",
+      },
+    ],
+    [
+      "impossible publication date",
+      {
+        id: "deploy-123",
+        context: "production",
+        publishedAt: "2026-02-31T09:10:11.123Z",
+      },
+    ],
   ])("does not publish a %s", async (_description, deploy) => {
     const writeNotification = jest.fn().mockResolvedValue(undefined);
     const handler = createDeploySucceededHandler({ writeNotification });
@@ -96,7 +125,7 @@ describe("compiler deployment notification", () => {
       publishedAt: "2026-07-14T09:10:11.123Z",
     };
 
-    await writeNotification("deployments/compiler/production", notification);
+    await writeNotification(notification);
 
     expect(fetchImpl).toHaveBeenCalledWith(
       "https://easyeyes-compiler-default-rtdb.firebaseio.com/deployments/compiler/production.json?auth=firebase-db-secret",
@@ -124,7 +153,7 @@ describe("compiler deployment notification", () => {
 
     let thrown: unknown;
     try {
-      await writeNotification("deployments/compiler/production", {
+      await writeNotification({
         deploymentId: "deploy-123",
         publishedAt: "2026-07-14T09:10:11.123Z",
       });
@@ -160,7 +189,7 @@ describe("compiler deployment notification", () => {
     });
 
     await expect(
-      writeNotification("deployments/compiler/production", {
+      writeNotification({
         deploymentId: "deploy-123",
         publishedAt: "2026-07-14T09:10:11.123Z",
       }),
