@@ -29,20 +29,21 @@ describe("compiler deployment notification", () => {
   it("publishes deploy previews only to the ODE database", async () => {
     const writeNotification = jest.fn().mockResolvedValue(undefined);
     const handler = createDeploySucceededHandler({ writeNotification });
-    const publishedAt = "2026-07-14T09:10:11.123Z";
+    const createdAt = "2026-07-15T14:04:21.909Z";
 
     await handler({
       deploy: {
         id: "preview-123",
         context: "deploy-preview",
-        publishedAt,
+        createdAt,
+        publishedAt: null,
       },
     } as never);
 
     expect(writeNotification).toHaveBeenCalledWith({
       notification: {
         deploymentId: "preview-123",
-        publishedAt,
+        publishedAt: createdAt,
       },
       firebaseRoot: "https://easyeyes-compiler-ode01.firebaseio.com",
     });

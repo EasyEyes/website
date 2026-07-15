@@ -2,6 +2,7 @@ type DeploySucceededEvent = {
   deploy: {
     id: string;
     context: string;
+    createdAt?: string | null;
     publishedAt: string | null;
   };
 };
@@ -98,6 +99,8 @@ export function createDeploySucceededHandler({
 }: Dependencies) {
   return async function deploySucceeded(event: DeploySucceededEvent) {
     const deploy = event?.deploy;
+    const notificationTimestamp =
+      deploy?.context === "production" ? deploy.publishedAt : deploy?.createdAt;
     if (
       typeof deploy?.context !== "string" ||
       !Object.prototype.hasOwnProperty.call(
@@ -106,8 +109,8 @@ export function createDeploySucceededHandler({
       ) ||
       typeof deploy.id !== "string" ||
       !deploymentIdPattern.test(deploy.id) ||
-      typeof deploy.publishedAt !== "string" ||
-      !isValidPublishedAt(deploy.publishedAt)
+      typeof notificationTimestamp !== "string" ||
+      !isValidPublishedAt(notificationTimestamp)
     ) {
       return;
     }
@@ -115,7 +118,7 @@ export function createDeploySucceededHandler({
     await writeNotification({
       notification: {
         deploymentId: deploy.id,
-        publishedAt: deploy.publishedAt,
+        publishedAt: notificationTimestamp,
       },
       firebaseRoot: firebaseRootsByDeployContext[deploy.context],
     });
