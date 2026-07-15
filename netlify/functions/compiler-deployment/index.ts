@@ -11,8 +11,13 @@ type DeploymentNotification = {
   publishedAt: string;
 };
 
+type NotificationWrite = {
+  notification: DeploymentNotification;
+  firebaseRoot: string;
+};
+
 type Dependencies = {
-  writeNotification: (notification: DeploymentNotification) => Promise<void>;
+  writeNotification: (write: NotificationWrite) => Promise<void>;
 };
 
 type FirebaseWriterDependencies = {
@@ -22,7 +27,10 @@ type FirebaseWriterDependencies = {
 };
 
 const notificationPath = "deployments/compiler/production";
-const firebaseRoot = "https://easyeyes-compiler-default-rtdb.firebaseio.com";
+const firebaseRootsByDeployContext: Record<string, string> = {
+  production: "https://easyeyes-compiler-default-rtdb.firebaseio.com",
+  "deploy-preview": "https://easyeyes-compiler-ode01.firebaseio.com",
+};
 const deploymentIdPattern = /^[A-Za-z0-9_-]{1,128}$/;
 const publishedAtPattern =
   /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d{1,9})?Z$/;
@@ -50,9 +58,10 @@ export function createFirebaseNotificationWriter({
   getCredential,
   logger,
 }: FirebaseWriterDependencies) {
-  return async function writeNotification(
-    notification: DeploymentNotification,
-  ): Promise<void> {
+  return async function writeNotification({
+    notification,
+    firebaseRoot,
+  }: NotificationWrite): Promise<void> {
     const credential = getCredential();
     if (!credential) {
       throw new Error("FIREBASE_DB environment variable is required");
@@ -90,7 +99,11 @@ export function createDeploySucceededHandler({
   return async function deploySucceeded(event: DeploySucceededEvent) {
     const deploy = event?.deploy;
     if (
-      deploy?.context !== "production" ||
+      typeof deploy?.context !== "string" ||
+      !Object.prototype.hasOwnProperty.call(
+        firebaseRootsByDeployContext,
+        deploy.context,
+      ) ||
       typeof deploy.id !== "string" ||
       !deploymentIdPattern.test(deploy.id) ||
       typeof deploy.publishedAt !== "string" ||
@@ -100,8 +113,11 @@ export function createDeploySucceededHandler({
     }
 
     await writeNotification({
-      deploymentId: deploy.id,
-      publishedAt: deploy.publishedAt,
+      notification: {
+        deploymentId: deploy.id,
+        publishedAt: deploy.publishedAt,
+      },
+      firebaseRoot: firebaseRootsByDeployContext[deploy.context],
     });
   };
 }

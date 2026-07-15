@@ -18,20 +18,37 @@ describe("compiler deployment notification", () => {
     } as never);
 
     expect(writeNotification).toHaveBeenCalledWith({
-      deploymentId: "deploy-123",
-      publishedAt,
+      notification: {
+        deploymentId: "deploy-123",
+        publishedAt,
+      },
+      firebaseRoot: "https://easyeyes-compiler-default-rtdb.firebaseio.com",
+    });
+  });
+
+  it("publishes deploy previews only to the ODE database", async () => {
+    const writeNotification = jest.fn().mockResolvedValue(undefined);
+    const handler = createDeploySucceededHandler({ writeNotification });
+    const publishedAt = "2026-07-14T09:10:11.123Z";
+
+    await handler({
+      deploy: {
+        id: "preview-123",
+        context: "deploy-preview",
+        publishedAt,
+      },
+    } as never);
+
+    expect(writeNotification).toHaveBeenCalledWith({
+      notification: {
+        deploymentId: "preview-123",
+        publishedAt,
+      },
+      firebaseRoot: "https://easyeyes-compiler-ode01.firebaseio.com",
     });
   });
 
   it.each([
-    [
-      "deploy preview",
-      {
-        id: "preview-1",
-        context: "deploy-preview",
-        publishedAt: "2026-07-14T09:10:11.123Z",
-      },
-    ],
     [
       "branch deploy",
       {
@@ -45,6 +62,14 @@ describe("compiler deployment notification", () => {
       {
         id: "other-1",
         context: "staging",
+        publishedAt: "2026-07-14T09:10:11.123Z",
+      },
+    ],
+    [
+      "inherited object property context",
+      {
+        id: "inherited-1",
+        context: "constructor",
         publishedAt: "2026-07-14T09:10:11.123Z",
       },
     ],
@@ -125,7 +150,10 @@ describe("compiler deployment notification", () => {
       publishedAt: "2026-07-14T09:10:11.123Z",
     };
 
-    await writeNotification(notification);
+    await writeNotification({
+      notification,
+      firebaseRoot: "https://easyeyes-compiler-default-rtdb.firebaseio.com",
+    });
 
     expect(fetchImpl).toHaveBeenCalledWith(
       "https://easyeyes-compiler-default-rtdb.firebaseio.com/deployments/compiler/production.json?auth=firebase-db-secret",
@@ -154,8 +182,11 @@ describe("compiler deployment notification", () => {
     let thrown: unknown;
     try {
       await writeNotification({
-        deploymentId: "deploy-123",
-        publishedAt: "2026-07-14T09:10:11.123Z",
+        notification: {
+          deploymentId: "deploy-123",
+          publishedAt: "2026-07-14T09:10:11.123Z",
+        },
+        firebaseRoot: "https://easyeyes-compiler-default-rtdb.firebaseio.com",
       });
     } catch (error) {
       thrown = error;
@@ -190,8 +221,11 @@ describe("compiler deployment notification", () => {
 
     await expect(
       writeNotification({
-        deploymentId: "deploy-123",
-        publishedAt: "2026-07-14T09:10:11.123Z",
+        notification: {
+          deploymentId: "deploy-123",
+          publishedAt: "2026-07-14T09:10:11.123Z",
+        },
+        firebaseRoot: "https://easyeyes-compiler-default-rtdb.firebaseio.com",
       }),
     ).rejects.toThrow("Firebase notification write failed");
 
