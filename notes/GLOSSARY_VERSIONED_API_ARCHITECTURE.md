@@ -392,3 +392,4 @@ const version = getGlossaryVersion(); // e.g. "1.2" (or null pre-init)
 ```
 
 ```
+
