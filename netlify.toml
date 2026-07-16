@@ -20,6 +20,30 @@ Cross-Origin-Opener-Policy = "same-origin"
 Cross-Origin-Resource-Policy = "cross-origin"
 
 [[headers]]
+for = "/compiler/"
+[headers.values]
+Cache-Control = "public, max-age=0, must-revalidate"
+Netlify-CDN-Cache-Control = "public, max-age=0, must-revalidate"
+
+[[headers]]
+for = "/compiler/index.html"
+[headers.values]
+Cache-Control = "public, max-age=0, must-revalidate"
+Netlify-CDN-Cache-Control = "public, max-age=0, must-revalidate"
+
+[[headers]]
+for = "/compiler/deployment.json"
+[headers.values]
+Cache-Control = "public, max-age=0, must-revalidate"
+Netlify-CDN-Cache-Control = "public, max-age=0, must-revalidate"
+
+[[headers]]
+for = "/compiler/dist/*"
+[headers.values]
+Cache-Control = "public, max-age=31536000, immutable"
+Netlify-CDN-Cache-Control = "public, max-age=31536000, immutable"
+
+[[headers]]
 # Define which paths this specific [[headers]] block will cover.
 for = "/*"
 [headers.values]
