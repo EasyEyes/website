@@ -1,11 +1,4 @@
-type DeploySucceededEvent = {
-  deploy: {
-    id: string;
-    context: string;
-    createdAt?: string | null;
-    publishedAt: string | null;
-  };
-};
+import type { DeploySucceededEvent, NetlifyFunction } from "@netlify/functions";
 
 type DeploymentNotification = {
   deploymentId: string;
@@ -186,4 +179,4 @@ const deploySucceeded = createDeploySucceededHandler({
   logger: console,
 });
 
-export default { deploySucceeded };
+export default { deploySucceeded } satisfies NetlifyFunction;
