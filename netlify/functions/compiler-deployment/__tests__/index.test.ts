@@ -4,6 +4,12 @@ import {
 } from "../index";
 
 describe("compiler deployment notification", () => {
+  const createLogger = () => ({
+    info: jest.fn(),
+    warn: jest.fn(),
+    error: jest.fn(),
+  });
+
   it("publishes the exact deployment identity and publication time for production", async () => {
     const writeNotification = jest.fn().mockResolvedValue(undefined);
     const handler = createDeploySucceededHandler({ writeNotification });
@@ -141,10 +147,11 @@ describe("compiler deployment notification", () => {
 
   it("writes through Firebase REST using the existing server credential", async () => {
     const fetchImpl = jest.fn().mockResolvedValue({ ok: true, status: 200 });
+    const logger = createLogger();
     const writeNotification = createFirebaseNotificationWriter({
       fetchImpl: fetchImpl as never,
       getCredential: () => "firebase-db-secret",
-      logger: { error: jest.fn() },
+      logger,
     });
     const notification = {
       deploymentId: "deploy-123",
@@ -164,12 +171,68 @@ describe("compiler deployment notification", () => {
         body: JSON.stringify(notification),
       },
     );
+    expect(logger.info).toHaveBeenNthCalledWith(
+      1,
+      "[compiler-deployment] Firebase notification write started",
+      {
+        deploymentId: "deploy-123",
+        publishedAt: "2026-07-14T09:10:11.123Z",
+        firebaseRoot: "https://easyeyes-compiler-default-rtdb.firebaseio.com",
+      },
+    );
+    expect(logger.info).toHaveBeenNthCalledWith(
+      2,
+      "[compiler-deployment] Firebase notification write succeeded",
+      {
+        deploymentId: "deploy-123",
+        publishedAt: "2026-07-14T09:10:11.123Z",
+        firebaseRoot: "https://easyeyes-compiler-default-rtdb.firebaseio.com",
+        status: 200,
+      },
+    );
+  });
+
+  it("logs accepted and rejected deploy events without raw invalid input", async () => {
+    const writeNotification = jest.fn().mockResolvedValue(undefined);
+    const logger = createLogger();
+    const handler = createDeploySucceededHandler({ writeNotification, logger });
+
+    await handler({
+      deploy: {
+        id: "deploy-123",
+        context: "production",
+        publishedAt: "2026-07-14T09:10:11.123Z",
+      },
+    } as never);
+    await handler({
+      deploy: {
+        id: '<script>alert("sensitive invalid input")</script>',
+        context: "production",
+        publishedAt: "2026-07-14T09:10:11.123Z",
+      },
+    } as never);
+
+    expect(logger.info).toHaveBeenCalledWith(
+      "[compiler-deployment] deploySucceeded event accepted",
+      {
+        deploymentId: "deploy-123",
+        context: "production",
+        publishedAt: "2026-07-14T09:10:11.123Z",
+      },
+    );
+    expect(logger.warn).toHaveBeenCalledWith(
+      "[compiler-deployment] deploySucceeded event ignored",
+      { reason: "invalid-deployment-id", context: "production" },
+    );
+    expect(JSON.stringify(logger.warn.mock.calls)).not.toContain(
+      "sensitive invalid input",
+    );
   });
 
   it("propagates Firebase failures without logging credentials or response data", async () => {
     const secret = "sensitive-firebase-secret";
     const responseBody = "sensitive-upstream-response";
-    const logger = { error: jest.fn() };
+    const logger = createLogger();
     const writeNotification = createFirebaseNotificationWriter({
       fetchImpl: jest.fn().mockResolvedValue({
         ok: false,
@@ -197,7 +260,7 @@ describe("compiler deployment notification", () => {
       new Error("Firebase notification write failed with status 503"),
     );
     expect(logger.error).toHaveBeenCalledWith(
-      "Firebase notification write failed with status 503",
+      "[compiler-deployment] Firebase notification write failed with status 503",
     );
     const observableOutput = JSON.stringify({
       thrown,
@@ -209,7 +272,7 @@ describe("compiler deployment notification", () => {
 
   it("redacts the credential when the Firebase request itself rejects", async () => {
     const secret = "sensitive-firebase-secret";
-    const logger = { error: jest.fn() };
+    const logger = createLogger();
     const writeNotification = createFirebaseNotificationWriter({
       fetchImpl: jest
         .fn()

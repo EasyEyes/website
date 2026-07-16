@@ -19,12 +19,15 @@ type NotificationWrite = {
 
 type Dependencies = {
   writeNotification: (write: NotificationWrite) => Promise<void>;
+  logger?: DeploymentLogger;
 };
+
+type DeploymentLogger = Pick<Console, "info" | "warn" | "error">;
 
 type FirebaseWriterDependencies = {
   fetchImpl: typeof fetch;
   getCredential: () => string | undefined;
-  logger: Pick<Console, "error">;
+  logger: DeploymentLogger;
 };
 
 const notificationPath = "deployments/compiler/production";
@@ -65,8 +68,20 @@ export function createFirebaseNotificationWriter({
   }: NotificationWrite): Promise<void> {
     const credential = getCredential();
     if (!credential) {
-      throw new Error("FIREBASE_DB environment variable is required");
+      const message = "FIREBASE_DB environment variable is required";
+      logger.error(`[compiler-deployment] ${message}`);
+      throw new Error(message);
     }
+
+    const logDetails = {
+      deploymentId: notification.deploymentId,
+      publishedAt: notification.publishedAt,
+      firebaseRoot,
+    };
+    logger.info(
+      "[compiler-deployment] Firebase notification write started",
+      logDetails,
+    );
 
     let response: Response;
     try {
@@ -82,43 +97,80 @@ export function createFirebaseNotificationWriter({
       );
     } catch {
       const message = "Firebase notification write failed";
-      logger.error(message);
+      logger.error(`[compiler-deployment] ${message}`);
       throw new Error(message);
     }
 
     if (!response.ok) {
       const message = `Firebase notification write failed with status ${response.status}`;
-      logger.error(message);
+      logger.error(`[compiler-deployment] ${message}`);
       throw new Error(message);
     }
+
+    logger.info("[compiler-deployment] Firebase notification write succeeded", {
+      ...logDetails,
+      status: response.status,
+    });
   };
 }
 
 export function createDeploySucceededHandler({
   writeNotification,
+  logger,
 }: Dependencies) {
   return async function deploySucceeded(event: DeploySucceededEvent) {
     const deploy = event?.deploy;
     const notificationTimestamp =
       deploy?.context === "production" ? deploy.publishedAt : deploy?.createdAt;
-    if (
-      typeof deploy?.context !== "string" ||
+    const context = deploy?.context;
+    const safeContext =
+      typeof context === "string" && /^[a-z-]{1,32}$/.test(context)
+        ? context
+        : "invalid";
+    let rejectionReason: string | undefined;
+
+    if (typeof context !== "string") {
+      rejectionReason = "malformed-event";
+    } else if (
       !Object.prototype.hasOwnProperty.call(
         firebaseRootsByDeployContext,
-        deploy.context,
-      ) ||
-      typeof deploy.id !== "string" ||
-      !deploymentIdPattern.test(deploy.id) ||
+        context,
+      )
+    ) {
+      rejectionReason = "unsupported-context";
+    } else if (
+      typeof deploy?.id !== "string" ||
+      !deploymentIdPattern.test(deploy.id)
+    ) {
+      rejectionReason = "invalid-deployment-id";
+    } else if (
       typeof notificationTimestamp !== "string" ||
       !isValidPublishedAt(notificationTimestamp)
     ) {
+      rejectionReason = "invalid-timestamp";
+    }
+
+    if (rejectionReason) {
+      logger?.warn("[compiler-deployment] deploySucceeded event ignored", {
+        reason: rejectionReason,
+        context: safeContext,
+      });
       return;
     }
 
+    // The rejection checks above establish these values before any write.
+    const deploymentId = deploy!.id as string;
+    const publishedAt = notificationTimestamp as string;
+    logger?.info("[compiler-deployment] deploySucceeded event accepted", {
+      deploymentId,
+      context,
+      publishedAt,
+    });
+
     await writeNotification({
       notification: {
-        deploymentId: deploy.id,
-        publishedAt: notificationTimestamp,
+        deploymentId,
+        publishedAt,
       },
       firebaseRoot: firebaseRootsByDeployContext[deploy.context],
     });
@@ -131,6 +183,7 @@ const deploySucceeded = createDeploySucceededHandler({
     getCredential: () => process.env.FIREBASE_DB,
     logger: console,
   }),
+  logger: console,
 });
 
 export default { deploySucceeded };
