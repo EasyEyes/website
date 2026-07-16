@@ -1,7 +1,8 @@
-import type { DeploySucceededEvent, NetlifyFunction } from "@netlify/functions";
+import type { DeploySucceededEvent } from "@netlify/functions";
 
 export default {
   deploySucceeded(event: DeploySucceededEvent) {
+    console.log(`Deploy ${event.deploy.id} succeeded for ${event.site.name}`);
     console.log("[deploy-success-probe] deploySucceeded event received", {
       deploymentId: event.deploy.id,
       context: event.deploy.context,
@@ -9,4 +10,4 @@ export default {
       siteId: event.site.id,
     });
   },
-} satisfies NetlifyFunction;
+};
