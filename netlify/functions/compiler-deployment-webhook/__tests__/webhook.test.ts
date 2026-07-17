@@ -3,7 +3,7 @@ import { createHmac, createHash } from "node:crypto";
 import {
   createCompilerDeploymentWebhook,
   createWebhookSignatureVerifier,
-} from "../../compiler-deployment-webhook/index";
+} from "../index";
 
 const productionPayload = {
   id: "deploy-123",

@@ -1,7 +1,7 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 import jwt from "jsonwebtoken";
 
-import { createFirebaseNotificationWriter } from "../compiler-deployment/index";
+import { createFirebaseNotificationWriter } from "./compilerDeployment";
 
 type DeploymentNotification = {
   deploymentId: string;
