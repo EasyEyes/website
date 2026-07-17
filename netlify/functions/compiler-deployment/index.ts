@@ -15,6 +15,11 @@ type Dependencies = {
   logger?: DeploymentLogger;
 };
 
+type LegacyHandlerDependencies = {
+  handleDeploySucceeded: (event: DeploySucceededEvent) => Promise<void>;
+  logger?: DeploymentLogger;
+};
+
 type DeploymentLogger = Pick<Console, "info" | "warn" | "error">;
 
 type FirebaseWriterDependencies = {
@@ -170,7 +175,35 @@ export function createDeploySucceededHandler({
   };
 }
 
-const deploySucceeded = createDeploySucceededHandler({
+export function createLegacyDeploySucceededHandler({
+  handleDeploySucceeded,
+  logger,
+}: LegacyHandlerDependencies) {
+  return async function legacyDeploySucceeded(request: Request): Promise<void> {
+    logger?.info("[deploy-succeeded] legacy event received");
+
+    const body = (await request.json()) as {
+      payload?: {
+        id?: unknown;
+        context?: unknown;
+        published_at?: unknown;
+        created_at?: unknown;
+      };
+    };
+    const payload = body?.payload;
+
+    await handleDeploySucceeded({
+      deploy: {
+        id: payload?.id,
+        context: payload?.context,
+        publishedAt: payload?.published_at,
+        createdAt: payload?.created_at,
+      },
+    } as DeploySucceededEvent);
+  };
+}
+
+export const deploySucceeded = createDeploySucceededHandler({
   writeNotification: createFirebaseNotificationWriter({
     fetchImpl: fetch,
     getCredential: () => process.env.FIREBASE_DB,

@@ -1,6 +1,7 @@
 import {
   createDeploySucceededHandler,
   createFirebaseNotificationWriter,
+  createLegacyDeploySucceededHandler,
 } from "../index";
 
 describe("compiler deployment notification", () => {
@@ -8,6 +9,42 @@ describe("compiler deployment notification", () => {
     info: jest.fn(),
     warn: jest.fn(),
     error: jest.fn(),
+  });
+
+  it("adapts Netlify's legacy deploy-succeeded request to the deployment handler", async () => {
+    const handleDeploySucceeded = jest.fn().mockResolvedValue(undefined);
+    const logger = createLogger();
+    const handler = createLegacyDeploySucceededHandler({
+      handleDeploySucceeded,
+      logger,
+    });
+
+    await handler(
+      new Request("https://easyeyes.app/.netlify/functions/deploy-succeeded", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          payload: {
+            id: "deploy-123",
+            context: "production",
+            published_at: "2026-07-17T10:00:00.000Z",
+            created_at: "2026-07-17T09:59:00.000Z",
+          },
+        }),
+      }),
+    );
+
+    expect(handleDeploySucceeded).toHaveBeenCalledWith({
+      deploy: {
+        id: "deploy-123",
+        context: "production",
+        publishedAt: "2026-07-17T10:00:00.000Z",
+        createdAt: "2026-07-17T09:59:00.000Z",
+      },
+    });
+    expect(logger.info).toHaveBeenCalledWith(
+      "[deploy-succeeded] legacy event received",
+    );
   });
 
   it("publishes the exact deployment identity and publication time for production", async () => {

@@ -1,7 +1,9 @@
-export default async (request: Request) => {
-  const { payload } = await request.json();
+import {
+  createLegacyDeploySucceededHandler,
+  deploySucceeded,
+} from "./compiler-deployment/index";
 
-  console.log("[deploy-success-probe] legacy deploy-succeeded event received", {
-    deploymentId: payload?.id,
-  });
-};
+export default createLegacyDeploySucceededHandler({
+  handleDeploySucceeded: deploySucceeded,
+  logger: console,
+});
