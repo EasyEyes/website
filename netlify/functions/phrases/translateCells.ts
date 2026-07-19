@@ -1,4 +1,7 @@
-import { segmentHtmlTags, rejoinHtmlTagSegments } from "../shared/htmlTagSegments";
+import {
+  segmentHtmlTags,
+  rejoinHtmlTagSegments,
+} from "../shared/htmlTagSegments";
 import type { PhraseMap, TranslateDeps } from "./types";
 
 const DEEPL_CODE_MAP: Record<string, string> = {
@@ -29,14 +32,23 @@ async function callDeepL(
   const RETRY_STATUSES = new Set([429, 456]);
 
   for (let attempt = 0; attempt < 3; attempt++) {
-    console.log("[deepl] request:", { targetLang, textCount: texts.length, texts, attempt });
+    console.log("[deepl] request:", {
+      targetLang,
+      textCount: texts.length,
+      texts,
+      attempt,
+    });
     const res = await deeplFetch(`${baseUrl}/v2/translate`, {
       method: "POST",
       headers: {
         Authorization: `DeepL-Auth-Key ${apiKey}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ text: texts, target_lang: targetLang, source_lang: "EN" }),
+      body: JSON.stringify({
+        text: texts,
+        target_lang: targetLang,
+        source_lang: "EN",
+      }),
     });
 
     console.log("[deepl] response status:", res.status);
@@ -101,7 +113,9 @@ async function translateForLanguage(
     );
 
     if (translations === null) continue;
-    batch.forEach((p, j) => translatedBySeg.set(`${p.jobIdx}:${p.segIdx}`, translations[j]));
+    batch.forEach((p, j) =>
+      translatedBySeg.set(`${p.jobIdx}:${p.segIdx}`, translations[j]),
+    );
   }
 
   jobs.forEach((job, jobIdx) => {
@@ -176,8 +190,8 @@ export async function translateCells(
       if (lang === "en") continue;
       const sentValue = sent[lang] ?? "";
 
-      const isCyan = color.toLowerCase() === "#00ffff";
-      if (!isCyan) {
+      const isWhite = color.toLowerCase() === "#ffffff";
+      if (!isWhite) {
         result[key][lang] = sentValue;
         continue;
       }
