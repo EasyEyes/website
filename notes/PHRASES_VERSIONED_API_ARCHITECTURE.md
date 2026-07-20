@@ -360,7 +360,7 @@ export const phrasesData: PhrasesData = await loadPhrases(
 import { readi18nPhrases } from "./components/readPhrases";
 
 // Per-language lookup (throws if the key or language is undefined):
-const title = readi18nPhrases("EE_languageNameNative", "ja");
+const title = readi18nPhrases("EE_LanguageNativeName", "ja");
 
 // Whole-row lookup (all languages for a key):
 const row = readi18nPhrases("EE_ok"); // { en: "OK", de: "OK", … }

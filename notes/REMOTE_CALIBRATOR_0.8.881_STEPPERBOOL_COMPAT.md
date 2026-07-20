@@ -93,7 +93,7 @@ when paired with the new phrases arch:
 | **New phrases API**          | `en`             | `zh-CN`, `zh-TW` | `pt`, `pt-pt` | _(none)_   |
 | **Old RC base `phrases.js`** | `en-US`, `en-UK` | `zh-CN`, `zh-HK` | `pt`          | `en-UK`    |
 
-`looseSetLanguage` resolves the display language `L` from the loaded `EE_languageNameNative`
+`looseSetLanguage` resolves the display language `L` from the loaded `EE_LanguageNativeName`
 keys; `readi18nPhrases` (threshold) and RC then index `phrases[key][L]` **strictly** (throws
 on miss). Mixing the two schemes (base + overlay) leaves `L` in one scheme while some phrase
 values are keyed in the other → blank strings or thrown phrase errors.
