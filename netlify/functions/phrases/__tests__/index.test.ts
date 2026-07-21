@@ -472,6 +472,40 @@ describe("POST /phrases { action: 'translate' } — happy path", () => {
     expect(phrasesPut).toBeDefined();
     expect(phrasesPut?.body).toEqual({ hello: SAMPLE_PHRASES.hello });
   });
+
+  test("removes languages omitted from the spreadsheet", async () => {
+    const phrasesWithRemovedLanguage: PhraseMap = {
+      hello: { en: "Hello", fr: "Bonjour", hr: "Pozdrav" },
+      bye: { en: "Goodbye", fr: "Au revoir", hr: "Doviđenja" },
+    };
+    mockFetch([
+      { url: /phrases\/currentVersion/, body: "1.0" },
+      {
+        url: /phrasesVersions\/1_dot_0\/phrases/,
+        body: phrasesWithRemovedLanguage,
+      },
+    ]);
+
+    const res = await handler(
+      makePostEvent({
+        action: "translate",
+        changedPhrases: {},
+        colorMask: {},
+        sentValues: {},
+        activeLanguages: ["en", "fr"],
+        currentVersion: "1.0",
+      })
+    );
+
+    expect(res.statusCode).toBe(200);
+    const data = JSON.parse(res.body);
+    expect(data.newVersion).toBe("2.0");
+
+    const phrasesPut = capturedPuts().find((put) =>
+      put.url.includes("phrasesVersions/2_dot_0/phrases")
+    );
+    expect(phrasesPut?.body).toEqual(SAMPLE_PHRASES);
+  });
 });
 
 // ── POST /phrases { action: "translate" } + nonCyanPhrases ───────────────────
