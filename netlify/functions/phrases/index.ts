@@ -264,6 +264,7 @@ async function handleTranslate(
     string,
     Record<string, string>
   >;
+  const removedKeys = body.removedKeys ?? [];
   const requestVersion = body.currentVersion as string;
 
   console.log("[phrases/translate] input:", {
@@ -272,6 +273,7 @@ async function handleTranslate(
     changedCount: changedPhrases ? Object.keys(changedPhrases).length : 0,
     colorMaskKeys: Object.keys(colorMask),
     sentValuesKeys: Object.keys(sentValues),
+    removedCount: Array.isArray(removedKeys) ? removedKeys.length : null,
     skipSizeGuard,
   });
 
@@ -281,6 +283,14 @@ async function handleTranslate(
   ) {
     console.log("[phrases/translate] error: missing changedPhrases");
     return jsonErr(400, "Missing changedPhrases");
+  }
+
+  if (
+    !Array.isArray(removedKeys) ||
+    removedKeys.some((key) => typeof key !== "string")
+  ) {
+    console.log("[phrases/translate] error: invalid removedKeys");
+    return jsonErr(400, "Invalid removedKeys");
   }
 
   if (!skipSizeGuard && Object.keys(changedPhrases).length > 50) {
@@ -342,7 +352,11 @@ async function handleTranslate(
     }
   }
 
-  const newVersioned = buildNewVersion(prevVersioned, translatedRows, []);
+  const newVersioned = buildNewVersion(
+    prevVersioned,
+    translatedRows,
+    removedKeys
+  );
 
   console.log("[phrases/translate] buildNewVersion result:", {
     isNull: newVersioned === null,

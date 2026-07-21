@@ -444,6 +444,34 @@ describe("POST /phrases { action: 'translate' } — happy path", () => {
     expect(puts.some((p) => p.url.includes("phrasesVersions/1_dot_1/phrases"))).toBe(true);
     expect(puts.some((p) => p.url.includes("phrases/currentVersion") && p.body === "1.1")).toBe(true);
   });
+
+  test("removes phrase keys omitted from the spreadsheet", async () => {
+    mockFetch([
+      { url: /phrases\/currentVersion/, body: "1.0" },
+      { url: /phrasesVersions\/1_dot_0\/phrases/, body: SAMPLE_PHRASES },
+    ]);
+
+    const res = await handler(
+      makePostEvent({
+        action: "translate",
+        changedPhrases: {},
+        removedKeys: ["bye"],
+        colorMask: {},
+        sentValues: {},
+        currentVersion: "1.0",
+      })
+    );
+
+    expect(res.statusCode).toBe(200);
+    const data = JSON.parse(res.body);
+    expect(data.newVersion).toBe("2.0");
+
+    const phrasesPut = capturedPuts().find((put) =>
+      put.url.includes("phrasesVersions/2_dot_0/phrases")
+    );
+    expect(phrasesPut).toBeDefined();
+    expect(phrasesPut?.body).toEqual({ hello: SAMPLE_PHRASES.hello });
+  });
 });
 
 // ── POST /phrases { action: "translate" } + nonCyanPhrases ───────────────────
