@@ -4,7 +4,7 @@ import type { FetchLike, TranslateDeps } from "../types";
 const noSleep = () => Promise.resolve();
 
 function makeDeeplFetch(
-  responses: Array<{ status: number; body?: unknown }>
+  responses: Array<{ status: number; body?: unknown }>,
 ): jest.Mock {
   let callCount = 0;
   return jest.fn(() => {
@@ -19,7 +19,11 @@ function makeDeeplFetch(
 
 function makeGoogleFetch(body: unknown): jest.Mock {
   return jest.fn(() =>
-    Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(body) })
+    Promise.resolve({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve(body),
+    }),
   );
 }
 
@@ -31,7 +35,7 @@ function deeplOk(texts: string[]): { status: number; body: unknown } {
 }
 
 describe("translateCells — hex colorMask (apps-script format)", () => {
-  test("non-cyan → passthrough sentValue, no fetch calls", async () => {
+  test("non-white → passthrough sentValue, no fetch calls", async () => {
     const deeplFetch = jest.fn();
     const deps: TranslateDeps = {
       deeplFetch: deeplFetch as unknown as FetchLike,
@@ -43,16 +47,16 @@ describe("translateCells — hex colorMask (apps-script format)", () => {
 
     const result = await translateCells(
       { k1: "Hello" },
-      { k1: { fr: "#ffffff" } },
+      { k1: { fr: "#00ffff" } },
       { k1: { fr: "Bonjour" } },
-      deps
+      deps,
     );
 
     expect(result.k1.fr).toBe("Bonjour");
     expect(deeplFetch).not.toHaveBeenCalled();
   });
 
-  test("#00ffff → deeplFetch called", async () => {
+  test("#ffffff → deeplFetch called", async () => {
     const deeplFetch = makeDeeplFetch([deeplOk(["Bonjour"])]);
     const deps: TranslateDeps = {
       deeplFetch: deeplFetch as unknown as FetchLike,
@@ -64,9 +68,9 @@ describe("translateCells — hex colorMask (apps-script format)", () => {
 
     const result = await translateCells(
       { k1: "Hello" },
-      { k1: { fr: "#00ffff" } },
+      { k1: { fr: "#ffffff" } },
       { k1: { fr: "" } },
-      deps
+      deps,
     );
 
     expect(result.k1.fr).toBe("[Bonjour]");
@@ -74,8 +78,8 @@ describe("translateCells — hex colorMask (apps-script format)", () => {
   });
 });
 
-describe("translateCells — white cell passthrough", () => {
-  test("#ffffff → returns sentValue, no fetch calls made", async () => {
+describe("translateCells — cyan cell passthrough", () => {
+  test("#00ffff → returns sentValue, no fetch calls made", async () => {
     const deeplFetch = jest.fn();
     const googleFetch = jest.fn();
     const deps: TranslateDeps = {
@@ -88,9 +92,9 @@ describe("translateCells — white cell passthrough", () => {
 
     const result = await translateCells(
       { k1: "Hello" },
-      { k1: { fr: "#ffffff" } },
+      { k1: { fr: "#00ffff" } },
       { k1: { fr: "Bonjour" } },
-      deps
+      deps,
     );
 
     expect(result.k1.fr).toBe("Bonjour");
@@ -100,7 +104,7 @@ describe("translateCells — white cell passthrough", () => {
 });
 
 describe("translateCells — DeepL basic path", () => {
-  test("cyan non-kn cell → deeplFetch called on api.deepl.com/v2/translate", async () => {
+  test("white non-kn cell → deeplFetch called on api.deepl.com/v2/translate", async () => {
     const deeplFetch = makeDeeplFetch([deeplOk(["Hello"])]);
     const deps: TranslateDeps = {
       deeplFetch: deeplFetch as unknown as FetchLike,
@@ -112,9 +116,9 @@ describe("translateCells — DeepL basic path", () => {
 
     const result = await translateCells(
       { k1: "Hello" },
-      { k1: { fr: "#00ffff" } },
+      { k1: { fr: "#ffffff" } },
       { k1: { fr: "" } },
-      deps
+      deps,
     );
 
     expect(result.k1.fr).toBe("[Hello]");
@@ -141,9 +145,9 @@ describe("translateCells — kn + googleApiKey", () => {
 
     const result = await translateCells(
       { k1: "Hello" },
-      { k1: { kn: "#00ffff" } },
+      { k1: { kn: "#ffffff" } },
       { k1: { kn: "" } },
-      deps
+      deps,
     );
 
     expect(result.k1.kn).toBe("ಹಲೋ");
@@ -166,9 +170,9 @@ describe("translateCells — kn without googleApiKey", () => {
 
     const result = await translateCells(
       { k1: "Hello" },
-      { k1: { kn: "#00ffff" } },
+      { k1: { kn: "#ffffff" } },
       { k1: { kn: "existing_kn" } },
-      deps
+      deps,
     );
 
     expect(result.k1.kn).toBe("existing_kn");
@@ -177,8 +181,8 @@ describe("translateCells — kn without googleApiKey", () => {
   });
 });
 
-describe("translateCells — white-skip precedence", () => {
-  test("white kn cell → passthrough even when googleApiKey present", async () => {
+describe("translateCells — cyan-skip precedence", () => {
+  test("cyan kn cell → passthrough even when googleApiKey present", async () => {
     const googleFetch = jest.fn();
     const deps: TranslateDeps = {
       deeplFetch: jest.fn() as unknown as FetchLike,
@@ -190,9 +194,9 @@ describe("translateCells — white-skip precedence", () => {
 
     const result = await translateCells(
       { k1: "Hello" },
-      { k1: { kn: "#ffffff" } },
+      { k1: { kn: "#00ffff" } },
       { k1: { kn: "ಹಲೋ" } },
-      deps
+      deps,
     );
 
     expect(result.k1.kn).toBe("ಹಲೋ");
@@ -213,9 +217,9 @@ describe("translateCells — DeepL code mapping", () => {
 
     await translateCells(
       { k1: "Hello" },
-      { k1: { "zh-CN": "#00ffff" } },
+      { k1: { "zh-CN": "#ffffff" } },
       { k1: { "zh-CN": "" } },
-      deps
+      deps,
     );
 
     const body = JSON.parse(deeplFetch.mock.calls[0][1].body);
@@ -234,13 +238,14 @@ describe("translateCells — DeepL code mapping", () => {
 
     await translateCells(
       { k1: "Hello" },
-      { k1: { no: "#00ffff", "pt-pt": "#00ffff" } },
+      { k1: { no: "#ffffff", "pt-pt": "#ffffff" } },
       { k1: { no: "", "pt-pt": "" } },
-      deps
+      deps,
     );
 
     const calledTargets = deeplFetch.mock.calls.map(
-      ([, init]: [string, { body: string }]) => JSON.parse(init.body).target_lang
+      ([, init]: [string, { body: string }]) =>
+        JSON.parse(init.body).target_lang,
     );
     expect(calledTargets).toContain("NB");
     expect(calledTargets).toContain("PT-PT");
@@ -254,12 +259,15 @@ describe("translateCells — 50-text batching", () => {
     const sent: Record<string, Record<string, string>> = {};
     for (let i = 0; i < 51; i++) {
       phrases[`k${i}`] = `text ${i}`;
-      mask[`k${i}`] = { fr: "#00ffff" };
+      mask[`k${i}`] = { fr: "#ffffff" };
       sent[`k${i}`] = { fr: "" };
     }
 
     const deeplFetch = makeDeeplFetch([
-      { status: 200, body: { translations: Array(50).fill({ text: "translated" }) } },
+      {
+        status: 200,
+        body: { translations: Array(50).fill({ text: "translated" }) },
+      },
       { status: 200, body: { translations: [{ text: "translated" }] } },
     ]);
     const deps: TranslateDeps = {
@@ -280,7 +288,10 @@ describe("translateCells — 50-text batching", () => {
 
 describe("translateCells — language-parallel fan-out", () => {
   test("multiple languages → all appear in result, deeplFetch called once per language", async () => {
-    const deeplFetch = makeDeeplFetch([deeplOk(["Bonjour"]), deeplOk(["Hola"])]);
+    const deeplFetch = makeDeeplFetch([
+      deeplOk(["Bonjour"]),
+      deeplOk(["Hola"]),
+    ]);
     const deps: TranslateDeps = {
       deeplFetch: deeplFetch as unknown as FetchLike,
       googleFetch: jest.fn() as unknown as FetchLike,
@@ -291,9 +302,9 @@ describe("translateCells — language-parallel fan-out", () => {
 
     const result = await translateCells(
       { k1: "Hello" },
-      { k1: { fr: "#00ffff", es: "#00ffff" } },
+      { k1: { fr: "#ffffff", es: "#ffffff" } },
       { k1: { fr: "", es: "" } },
-      deps
+      deps,
     );
 
     expect(result.k1.fr).toBeDefined();
@@ -319,9 +330,9 @@ describe("translateCells — 429 retry", () => {
 
     const result = await translateCells(
       { k1: "Hello" },
-      { k1: { fr: "#00ffff" } },
+      { k1: { fr: "#ffffff" } },
       { k1: { fr: "" } },
-      deps
+      deps,
     );
 
     expect(result.k1.fr).toBe("[Hello]");
@@ -347,9 +358,9 @@ describe("translateCells — 456 retry", () => {
 
     const result = await translateCells(
       { k1: "Hello" },
-      { k1: { es: "#00ffff" } },
+      { k1: { es: "#ffffff" } },
       { k1: { es: "" } },
-      deps
+      deps,
     );
 
     expect(result.k1.es).toBe("[Hello]");
@@ -371,9 +382,9 @@ describe("translateCells — Free key (:fx suffix)", () => {
 
     await translateCells(
       { k1: "Hello" },
-      { k1: { fr: "#00ffff" } },
+      { k1: { fr: "#ffffff" } },
       { k1: { fr: "" } },
-      deps
+      deps,
     );
 
     expect(deeplFetch.mock.calls[0][0]).toContain("api-free.deepl.com");
@@ -393,9 +404,9 @@ describe("translateCells — Pro key (no :fx suffix)", () => {
 
     await translateCells(
       { k1: "Hello" },
-      { k1: { fr: "#00ffff" } },
+      { k1: { fr: "#ffffff" } },
       { k1: { fr: "" } },
-      deps
+      deps,
     );
 
     const url: string = deeplFetch.mock.calls[0][0];
@@ -417,7 +428,7 @@ describe("translateCells — HTML tag protection", () => {
 
     const result = await translateCells(
       { k1: '<span style="font-style: normal">▼</span>' },
-      { k1: { fr: "#00ffff" } },
+      { k1: { fr: "#ffffff" } },
       { k1: { fr: "" } },
       deps,
     );
@@ -428,7 +439,9 @@ describe("translateCells — HTML tag protection", () => {
   });
 
   test("cell with multiple tags → each translated segment rejoined in place, tags untouched", async () => {
-    const deeplFetch = makeDeeplFetch([deeplOk(["See ", "this citation", " for details."])]);
+    const deeplFetch = makeDeeplFetch([
+      deeplOk(["See ", "this citation", " for details."]),
+    ]);
     const deps: TranslateDeps = {
       deeplFetch: deeplFetch as unknown as FetchLike,
       googleFetch: jest.fn() as unknown as FetchLike,
@@ -438,8 +451,10 @@ describe("translateCells — HTML tag protection", () => {
     };
 
     const result = await translateCells(
-      { k1: 'See <a href="https://example.com/citation">this citation</a> for details.' },
-      { k1: { fr: "#00ffff" } },
+      {
+        k1: 'See <a href="https://example.com/citation">this citation</a> for details.',
+      },
+      { k1: { fr: "#ffffff" } },
       { k1: { fr: "" } },
       deps,
     );
@@ -463,9 +478,9 @@ describe("translateCells — unmapped language fail-safe", () => {
 
     const result = await translateCells(
       { k1: "Hello" },
-      { k1: { xx: "#00ffff" } },
+      { k1: { xx: "#ffffff" } },
       { k1: { xx: "original_value" } },
-      deps
+      deps,
     );
 
     expect(result.k1.xx).toBe("original_value");

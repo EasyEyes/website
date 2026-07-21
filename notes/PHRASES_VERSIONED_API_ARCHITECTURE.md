@@ -11,7 +11,7 @@
 >
 > - **server-side translation** (DeepL, + Google Translate for Kannada) instead of
 >   `GOOGLETRANSLATE` formulas in a sheet;
-> - a **`diff` step** that publishes only what actually changed (cyan vs. non-cyan cells);
+> - a **`diff` step** that publishes only what actually changed (white vs. non-white cells);
 > - **gzip** on the payload responses;
 > - a **shared-secret gate** on the write (`POST`) path.
 >
@@ -32,7 +32,7 @@ The phrases endpoint makes them **versioned data, not committed code**:
 - Phrases are stored as **immutable versioned JSON snapshots in Firebase RTDB**, served by
   a Netlify function as `application/json`.
 - Publishing a change is a **`diff` → `translate` POST pair** to the function. `diff` finds
-  the keys that genuinely changed; `translate` runs DeepL only on the cyan (auto-translate)
+  the keys that genuinely changed; `translate` runs DeepL only on the white (auto-translate)
   cells, writes a **new version**, and bumps `currentVersion` — **no build, no commit**.
 - Each compiled experiment **pins** the current version against its Pavlovia path. At runtime
   the experiment fetches **exactly that pinned version**, so a later phrases push can never
@@ -62,7 +62,7 @@ sequenceDiagram
     rect rgb(223, 240, 216)
     note over Editor,FB: A — PUBLISH (no build, instant)
     Editor->>AS: Edit sheet + run "Push phrases"
-    AS->>Fn: POST {action:"diff", english, nonCyanValues} (x-phrases-secret)
+    AS->>Fn: POST {action:"diff", english} (x-phrases-secret)
     Fn->>FB: read currentVersion + that version's phrases
     Fn-->>AS: 200 {changed[], removed[], currentVersion}
     AS->>Fn: POST {action:"translate", changedPhrases, colorMask, sentValues, currentVersion}
@@ -100,7 +100,7 @@ sequenceDiagram
 ```mermaid
 flowchart LR
     subgraph Author["Authoring"]
-        Sheet[Google Sheet<br/>phrases + cyan cells]
+        Sheet[Google Sheet<br/>phrases + white cells]
         AppsScript[Apps Script<br/>diff → translate POST]
     end
 
@@ -152,7 +152,7 @@ stateDiagram-v2
     [*] --> Diff
 
     state "POST action:diff" as Diff
-    Diff --> Changed : English changed<br/>OR a non-cyan cell differs
+    Diff --> Changed : English changed<br/>OR a non-white cell differs
     Diff --> Removed : key missing from incoming english
     Changed --> DiffResult
     Removed --> DiffResult
@@ -166,9 +166,9 @@ stateDiagram-v2
 
     state TranslateCells {
         [*] --> PerCell
-        PerCell --> KeepSent : cell NON-cyan → keep sentValue verbatim
-        PerCell --> DeepL : cell cyan (#00ffff), lang ≠ kn
-        PerCell --> GoogleKN : cell cyan, lang = kn
+        PerCell --> KeepSent : cell NON-white → keep sentValue verbatim
+        PerCell --> DeepL : cell white (#ffffff), lang ≠ kn
+        PerCell --> GoogleKN : cell white, lang = kn
     }
 
     TranslateCells --> Build
@@ -184,11 +184,11 @@ stateDiagram-v2
     Respond --> [*] : 200 {newVersion, translatedRows}
 ```
 
-**The cyan rule (the heart of the noise fix).** Each cell carries a colour in `colorMask`.
-A cell coloured cyan (`#00ffff`) is _machine-translatable_ — `translateCells` overwrites it
+**The white rule (the heart of the noise fix).** Each cell carries a colour in `colorMask`.
+A cell coloured white (`#ffffff`) is _machine-translatable_ — `translateCells` overwrites it
 with DeepL output (Google for `kn`). Any other colour means a human owns that cell, so its
 `sentValue` is written **verbatim, never machine-translated**. `diffEnglish` mirrors this:
-a key counts as "changed" only when its English text changed **or** one of its _non-cyan_
+a key counts as "changed" only when its English text changed **or** one of its _non-white_
 (human-owned) values differs from what Firebase already has — so a stray re-evaluation of a
 machine cell can no longer trigger a publish.
 
@@ -378,16 +378,16 @@ const row = readi18nPhrases("EE_ok"); // { en: "OK", de: "OK", … }
 
 ### Pros
 
-| Pro                                 | who | Detail                                                                                                                                                                     |
-| ----------------------------------- | --- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Instant publish, no build**       | B   | A push is live when the `translate` POST returns (seconds), vs ~10–14 min build + CDN.                                                                                     |
-| **Review gate via `diff`**          | U   | `diff` reports exactly which keys changed before anything is written; no more blind auto-commits.                                                                          |
-| **No dev-notes-shipped / GT-noise** | U   | Cyan rule + server-side DeepL replace in-sheet `GOOGLETRANSLATE`; non-cyan human cells are never machine-touched, and a re-evaluated machine cell can't trigger a publish. |
-| **Reproducible pinned versions**    | B   | Each experiment runs the exact version it compiled with; later pushes can't change a running study.                                                                        |
-| **Auto-versioning with semantics**  | D   | Key add/remove → major bump, value-only → minor; first push `1.0`; no-op publishes write nothing. No human picks the number.                                               |
-| **No auto-commit churn**            | D   | Ends the ~1,200 automated `i18n.js` commits; phrases history lives in Firebase versions, not git.                                                                          |
-| **gzip hot path**                   | U   | Participant `?v=` payload is gzipped and edge-cached for a year.                                                                                                           |
-| **Typed, single-seam contract**     | D   | One `phrasesRegistry` seam for runtime and compiler; `{version, phrases}` wire shape declared once per side.                                                               |
+| Pro                                 | who | Detail                                                                                                                                                                       |
+| ----------------------------------- | --- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Instant publish, no build**       | B   | A push is live when the `translate` POST returns (seconds), vs ~10–14 min build + CDN.                                                                                       |
+| **Review gate via `diff`**          | U   | `diff` reports exactly which keys changed before anything is written; no more blind auto-commits.                                                                            |
+| **No dev-notes-shipped / GT-noise** | U   | White rule + server-side DeepL replace in-sheet `GOOGLETRANSLATE`; non-white human cells are never machine-touched, and a re-evaluated machine cell can't trigger a publish. |
+| **Reproducible pinned versions**    | B   | Each experiment runs the exact version it compiled with; later pushes can't change a running study.                                                                          |
+| **Auto-versioning with semantics**  | D   | Key add/remove → major bump, value-only → minor; first push `1.0`; no-op publishes write nothing. No human picks the number.                                                 |
+| **No auto-commit churn**            | D   | Ends the ~1,200 automated `i18n.js` commits; phrases history lives in Firebase versions, not git.                                                                            |
+| **gzip hot path**                   | U   | Participant `?v=` payload is gzipped and edge-cached for a year.                                                                                                             |
+| **Typed, single-seam contract**     | D   | One `phrasesRegistry` seam for runtime and compiler; `{version, phrases}` wire shape declared once per side.                                                                 |
 
 ### Cons / risks (verified against the code)
 
@@ -414,7 +414,7 @@ The documented consequences — developer notes translated and shipped to users,
 Google-Translate output churning commits, a single English edit retranslating hundreds of
 unrelated keys, and ~1,200 of ~2,700 `i18n.js` commits being fully automated — are written up
 in [`../../i18n-pipeline-investigation.md`](../../i18n-pipeline-investigation.md). The phrases
-endpoint replaces this pipeline: the **cyan rule** stops machine translation from clobbering
+endpoint replaces this pipeline: the **white rule** stops machine translation from clobbering
 human cells, **`diff`** suppresses the blast radius, **server-side DeepL** removes the in-sheet
 formula noise, and **versioned snapshots + pinning** remove the build, the CDN wait, and the
 auto-commit stream entirely.
@@ -432,7 +432,7 @@ auto-commit stream entirely.
 | `GET`     | `?v={version}`                                                                         | `200` gzip `{version, phrases}` (immutable, 1yr); else `404 "Version not found"` | runtime hot path               |
 | `GET`     | `?pinned={u}/{e}`                                                                      | `200 {version}` (no-store); `404 "No pinned version"`                            | `phrases-loader.ts` runtime    |
 | `PUT`     | `{username, experimentName}`                                                           | `200 {version}` (pins current); `400` bad body; `500` no current version         | `phrasesApi.pinPhrasesVersion` |
-| `POST`    | `{action:"diff", english, nonCyanValues?}` + `x-phrases-secret`                        | `200 {changed[], removed[], currentVersion}`                                     | Apps Script                    |
+| `POST`    | `{action:"diff", english}` + `x-phrases-secret`                                        | `200 {changed[], removed[], currentVersion}`                                     | Apps Script                    |
 | `POST`    | `{action:"translate", changedPhrases, colorMask, sentValues, currentVersion}` + secret | `200 {newVersion, translatedRows}`; `409` version conflict; `400` >50 changed    | Apps Script                    |
 | `POST`    | `{action:"fullResync", …}` + secret                                                    | same as `translate` but skips the 50-change size guard                           | Apps Script (bulk)             |
 | `POST`    | any, missing/!= `PHRASES_SECRET`                                                       | `401 "Unauthorized"`                                                             | —                              |
