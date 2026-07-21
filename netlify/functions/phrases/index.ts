@@ -265,6 +265,7 @@ async function handleTranslate(
     Record<string, string>
   >;
   const removedKeys = body.removedKeys ?? [];
+  const activeLanguages = body.activeLanguages as string[] | undefined;
   const requestVersion = body.currentVersion as string;
 
   console.log("[phrases/translate] input:", {
@@ -274,6 +275,9 @@ async function handleTranslate(
     colorMaskKeys: Object.keys(colorMask),
     sentValuesKeys: Object.keys(sentValues),
     removedCount: Array.isArray(removedKeys) ? removedKeys.length : null,
+    activeLanguageCount: Array.isArray(activeLanguages)
+      ? activeLanguages.length
+      : null,
     skipSizeGuard,
   });
 
@@ -291,6 +295,19 @@ async function handleTranslate(
   ) {
     console.log("[phrases/translate] error: invalid removedKeys");
     return jsonErr(400, "Invalid removedKeys");
+  }
+
+  if (
+    activeLanguages !== undefined &&
+    (!Array.isArray(activeLanguages) ||
+      activeLanguages.length === 0 ||
+      !activeLanguages.includes("en") ||
+      activeLanguages.some(
+        (language) => typeof language !== "string" || language.length === 0
+      ))
+  ) {
+    console.log("[phrases/translate] error: invalid activeLanguages");
+    return jsonErr(400, "Invalid activeLanguages");
   }
 
   if (!skipSizeGuard && Object.keys(changedPhrases).length > 50) {
@@ -355,7 +372,8 @@ async function handleTranslate(
   const newVersioned = buildNewVersion(
     prevVersioned,
     translatedRows,
-    removedKeys
+    removedKeys,
+    activeLanguages
   );
 
   console.log("[phrases/translate] buildNewVersion result:", {

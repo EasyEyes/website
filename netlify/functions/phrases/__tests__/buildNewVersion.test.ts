@@ -52,6 +52,36 @@ describe("buildNewVersion — carry-forward", () => {
   });
 });
 
+describe("buildNewVersion — removed language columns", () => {
+  test("languages absent from the authoritative list are removed from every phrase", () => {
+    const prev: VersionedPhrases = {
+      version: "2.4",
+      phrases: {
+        k1: { en: "Hello", fr: "Bonjour", hr: "Pozdrav" },
+        k2: { en: "Bye", fr: "Au revoir", hr: "Doviđenja" },
+      },
+    };
+
+    const result = buildNewVersion(prev, {}, [], ["en", "fr"]);
+
+    expect(result).not.toBeNull();
+    expect(result!.version).toBe("3.0");
+    expect(result!.phrases).toEqual({
+      k1: { en: "Hello", fr: "Bonjour" },
+      k2: { en: "Bye", fr: "Au revoir" },
+    });
+  });
+
+  test("omitting the authoritative list preserves languages for old callers", () => {
+    const prev: VersionedPhrases = {
+      version: "1.0",
+      phrases: { k1: { en: "Hello", hr: "Pozdrav" } },
+    };
+
+    expect(buildNewVersion(prev, {}, [])).toBeNull();
+  });
+});
+
 describe("buildNewVersion — major bump on key add", () => {
   test("new key in translatedCells → major bump", () => {
     const prev: VersionedPhrases = {
