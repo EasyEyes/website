@@ -22,7 +22,7 @@ type WebhookDependencies = {
 type WebhookPayload = {
   id: string;
   context: string;
-  published_at: string;
+  published_at: unknown;
 };
 
 const productionFirebaseRoot =
@@ -63,9 +63,7 @@ function parsePayload(rawBody: string): WebhookPayload | undefined {
   if (
     typeof payload.id !== "string" ||
     !deploymentIdPattern.test(payload.id) ||
-    typeof payload.context !== "string" ||
-    typeof payload.published_at !== "string" ||
-    !isValidPublishedAt(payload.published_at)
+    typeof payload.context !== "string"
   ) {
     return undefined;
   }
@@ -142,6 +140,16 @@ export function createCompilerDeploymentWebhook({
         context: payload.context,
       });
       return new Response(null, { status: 204 });
+    }
+
+    if (
+      typeof payload.published_at !== "string" ||
+      !isValidPublishedAt(payload.published_at)
+    ) {
+      logger.warn("[compiler-deployment-webhook] request rejected", {
+        reason: "invalid-payload",
+      });
+      return new Response("Invalid payload", { status: 400 });
     }
 
     logger.info("[compiler-deployment-webhook] production deploy accepted", {

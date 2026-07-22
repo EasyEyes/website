@@ -104,7 +104,7 @@ describe("compiler deployment webhook", () => {
     expect(writeNotification).not.toHaveBeenCalled();
   });
 
-  it("ignores non-production deploys and rejects malformed payloads", async () => {
+  it("ignores previews with null publish times and rejects malformed production payloads", async () => {
     const writeNotification = jest.fn();
     const handler = createCompilerDeploymentWebhook({
       verifySignature: () => true,
@@ -121,6 +121,7 @@ describe("compiler deployment webhook", () => {
           body: JSON.stringify({
             ...productionPayload,
             context: "deploy-preview",
+            published_at: null,
           }),
         },
       ),
