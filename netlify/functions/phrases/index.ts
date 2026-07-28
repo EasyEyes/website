@@ -22,6 +22,9 @@ type NetlifyResponse = {
 
 const FIREBASE_ROOT = "https://easyeyes-compiler-default-rtdb.firebaseio.com";
 const JSON_HEADERS = { "Content-Type": "application/json" };
+// TEMPORARY: Force the Apps Script warning path for manual testing.
+// Set this back to false after the warning has been verified.
+const FORCE_DEEPL_403_FOR_TESTING = true;
 
 function firebaseUrl(path: string): string {
   return `${FIREBASE_ROOT}/${path}.json?auth=${process.env.FIREBASE_DB}`;
@@ -315,6 +318,24 @@ async function handleTranslate(
     return jsonErr(
       400,
       "Too many changed phrases (max 50 per synchronous call)"
+    );
+  }
+
+  const hasDeepLTarget = Object.values(colorMask).some((languages) =>
+    Object.entries(languages).some(
+      ([language, color]) =>
+        language !== "en" &&
+        language !== "kn" &&
+        color.toLowerCase() === "#ffffff"
+    )
+  );
+  if (FORCE_DEEPL_403_FOR_TESTING && hasDeepLTarget) {
+    console.warn(
+      "[phrases/translate] TEMPORARY TEST: forcing DeepL 403 response"
+    );
+    return jsonErr(
+      502,
+      "DeepL rejected the translation request (status 403). No new phrases version was created."
     );
   }
 
