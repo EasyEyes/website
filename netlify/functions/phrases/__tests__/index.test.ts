@@ -380,6 +380,87 @@ describe("POST /phrases { action: 'diff' }", () => {
   });
 });
 
+// ── POST /phrases { action: "usage" } ─────────────────────────────────────────
+
+describe("POST /phrases { action: 'usage' }", () => {
+  test("returns the current DeepL character usage", async () => {
+    mockFetch([
+      {
+        url: "api.deepl.com/v2/usage",
+        body: { character_count: 180118, character_limit: 1250000 },
+      },
+    ]);
+
+    const res = await handler(makePostEvent({ action: "usage" }));
+
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body)).toEqual({
+      character_count: 180118,
+      character_limit: 1250000,
+    });
+    expect(global.fetch).toHaveBeenCalledWith(
+      "https://api.deepl.com/v2/usage",
+      expect.objectContaining({
+        headers: {
+          Authorization: "DeepL-Auth-Key test-deepl-key",
+        },
+      })
+    );
+  });
+
+  test("uses the DeepL Free endpoint for a Free API key", async () => {
+    process.env.DEEPL_API_KEY = "test-deepl-key:fx";
+    mockFetch([
+      {
+        url: "api-free.deepl.com/v2/usage",
+        body: { character_count: 123, character_limit: 500000 },
+      },
+    ]);
+
+    const res = await handler(makePostEvent({ action: "usage" }));
+
+    expect(res.statusCode).toBe(200);
+    expect(global.fetch).toHaveBeenCalledWith(
+      "https://api-free.deepl.com/v2/usage",
+      expect.any(Object)
+    );
+  });
+
+  test("returns a controlled error when DeepL rejects the usage request", async () => {
+    mockFetch([
+      {
+        url: "/v2/usage",
+        body: { message: "Authorization failed" },
+        ok: false,
+        status: 403,
+      },
+    ]);
+
+    const res = await handler(makePostEvent({ action: "usage" }));
+
+    expect(res.statusCode).toBe(502);
+    expect(JSON.parse(res.body)).toEqual({
+      error: "DeepL usage request failed (status 403)",
+    });
+  });
+
+  test("returns a controlled error for an invalid DeepL usage response", async () => {
+    mockFetch([
+      {
+        url: "/v2/usage",
+        body: { character_count: "unknown" },
+      },
+    ]);
+
+    const res = await handler(makePostEvent({ action: "usage" }));
+
+    expect(res.statusCode).toBe(502);
+    expect(JSON.parse(res.body)).toEqual({
+      error: "DeepL usage response was invalid",
+    });
+  });
+});
+
 // ── POST /phrases { action: "translate" } ─────────────────────────────────────
 
 describe("POST /phrases { action: 'translate' } — guards", () => {

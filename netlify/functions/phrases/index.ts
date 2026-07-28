@@ -463,6 +463,45 @@ async function handlePost(event: NetlifyEvent): Promise<NetlifyResponse> {
     return jsonOk(result);
   }
 
+  if (body.action === "usage") {
+    const deeplApiKey = process.env.DEEPL_API_KEY ?? "";
+    if (!deeplApiKey) {
+      return jsonErr(500, "DEEPL_API_KEY is not configured");
+    }
+
+    const deeplBaseUrl = deeplApiKey.endsWith(":fx")
+      ? "https://api-free.deepl.com"
+      : "https://api.deepl.com";
+    const usageResponse = await fetchWithTimeout(
+      `${deeplBaseUrl}/v2/usage`,
+      {
+        headers: {
+          Authorization: `DeepL-Auth-Key ${deeplApiKey}`,
+        },
+      },
+      5000,
+      0
+    );
+    if (!usageResponse.ok) {
+      return jsonErr(
+        502,
+        `DeepL usage request failed (status ${usageResponse.status})`
+      );
+    }
+
+    const usage = (await usageResponse.json()) as Record<string, unknown>;
+    if (
+      typeof usage.character_count !== "number" ||
+      typeof usage.character_limit !== "number"
+    ) {
+      return jsonErr(502, "DeepL usage response was invalid");
+    }
+    return jsonOk({
+      character_count: usage.character_count,
+      character_limit: usage.character_limit,
+    });
+  }
+
   if (body.action === "translate") {
     return handleTranslate(body, false);
   }
