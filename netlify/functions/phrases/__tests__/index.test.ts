@@ -508,6 +508,37 @@ describe("POST /phrases { action: 'translate' } — happy path", () => {
   });
 });
 
+describe("POST /phrases { action: 'translate' } — DeepL failure", () => {
+  test("a DeepL 403 returns a warning response and performs no Firebase writes", async () => {
+    mockFetch([
+      { url: /phrases\/currentVersion/, body: "1.0" },
+      { url: /phrasesVersions\/1_dot_0\/phrases/, body: SAMPLE_PHRASES },
+      {
+        url: "api.deepl.com/v2/translate",
+        body: { message: "Forbidden" },
+        ok: false,
+        status: 403,
+      },
+    ]);
+
+    const res = await handler(
+      makePostEvent({
+        action: "translate",
+        changedPhrases: { hello: "Hello updated" },
+        colorMask: { hello: { fr: "#ffffff" } },
+        sentValues: { hello: { fr: "Bonjour" } },
+        currentVersion: "1.0",
+      })
+    );
+
+    expect(res.statusCode).toBe(502);
+    expect(JSON.parse(res.body).error).toMatch(
+      /DeepL rejected.*No new phrases version was created/i
+    );
+    expect(capturedPuts()).toHaveLength(0);
+  });
+});
+
 // ── POST /phrases { action: "translate" } + nonCyanPhrases ───────────────────
 
 describe("POST /phrases { action: 'translate' } — nonCyanPhrases", () => {

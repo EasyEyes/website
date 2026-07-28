@@ -1,4 +1,4 @@
-import { translateCells } from "../translateCells";
+import { DeepLTranslationError, translateCells } from "../translateCells";
 import type { FetchLike, TranslateDeps } from "../types";
 
 const noSleep = () => Promise.resolve();
@@ -484,5 +484,27 @@ describe("translateCells — unmapped language fail-safe", () => {
     );
 
     expect(result.k1.xx).toBe("original_value");
+  });
+});
+
+describe("translateCells — DeepL authorization failure", () => {
+  test("DeepL 403 rejects instead of passing through the existing translation", async () => {
+    const deeplFetch = makeDeeplFetch([{ status: 403, body: null }]);
+    const deps: TranslateDeps = {
+      deeplFetch: deeplFetch as unknown as FetchLike,
+      googleFetch: jest.fn() as unknown as FetchLike,
+      googleApiKey: undefined,
+      deeplApiKey: "invalid-key",
+      sleep: noSleep,
+    };
+
+    await expect(
+      translateCells(
+        { k1: "Hello updated" },
+        { k1: { fr: "#ffffff" } },
+        { k1: { fr: "Bonjour" } },
+        deps,
+      ),
+    ).rejects.toEqual(new DeepLTranslationError(403));
   });
 });

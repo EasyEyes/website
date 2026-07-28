@@ -1,6 +1,6 @@
 import { gzipSync } from "zlib";
 import { diffEnglish } from "./diffEnglish";
-import { translateCells } from "./translateCells";
+import { DeepLTranslationError, translateCells } from "./translateCells";
 import { buildNewVersion } from "./buildNewVersion";
 import { encodeFirebaseSegment } from "../glossary/encodeFirebaseSegment";
 import { corsHeaders } from "../shared/cors";
@@ -346,12 +346,26 @@ async function handleTranslate(
     googleApiKey: process.env.GOOGLE_API_KEY,
   };
 
-  const translatedRows = await translateCells(
-    changedPhrases,
-    colorMask,
-    sentValues,
-    deps
-  );
+  let translatedRows: PhraseMap;
+  try {
+    translatedRows = await translateCells(
+      changedPhrases,
+      colorMask,
+      sentValues,
+      deps
+    );
+  } catch (error) {
+    if (error instanceof DeepLTranslationError) {
+      console.error("[phrases/translate] DeepL translation failed; aborting before Firebase write:", {
+        status: error.status,
+      });
+      return jsonErr(
+        502,
+        `DeepL rejected the translation request (status ${error.status}). No new phrases version was created.`
+      );
+    }
+    throw error;
+  }
 
   console.log("[phrases/translate] translatedRows:", translatedRows);
 

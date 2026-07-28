@@ -11,6 +11,13 @@ const DEEPL_CODE_MAP: Record<string, string> = {
   "pt-pt": "PT-PT",
 };
 
+export class DeepLTranslationError extends Error {
+  constructor(public readonly status: number) {
+    super(`DeepL translation failed with status ${status}`);
+    this.name = "DeepLTranslationError";
+  }
+}
+
 function deeplBaseUrl(apiKey: string): string {
   return apiKey.endsWith(":fx")
     ? "https://api-free.deepl.com"
@@ -69,6 +76,9 @@ async function callDeepL(
     }
 
     console.log("[deepl] non-retryable error, giving up:", res.status);
+    if (res.status === 403) {
+      throw new DeepLTranslationError(res.status);
+    }
     return null;
   }
 
