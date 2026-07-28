@@ -34,9 +34,10 @@ async function callDeepL(
   apiKey: string,
   deeplFetch: TranslateDeps["deeplFetch"],
   sleep: (ms: number) => Promise<void>,
-): Promise<string[] | null> {
+): Promise<string[]> {
   const baseUrl = deeplBaseUrl(apiKey);
   const RETRY_STATUSES = new Set([429, 456]);
+  let lastStatus = 0;
 
   for (let attempt = 0; attempt < 3; attempt++) {
     console.log("[deepl] request:", {
@@ -59,6 +60,7 @@ async function callDeepL(
     });
 
     console.log("[deepl] response status:", res.status);
+    lastStatus = res.status;
 
     if (res.ok) {
       const data = (await res.json()) as {
@@ -76,14 +78,11 @@ async function callDeepL(
     }
 
     console.log("[deepl] non-retryable error, giving up:", res.status);
-    if (res.status === 403) {
-      throw new DeepLTranslationError(res.status);
-    }
-    return null;
+    throw new DeepLTranslationError(res.status);
   }
 
   console.log("[deepl] all attempts exhausted for:", targetLang);
-  return null;
+  throw new DeepLTranslationError(lastStatus);
 }
 
 type DeeplJob = { key: string; engText: string; sentValue: string };
@@ -122,7 +121,6 @@ async function translateForLanguage(
       sleep,
     );
 
-    if (translations === null) continue;
     batch.forEach((p, j) =>
       translatedBySeg.set(`${p.jobIdx}:${p.segIdx}`, translations[j]),
     );

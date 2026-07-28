@@ -509,7 +509,7 @@ describe("POST /phrases { action: 'translate' } — happy path", () => {
 });
 
 describe("POST /phrases { action: 'translate' } — DeepL failure", () => {
-  test("a DeepL 403 returns a warning response and performs no Firebase writes", async () => {
+  test("a DeepL 403 returns a fatal structured response and performs no Firebase writes", async () => {
     mockFetch([
       { url: /phrases\/currentVersion/, body: "1.0" },
       { url: /phrasesVersions\/1_dot_0\/phrases/, body: SAMPLE_PHRASES },
@@ -532,9 +532,46 @@ describe("POST /phrases { action: 'translate' } — DeepL failure", () => {
     );
 
     expect(res.statusCode).toBe(502);
-    expect(JSON.parse(res.body).error).toMatch(
-      /DeepL rejected.*No new phrases version was created/i
+    expect(JSON.parse(res.body)).toEqual({
+      error:
+        "DeepL rejected the translation request (status 403). No new phrases version was created.",
+      code: "DEEPL_TRANSLATION_FAILED",
+      deeplStatus: 403,
+      fatal: true,
+    });
+    expect(capturedPuts()).toHaveLength(0);
+  });
+
+  test("a DeepL 500 returns a fatal structured response and performs no Firebase writes", async () => {
+    mockFetch([
+      { url: /phrases\/currentVersion/, body: "1.0" },
+      { url: /phrasesVersions\/1_dot_0\/phrases/, body: SAMPLE_PHRASES },
+      {
+        url: "api.deepl.com/v2/translate",
+        body: { message: "Internal error" },
+        ok: false,
+        status: 500,
+      },
+    ]);
+
+    const res = await handler(
+      makePostEvent({
+        action: "translate",
+        changedPhrases: { hello: "Hello updated" },
+        colorMask: { hello: { fr: "#ffffff" } },
+        sentValues: { hello: { fr: "Bonjour" } },
+        currentVersion: "1.0",
+      })
     );
+
+    expect(res.statusCode).toBe(502);
+    expect(JSON.parse(res.body)).toEqual({
+      error:
+        "DeepL rejected the translation request (status 500). No new phrases version was created.",
+      code: "DEEPL_TRANSLATION_FAILED",
+      deeplStatus: 500,
+      fatal: true,
+    });
     expect(capturedPuts()).toHaveLength(0);
   });
 });

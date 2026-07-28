@@ -465,8 +465,8 @@ describe("translateCells — HTML tag protection", () => {
   });
 });
 
-describe("translateCells — unmapped language fail-safe", () => {
-  test("DeepL 400 for unknown lang code → falls back to sentValue", async () => {
+describe("translateCells — unmapped language failure", () => {
+  test("DeepL 400 for unknown lang code → rejects instead of passing through the existing translation", async () => {
     const deeplFetch = makeDeeplFetch([{ status: 400, body: null }]);
     const deps: TranslateDeps = {
       deeplFetch: deeplFetch as unknown as FetchLike,
@@ -476,14 +476,14 @@ describe("translateCells — unmapped language fail-safe", () => {
       sleep: noSleep,
     };
 
-    const result = await translateCells(
-      { k1: "Hello" },
-      { k1: { xx: "#ffffff" } },
-      { k1: { xx: "original_value" } },
-      deps,
-    );
-
-    expect(result.k1.xx).toBe("original_value");
+    await expect(
+      translateCells(
+        { k1: "Hello" },
+        { k1: { xx: "#ffffff" } },
+        { k1: { xx: "original_value" } },
+        deps,
+      ),
+    ).rejects.toEqual(new DeepLTranslationError(400));
   });
 });
 
@@ -506,5 +506,49 @@ describe("translateCells — DeepL authorization failure", () => {
         deps,
       ),
     ).rejects.toEqual(new DeepLTranslationError(403));
+  });
+
+  test("DeepL 500 rejects instead of passing through the existing translation", async () => {
+    const deeplFetch = makeDeeplFetch([{ status: 500, body: null }]);
+    const deps: TranslateDeps = {
+      deeplFetch: deeplFetch as unknown as FetchLike,
+      googleFetch: jest.fn() as unknown as FetchLike,
+      googleApiKey: undefined,
+      deeplApiKey: "dkey",
+      sleep: noSleep,
+    };
+
+    await expect(
+      translateCells(
+        { k1: "Hello updated" },
+        { k1: { fr: "#ffffff" } },
+        { k1: { fr: "Bonjour" } },
+        deps,
+      ),
+    ).rejects.toEqual(new DeepLTranslationError(500));
+  });
+
+  test("exhausted DeepL retries reject instead of passing through the existing translation", async () => {
+    const deeplFetch = makeDeeplFetch([
+      { status: 429, body: null },
+      { status: 429, body: null },
+      { status: 429, body: null },
+    ]);
+    const deps: TranslateDeps = {
+      deeplFetch: deeplFetch as unknown as FetchLike,
+      googleFetch: jest.fn() as unknown as FetchLike,
+      googleApiKey: undefined,
+      deeplApiKey: "dkey",
+      sleep: noSleep,
+    };
+
+    await expect(
+      translateCells(
+        { k1: "Hello updated" },
+        { k1: { fr: "#ffffff" } },
+        { k1: { fr: "Bonjour" } },
+        deps,
+      ),
+    ).rejects.toEqual(new DeepLTranslationError(429));
   });
 });
