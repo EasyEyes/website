@@ -472,6 +472,9 @@ async function handlePost(event: NetlifyEvent): Promise<NetlifyResponse> {
     const deeplBaseUrl = deeplApiKey.endsWith(":fx")
       ? "https://api-free.deepl.com"
       : "https://api.deepl.com";
+    console.log("[phrases/usage] requesting DeepL usage:", {
+      endpoint: `${deeplBaseUrl}/v2/usage`,
+    });
     const usageResponse = await fetchWithTimeout(
       `${deeplBaseUrl}/v2/usage`,
       {
@@ -482,6 +485,11 @@ async function handlePost(event: NetlifyEvent): Promise<NetlifyResponse> {
       5000,
       0
     );
+    const usageResponseText = await usageResponse.text();
+    console.log("[phrases/usage] DeepL response:", {
+      status: usageResponse.status,
+      body: usageResponseText,
+    });
     if (!usageResponse.ok) {
       return jsonErr(
         502,
@@ -489,7 +497,12 @@ async function handlePost(event: NetlifyEvent): Promise<NetlifyResponse> {
       );
     }
 
-    const usage = (await usageResponse.json()) as Record<string, unknown>;
+    let usage: Record<string, unknown>;
+    try {
+      usage = JSON.parse(usageResponseText) as Record<string, unknown>;
+    } catch {
+      return jsonErr(502, "DeepL usage response was invalid");
+    }
     if (
       typeof usage.character_count !== "number" ||
       typeof usage.character_limit !== "number"
