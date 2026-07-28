@@ -211,9 +211,8 @@ function simulatedDeepLFetch(
 
 function deeplFailureScenariosEnabled(): boolean {
   if (process.env.NODE_ENV === "test") return true;
-  return (
-    process.env.CONTEXT !== "production" &&
-    process.env.BRANCH === "test/deepl-failure-scenarios"
+  return ["deploy-preview", "branch-deploy", "dev"].includes(
+    process.env.CONTEXT ?? ""
   );
 }
 
