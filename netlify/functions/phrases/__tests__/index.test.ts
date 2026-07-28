@@ -644,6 +644,41 @@ describe("POST /phrases { action: 'translate' } — DeepL failure", () => {
       expect(capturedPuts()).toHaveLength(0);
     }
   );
+
+  test("production rejects a requested failure scenario", async () => {
+    const originalNodeEnv = process.env.NODE_ENV;
+    const originalContext = process.env.CONTEXT;
+    const originalBranch = process.env.BRANCH;
+    process.env.NODE_ENV = "production";
+    process.env.CONTEXT = "production";
+    process.env.BRANCH = "main";
+
+    try {
+      const res = await handler(
+        makePostEvent({
+          action: "translate",
+          changedPhrases: { hello: "Hello updated" },
+          colorMask: { hello: { fr: "#ffffff" } },
+          sentValues: { hello: { fr: "Bonjour" } },
+          currentVersion: "1.0",
+          testDeeplFailureScenario: "403",
+        })
+      );
+
+      expect(res.statusCode).toBe(400);
+      expect(JSON.parse(res.body)).toEqual({
+        error: "DeepL failure scenarios are disabled",
+      });
+      expect(global.fetch).not.toHaveBeenCalled();
+    } finally {
+      if (originalNodeEnv === undefined) delete process.env.NODE_ENV;
+      else process.env.NODE_ENV = originalNodeEnv;
+      if (originalContext === undefined) delete process.env.CONTEXT;
+      else process.env.CONTEXT = originalContext;
+      if (originalBranch === undefined) delete process.env.BRANCH;
+      else process.env.BRANCH = originalBranch;
+    }
+  });
 });
 
 // ── POST /phrases { action: "translate" } + nonCyanPhrases ───────────────────

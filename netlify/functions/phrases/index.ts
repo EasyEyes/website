@@ -209,6 +209,14 @@ function simulatedDeepLFetch(
   };
 }
 
+function deeplFailureScenariosEnabled(): boolean {
+  if (process.env.NODE_ENV === "test") return true;
+  return (
+    process.env.CONTEXT !== "production" &&
+    process.env.BRANCH === "test/deepl-failure-scenarios"
+  );
+}
+
 async function getCurrentVersion(): Promise<string | null> {
   return (await firebaseGet("phrases/currentVersion")) as string | null;
 }
@@ -369,6 +377,13 @@ async function handleTranslate(
     )
   ) {
     return jsonErr(400, "Invalid testDeeplFailureScenario");
+  }
+
+  if (
+    failureScenario !== undefined &&
+    !deeplFailureScenariosEnabled()
+  ) {
+    return jsonErr(400, "DeepL failure scenarios are disabled");
   }
 
   if (!skipSizeGuard && Object.keys(changedPhrases).length > 50) {
