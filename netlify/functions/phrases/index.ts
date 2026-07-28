@@ -20,6 +20,15 @@ type NetlifyResponse = {
   isBase64Encoded?: boolean;
 };
 
+const DEEPL_FAILURE_SCENARIOS = [
+  "403",
+  "500",
+  "network",
+  "malformed",
+  "count-mismatch",
+] as const;
+type DeepLFailureScenario = (typeof DEEPL_FAILURE_SCENARIOS)[number];
+
 const FIREBASE_ROOT = "https://easyeyes-compiler-default-rtdb.firebaseio.com";
 const JSON_HEADERS = { "Content-Type": "application/json" };
 
@@ -162,6 +171,44 @@ function jsonErr(
   };
 }
 
+function simulatedDeepLFetch(
+  scenario: DeepLFailureScenario
+): TranslateDeps["deeplFetch"] {
+  return async () => {
+    if (scenario === "network") {
+      throw new Error("Simulated DeepL network failure");
+    }
+
+    if (scenario === "malformed") {
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ malformed: true }),
+      };
+    }
+
+    if (scenario === "count-mismatch") {
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ translations: [] }),
+      };
+    }
+
+    const status = Number(scenario);
+    const message =
+      scenario === "403"
+        ? "Simulated DeepL authorization failure"
+        : "Simulated DeepL internal error";
+    return {
+      ok: false,
+      status,
+      json: async () => ({ message }),
+      text: async () => JSON.stringify({ message }),
+    };
+  };
+}
+
 async function getCurrentVersion(): Promise<string | null> {
   return (await firebaseGet("phrases/currentVersion")) as string | null;
 }
@@ -271,6 +318,7 @@ async function handleTranslate(
   const removedKeys = body.removedKeys ?? [];
   const activeLanguages = body.activeLanguages as string[] | undefined;
   const requestVersion = body.currentVersion as string;
+  const failureScenario = body.testDeeplFailureScenario;
 
   console.log("[phrases/translate] input:", {
     changedPhrases,
@@ -314,6 +362,15 @@ async function handleTranslate(
     return jsonErr(400, "Invalid activeLanguages");
   }
 
+  if (
+    failureScenario !== undefined &&
+    !DEEPL_FAILURE_SCENARIOS.includes(
+      failureScenario as DeepLFailureScenario
+    )
+  ) {
+    return jsonErr(400, "Invalid testDeeplFailureScenario");
+  }
+
   if (!skipSizeGuard && Object.keys(changedPhrases).length > 50) {
     console.log("[phrases/translate] error: too many changed phrases", Object.keys(changedPhrases).length);
     return jsonErr(
@@ -344,7 +401,10 @@ async function handleTranslate(
     >;
 
   const deps: TranslateDeps = {
-    deeplFetch: httpFetch,
+    deeplFetch:
+      failureScenario === undefined
+        ? httpFetch
+        : simulatedDeepLFetch(failureScenario as DeepLFailureScenario),
     googleFetch: httpFetch,
     deeplApiKey: process.env.DEEPL_API_KEY ?? "",
     googleApiKey: process.env.GOOGLE_API_KEY,

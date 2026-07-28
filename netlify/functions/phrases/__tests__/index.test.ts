@@ -608,6 +608,42 @@ describe("POST /phrases { action: 'translate' } — DeepL failure", () => {
     });
     expect(capturedPuts()).toHaveLength(0);
   });
+
+  test.each([
+    ["403", 403, "Simulated DeepL authorization failure"],
+    ["500", 500, "Simulated DeepL internal error"],
+    ["network", null, "Simulated DeepL network failure"],
+    ["malformed", 200, "Malformed DeepL response"],
+    ["count-mismatch", 200, "Malformed DeepL response"],
+  ])(
+    "test scenario %s exercises the fatal DeepL pipeline without a Firebase write",
+    async (scenario, expectedStatus, expectedDetail) => {
+      mockFetch([
+        { url: /phrases\/currentVersion/, body: "1.0" },
+        { url: /phrasesVersions\/1_dot_0\/phrases/, body: SAMPLE_PHRASES },
+      ]);
+
+      const res = await handler(
+        makePostEvent({
+          action: "translate",
+          changedPhrases: { hello: "Hello updated" },
+          colorMask: { hello: { fr: "#ffffff" } },
+          sentValues: { hello: { fr: "Bonjour" } },
+          currentVersion: "1.0",
+          testDeeplFailureScenario: scenario,
+        })
+      );
+
+      expect(res.statusCode).toBe(502);
+      expect(JSON.parse(res.body)).toMatchObject({
+        code: "DEEPL_TRANSLATION_FAILED",
+        deeplStatus: expectedStatus,
+        technicalDetail: expectedDetail,
+        fatal: true,
+      });
+      expect(capturedPuts()).toHaveLength(0);
+    }
+  );
 });
 
 // ── POST /phrases { action: "translate" } + nonCyanPhrases ───────────────────
