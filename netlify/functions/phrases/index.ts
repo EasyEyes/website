@@ -213,6 +213,7 @@ function deeplFailureScenariosEnabled(
   headers: Record<string, string | undefined>
 ): boolean {
   if (process.env.NODE_ENV === "test") return true;
+  if (process.env.CONTEXT === "production") return false;
   if (
     ["deploy-preview", "branch-deploy", "dev"].includes(
       process.env.CONTEXT ?? ""
@@ -221,13 +222,10 @@ function deeplFailureScenariosEnabled(
     return true;
   }
 
-  const forwardedHost = headers["x-forwarded-host"]?.split(",")[0]?.trim();
-  const host = (forwardedHost ?? headers.host ?? headers.Host ?? "")
+  const host = (headers.host ?? headers.Host ?? "")
     .toLowerCase()
     .replace(/:\d+$/, "");
-  return /^(?:deploy-preview-\d+|[a-z0-9][a-z0-9-]*)--easyeyes\.netlify\.app$/.test(
-    host
-  );
+  return /^deploy-preview-\d+--easyeyes\.netlify\.app$/.test(host);
 }
 
 async function getCurrentVersion(): Promise<string | null> {

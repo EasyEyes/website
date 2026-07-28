@@ -658,14 +658,17 @@ describe("POST /phrases { action: 'translate' } — DeepL failure", () => {
 
     try {
       const res = await handler(
-        makePostEvent({
-          action: "translate",
-          changedPhrases: { hello: "Hello updated" },
-          colorMask: { hello: { fr: "#ffffff" } },
-          sentValues: { hello: { fr: "Bonjour" } },
-          currentVersion: "1.0",
-          testDeeplFailureScenario: "403",
-        })
+        makePostEvent(
+          {
+            action: "translate",
+            changedPhrases: { hello: "Hello updated" },
+            colorMask: { hello: { fr: "#ffffff" } },
+            sentValues: { hello: { fr: "Bonjour" } },
+            currentVersion: "1.0",
+            testDeeplFailureScenario: "403",
+          },
+          { host: "deploy-preview-88--easyeyes.netlify.app" }
+        )
       );
 
       expect(res.statusCode).toBe(400);
