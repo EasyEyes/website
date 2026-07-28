@@ -537,6 +537,7 @@ describe("POST /phrases { action: 'translate' } — DeepL failure", () => {
         "DeepL rejected the translation request (status 403). No new phrases version was created.",
       code: "DEEPL_TRANSLATION_FAILED",
       deeplStatus: 403,
+      technicalDetail: "Forbidden",
       fatal: true,
     });
     expect(capturedPuts()).toHaveLength(0);
@@ -570,6 +571,7 @@ describe("POST /phrases { action: 'translate' } — DeepL failure", () => {
         "DeepL rejected the translation request (status 500). No new phrases version was created.",
       code: "DEEPL_TRANSLATION_FAILED",
       deeplStatus: 500,
+      technicalDetail: "Internal error",
       fatal: true,
     });
     expect(capturedPuts()).toHaveLength(0);

@@ -12,10 +12,38 @@ const DEEPL_CODE_MAP: Record<string, string> = {
 };
 
 export class DeepLTranslationError extends Error {
-  constructor(public readonly status: number) {
-    super(`DeepL translation failed with status ${status}`);
+  constructor(
+    public readonly status: number | null,
+    public readonly technicalDetail?: string,
+  ) {
+    super(
+      status === null
+        ? "DeepL translation failed before receiving a response"
+        : `DeepL translation failed with status ${status}`,
+    );
     this.name = "DeepLTranslationError";
   }
+}
+
+function technicalDetail(errorBody: unknown): string | undefined {
+  if (errorBody === null) return undefined;
+  let detail: string | undefined;
+  if (typeof errorBody === "string") {
+    detail = errorBody;
+  } else if (
+    typeof errorBody === "object" &&
+    errorBody !== null &&
+    typeof (errorBody as { message?: unknown }).message === "string"
+  ) {
+    detail = (errorBody as { message: string }).message;
+  } else if (errorBody !== undefined) {
+    try {
+      detail = JSON.stringify(errorBody);
+    } catch {
+      detail = undefined;
+    }
+  }
+  return detail?.slice(0, 500);
 }
 
 function deeplBaseUrl(apiKey: string): string {
@@ -38,6 +66,7 @@ async function callDeepL(
   const baseUrl = deeplBaseUrl(apiKey);
   const RETRY_STATUSES = new Set([429, 456]);
   let lastStatus = 0;
+  let lastTechnicalDetail: string | undefined;
 
   for (let attempt = 0; attempt < 3; attempt++) {
     console.log("[deepl] request:", {
@@ -46,30 +75,60 @@ async function callDeepL(
       texts,
       attempt,
     });
-    const res = await deeplFetch(`${baseUrl}/v2/translate`, {
-      method: "POST",
-      headers: {
-        Authorization: `DeepL-Auth-Key ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        text: texts,
-        target_lang: targetLang,
-        source_lang: "EN",
-      }),
-    });
+    let res;
+    try {
+      res = await deeplFetch(`${baseUrl}/v2/translate`, {
+        method: "POST",
+        headers: {
+          Authorization: `DeepL-Auth-Key ${apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          text: texts,
+          target_lang: targetLang,
+          source_lang: "EN",
+        }),
+      });
+    } catch (error) {
+      throw new DeepLTranslationError(
+        null,
+        error instanceof Error ? error.message : String(error),
+      );
+    }
 
     console.log("[deepl] response status:", res.status);
     lastStatus = res.status;
 
     if (res.ok) {
-      const data = (await res.json()) as {
+      let data: unknown;
+      try {
+        data = await res.json();
+      } catch {
+        throw new DeepLTranslationError(200, "Malformed DeepL response");
+      }
+      if (
+        typeof data !== "object" ||
+        data === null ||
+        !Array.isArray((data as { translations?: unknown }).translations) ||
+        !(data as { translations: unknown[] }).translations.every(
+          (translation) =>
+            typeof translation === "object" &&
+            translation !== null &&
+            typeof (translation as { text?: unknown }).text === "string",
+        )
+      ) {
+        throw new DeepLTranslationError(200, "Malformed DeepL response");
+      }
+      const translations = (data as {
         translations: Array<{ text: string }>;
-      };
-      const results = data.translations.map((t) => t.text);
+      }).translations;
+      const results = translations.map((t) => t.text);
       console.log("[deepl] translations:", { targetLang, results });
       return results;
     }
+
+    const errorBody = await res.json().catch(() => undefined);
+    lastTechnicalDetail = technicalDetail(errorBody);
 
     if (RETRY_STATUSES.has(res.status)) {
       console.log("[deepl] retryable status, sleeping:", res.status);
@@ -78,11 +137,11 @@ async function callDeepL(
     }
 
     console.log("[deepl] non-retryable error, giving up:", res.status);
-    throw new DeepLTranslationError(res.status);
+    throw new DeepLTranslationError(res.status, lastTechnicalDetail);
   }
 
   console.log("[deepl] all attempts exhausted for:", targetLang);
-  throw new DeepLTranslationError(lastStatus);
+  throw new DeepLTranslationError(lastStatus, lastTechnicalDetail);
 }
 
 type DeeplJob = { key: string; engText: string; sentValue: string };

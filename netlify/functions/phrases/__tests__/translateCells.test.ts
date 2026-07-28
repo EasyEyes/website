@@ -551,4 +551,49 @@ describe("translateCells — DeepL authorization failure", () => {
       ),
     ).rejects.toEqual(new DeepLTranslationError(429));
   });
+
+  test("a DeepL network failure rejects as a fatal translation error", async () => {
+    const deps: TranslateDeps = {
+      deeplFetch: jest
+        .fn()
+        .mockRejectedValue(new Error("connection reset")) as unknown as FetchLike,
+      googleFetch: jest.fn() as unknown as FetchLike,
+      googleApiKey: undefined,
+      deeplApiKey: "dkey",
+      sleep: noSleep,
+    };
+
+    await expect(
+      translateCells(
+        { k1: "Hello updated" },
+        { k1: { fr: "#ffffff" } },
+        { k1: { fr: "Bonjour" } },
+        deps,
+      ),
+    ).rejects.toEqual(
+      new DeepLTranslationError(null, "connection reset"),
+    );
+  });
+
+  test("a malformed successful DeepL response rejects as a fatal translation error", async () => {
+    const deeplFetch = makeDeeplFetch([{ status: 200, body: { nope: true } }]);
+    const deps: TranslateDeps = {
+      deeplFetch: deeplFetch as unknown as FetchLike,
+      googleFetch: jest.fn() as unknown as FetchLike,
+      googleApiKey: undefined,
+      deeplApiKey: "dkey",
+      sleep: noSleep,
+    };
+
+    await expect(
+      translateCells(
+        { k1: "Hello updated" },
+        { k1: { fr: "#ffffff" } },
+        { k1: { fr: "Bonjour" } },
+        deps,
+      ),
+    ).rejects.toEqual(
+      new DeepLTranslationError(200, "Malformed DeepL response"),
+    );
+  });
 });
