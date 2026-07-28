@@ -209,10 +209,24 @@ function simulatedDeepLFetch(
   };
 }
 
-function deeplFailureScenariosEnabled(): boolean {
+function deeplFailureScenariosEnabled(
+  headers: Record<string, string | undefined>
+): boolean {
   if (process.env.NODE_ENV === "test") return true;
-  return ["deploy-preview", "branch-deploy", "dev"].includes(
-    process.env.CONTEXT ?? ""
+  if (
+    ["deploy-preview", "branch-deploy", "dev"].includes(
+      process.env.CONTEXT ?? ""
+    )
+  ) {
+    return true;
+  }
+
+  const forwardedHost = headers["x-forwarded-host"]?.split(",")[0]?.trim();
+  const host = (forwardedHost ?? headers.host ?? headers.Host ?? "")
+    .toLowerCase()
+    .replace(/:\d+$/, "");
+  return /^(?:deploy-preview-\d+|[a-z0-9][a-z0-9-]*)--easyeyes\.netlify\.app$/.test(
+    host
   );
 }
 
@@ -307,7 +321,8 @@ async function handlePut(event: NetlifyEvent): Promise<NetlifyResponse> {
 
 async function handleTranslate(
   body: Record<string, unknown>,
-  skipSizeGuard: boolean
+  skipSizeGuard: boolean,
+  headers: Record<string, string | undefined>
 ): Promise<NetlifyResponse> {
   const changedPhrases = body.changedPhrases as Record<string, string>;
   const colorMask = (body.colorMask ?? {}) as Record<
@@ -380,7 +395,7 @@ async function handleTranslate(
 
   if (
     failureScenario !== undefined &&
-    !deeplFailureScenariosEnabled()
+    !deeplFailureScenariosEnabled(headers)
   ) {
     return jsonErr(400, "DeepL failure scenarios are disabled");
   }
@@ -553,11 +568,11 @@ async function handlePost(event: NetlifyEvent): Promise<NetlifyResponse> {
   }
 
   if (body.action === "translate") {
-    return handleTranslate(body, false);
+    return handleTranslate(body, false, event.headers);
   }
 
   if (body.action === "fullResync") {
-    return handleTranslate(body, true);
+    return handleTranslate(body, true, event.headers);
   }
 
   return jsonErr(400, `Unknown action: ${String(body.action)}`);

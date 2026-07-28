@@ -36,10 +36,13 @@ function makePutEvent(body: unknown) {
   };
 }
 
-function makePostEvent(body: unknown) {
+function makePostEvent(
+  body: unknown,
+  headers: Record<string, string> = {}
+) {
   return {
     httpMethod: "POST",
-    headers: { "x-phrases-secret": PHRASES_SECRET },
+    headers: { "x-phrases-secret": PHRASES_SECRET, ...headers },
     body: body === null ? null : JSON.stringify(body),
     queryStringParameters: {},
   };
@@ -702,6 +705,49 @@ describe("POST /phrases { action: 'translate' } — DeepL failure", () => {
           currentVersion: "1.0",
           testDeeplFailureScenario: "403",
         })
+      );
+
+      expect(res.statusCode).toBe(502);
+      expect(JSON.parse(res.body)).toMatchObject({
+        code: "DEEPL_TRANSLATION_FAILED",
+        deeplStatus: 403,
+        fatal: true,
+      });
+    } finally {
+      if (originalNodeEnv === undefined) delete process.env.NODE_ENV;
+      else process.env.NODE_ENV = originalNodeEnv;
+      if (originalContext === undefined) delete process.env.CONTEXT;
+      else process.env.CONTEXT = originalContext;
+      if (originalBranch === undefined) delete process.env.BRANCH;
+      else process.env.BRANCH = originalBranch;
+    }
+  });
+
+  test("a deploy-preview hostname enables scenarios when Netlify runtime context is unavailable", async () => {
+    const originalNodeEnv = process.env.NODE_ENV;
+    const originalContext = process.env.CONTEXT;
+    const originalBranch = process.env.BRANCH;
+    process.env.NODE_ENV = "production";
+    delete process.env.CONTEXT;
+    delete process.env.BRANCH;
+    mockFetch([
+      { url: /phrases\/currentVersion/, body: "1.0" },
+      { url: /phrasesVersions\/1_dot_0\/phrases/, body: SAMPLE_PHRASES },
+    ]);
+
+    try {
+      const res = await handler(
+        makePostEvent(
+          {
+            action: "translate",
+            changedPhrases: { hello: "Hello updated" },
+            colorMask: { hello: { fr: "#ffffff" } },
+            sentValues: { hello: { fr: "Bonjour" } },
+            currentVersion: "1.0",
+            testDeeplFailureScenario: "403",
+          },
+          { host: "deploy-preview-88--easyeyes.netlify.app" }
+        )
       );
 
       expect(res.statusCode).toBe(502);
