@@ -576,6 +576,38 @@ describe("POST /phrases { action: 'translate' } — DeepL failure", () => {
     });
     expect(capturedPuts()).toHaveLength(0);
   });
+
+  test("a plain-text DeepL failure preserves its technical detail", async () => {
+    mockFetch([
+      { url: /phrases\/currentVersion/, body: "1.0" },
+      { url: /phrasesVersions\/1_dot_0\/phrases/, body: SAMPLE_PHRASES },
+      {
+        url: "api.deepl.com/v2/translate",
+        body: "upstream unavailable",
+        ok: false,
+        status: 503,
+      },
+    ]);
+
+    const res = await handler(
+      makePostEvent({
+        action: "translate",
+        changedPhrases: { hello: "Hello updated" },
+        colorMask: { hello: { fr: "#ffffff" } },
+        sentValues: { hello: { fr: "Bonjour" } },
+        currentVersion: "1.0",
+      })
+    );
+
+    expect(res.statusCode).toBe(502);
+    expect(JSON.parse(res.body)).toMatchObject({
+      code: "DEEPL_TRANSLATION_FAILED",
+      deeplStatus: 503,
+      technicalDetail: "upstream unavailable",
+      fatal: true,
+    });
+    expect(capturedPuts()).toHaveLength(0);
+  });
 });
 
 // ── POST /phrases { action: "translate" } + nonCyanPhrases ───────────────────

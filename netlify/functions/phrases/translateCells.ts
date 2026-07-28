@@ -29,7 +29,11 @@ function technicalDetail(errorBody: unknown): string | undefined {
   if (errorBody === null) return undefined;
   let detail: string | undefined;
   if (typeof errorBody === "string") {
-    detail = errorBody;
+    try {
+      return technicalDetail(JSON.parse(errorBody));
+    } catch {
+      detail = errorBody;
+    }
   } else if (
     typeof errorBody === "object" &&
     errorBody !== null &&
@@ -44,6 +48,17 @@ function technicalDetail(errorBody: unknown): string | undefined {
     }
   }
   return detail?.slice(0, 500);
+}
+
+async function responseTechnicalDetail(response: {
+  json(): Promise<unknown>;
+  text?(): Promise<string>;
+}): Promise<string | undefined> {
+  if (response.text) {
+    const body = await response.text().catch(() => undefined);
+    if (body !== undefined) return technicalDetail(body);
+  }
+  return technicalDetail(await response.json().catch(() => undefined));
 }
 
 function deeplBaseUrl(apiKey: string): string {
@@ -110,6 +125,8 @@ async function callDeepL(
         typeof data !== "object" ||
         data === null ||
         !Array.isArray((data as { translations?: unknown }).translations) ||
+        (data as { translations: unknown[] }).translations.length !==
+          texts.length ||
         !(data as { translations: unknown[] }).translations.every(
           (translation) =>
             typeof translation === "object" &&
@@ -127,8 +144,7 @@ async function callDeepL(
       return results;
     }
 
-    const errorBody = await res.json().catch(() => undefined);
-    lastTechnicalDetail = technicalDetail(errorBody);
+    lastTechnicalDetail = await responseTechnicalDetail(res);
 
     if (RETRY_STATUSES.has(res.status)) {
       console.log("[deepl] retryable status, sleeping:", res.status);

@@ -596,4 +596,28 @@ describe("translateCells — DeepL authorization failure", () => {
       new DeepLTranslationError(200, "Malformed DeepL response"),
     );
   });
+
+  test("a DeepL response with the wrong translation count is fatal", async () => {
+    const deeplFetch = makeDeeplFetch([
+      { status: 200, body: { translations: [] } },
+    ]);
+    const deps: TranslateDeps = {
+      deeplFetch: deeplFetch as unknown as FetchLike,
+      googleFetch: jest.fn() as unknown as FetchLike,
+      googleApiKey: undefined,
+      deeplApiKey: "dkey",
+      sleep: noSleep,
+    };
+
+    await expect(
+      translateCells(
+        { k1: "Hello updated" },
+        { k1: { fr: "#ffffff" } },
+        { k1: { fr: "Bonjour" } },
+        deps,
+      ),
+    ).rejects.toEqual(
+      new DeepLTranslationError(200, "Malformed DeepL response"),
+    );
+  });
 });
