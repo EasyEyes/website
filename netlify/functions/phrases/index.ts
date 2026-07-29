@@ -150,11 +150,15 @@ function jsonOkGzipped(
   };
 }
 
-function jsonErr(statusCode: number, message: string): NetlifyResponse {
+function jsonErr(
+  statusCode: number,
+  message: string,
+  details: Record<string, unknown> = {}
+): NetlifyResponse {
   return {
     statusCode,
     headers: { ...JSON_HEADERS, "Cache-Control": CACHE.none },
-    body: JSON.stringify({ error: message }),
+    body: JSON.stringify({ error: message, ...details }),
   };
 }
 
@@ -358,10 +362,21 @@ async function handleTranslate(
     if (error instanceof DeepLTranslationError) {
       console.error("[phrases/translate] DeepL translation failed; aborting before Firebase write:", {
         status: error.status,
+        technicalDetail: error.technicalDetail,
       });
+      const statusDescription =
+        error.status === null ? "before receiving a response" : `status ${error.status}`;
       return jsonErr(
         502,
-        `DeepL rejected the translation request (status ${error.status}). No new phrases version was created.`
+        `DeepL rejected the translation request (${statusDescription}). No new phrases version was created.`,
+        {
+          code: "DEEPL_TRANSLATION_FAILED",
+          deeplStatus: error.status,
+          ...(error.technicalDetail
+            ? { technicalDetail: error.technicalDetail }
+            : {}),
+          fatal: true,
+        }
       );
     }
     throw error;

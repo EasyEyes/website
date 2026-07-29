@@ -23,6 +23,7 @@ export type FetchLike = (
   ok: boolean;
   status: number;
   json(): Promise<unknown>;
+  text?(): Promise<string>;
 }>;
 
 export type TranslateDeps = {
