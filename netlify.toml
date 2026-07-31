@@ -6,10 +6,6 @@ command = "npm run netlify"
 [[plugins]]
 package = "@netlify/plugin-functions-install-core"
 
-# Persist ~/.npm/_cacache across builds (speeds up nested npm ci runs)
-[[plugins]]
-package = "./netlify/plugins/npm-cache"
-
 [[headers]]
 for = "/hdr/*"
 [headers.values]
