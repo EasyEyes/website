@@ -89,6 +89,10 @@ beforeEach(() => {
   jest.resetAllMocks();
 });
 
+afterEach(() => {
+  jest.restoreAllMocks();
+});
+
 describe("POST /glossary — authentication", () => {
   test("missing x-glossary-secret header → 401", async () => {
     const res = await handler(makeEvent({ headers: {} }));
@@ -123,6 +127,24 @@ describe("POST /glossary — body validation", () => {
 });
 
 describe("POST /glossary — versioning", () => {
+  test("stores the publication date with a newly released version", async () => {
+    jest.spyOn(Date, "now").mockReturnValue(1786190400000);
+    mockFetch([{ url: /currentVersion/, body: null }]);
+
+    const rows = makeRows([{ name: "_about" }]);
+    const res = await handler(makeEvent({ body: JSON.stringify({ rows }) }));
+
+    expect(res.statusCode).toBe(200);
+    expect(capturedPuts()).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          url: expect.stringContaining("/versions/1_dot_0/publishedAt"),
+          body: "2026-08-08T12:00:00.000Z",
+        }),
+      ])
+    );
+  });
+
   test("first-ever push creates version 1.0", async () => {
     mockFetch([{ url: /currentVersion/, body: null }]);
 
@@ -233,6 +255,34 @@ describe("POST /glossary — versioning", () => {
 
     expect(res.statusCode).toBe(200);
     expect(JSON.parse(res.body)).toEqual({ version: "3.0" });
+  });
+});
+
+describe("GET /glossary?versionOnly=1", () => {
+  test("returns the current version and its publication date", async () => {
+    mockFetch([
+      { url: /currentVersion/, body: "2.3" },
+      {
+        url: /versions\/2_dot_3\/publishedAt/,
+        body: "2026-08-08T12:00:00.000Z",
+      },
+    ]);
+
+    const res = await handler(makeGetEvent({ versionOnly: "1" }));
+
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body)).toEqual({
+      version: "2.3",
+      publishedAt: "2026-08-08T12:00:00.000Z",
+    });
+  });
+
+  test("returns a missing publication date without backfilling it", async () => {
+    mockFetch([{ url: /currentVersion/, body: "2.3" }]);
+
+    const res = await handler(makeGetEvent({ versionOnly: "1" }));
+
+    expect(JSON.parse(res.body)).toEqual({ version: "2.3", publishedAt: null });
   });
 });
 
@@ -554,18 +604,21 @@ describe("GET /glossary?username=&experiment= — per-experiment version lookup"
 });
 
 describe("GET /glossary?versionOnly=1 — lightweight version check", () => {
-  test("returns { version } without reading glossary data", async () => {
+  test("returns version metadata without reading glossary data", async () => {
     mockFetch([{ url: /currentVersion/, body: "2.0" }]);
 
     const res = await handler(makeGetEvent({ versionOnly: "1" }));
 
     expect(res.statusCode).toBe(200);
-    expect(JSON.parse(res.body)).toEqual({ version: "2.0" });
+    expect(JSON.parse(res.body)).toEqual({
+      version: "2.0",
+      publishedAt: null,
+    });
 
     const fetchedUrls: string[] = (global as unknown as { fetch: jest.Mock }).fetch.mock.calls.map(
       ([url]: [string]) => url
     );
-    expect(fetchedUrls.some((u) => u.includes("/versions/"))).toBe(false);
+    expect(fetchedUrls.some((u) => u.includes("/glossary.json"))).toBe(false);
   });
 
   test("returns { version: null } when Firebase has no currentVersion", async () => {
@@ -574,7 +627,10 @@ describe("GET /glossary?versionOnly=1 — lightweight version check", () => {
     const res = await handler(makeGetEvent({ versionOnly: "1" }));
 
     expect(res.statusCode).toBe(200);
-    expect(JSON.parse(res.body)).toEqual({ version: null });
+    expect(JSON.parse(res.body)).toEqual({
+      version: null,
+      publishedAt: null,
+    });
   });
 });
 

@@ -26,7 +26,6 @@ const JSON_HEADERS = { "Content-Type": "application/json" };
 function firebaseUrl(path: string): string {
   return `${FIREBASE_ROOT}/${path}.json?auth=${process.env.FIREBASE_DB}`;
 }
-
 // Firebase is a live dependency in the request path. A slow or degraded
 // Firebase must fail fast (well under Netlify's 10s function timeout) and
 // recover from transient blips, rather than hanging until Netlify kills the
@@ -183,7 +182,12 @@ async function handleGet(event: NetlifyEvent): Promise<NetlifyResponse> {
   if (params.versionOnly !== undefined) {
     // The freshness oracle the compiler relies on — must never be cached.
     const version = await getCurrentVersion();
-    return jsonOk({ version }, CACHE.none);
+    const publishedAt = version
+      ? ((await firebaseGet(
+          `phrasesVersions/${encodeFirebaseSegment(version)}/publishedAt`
+        )) as string | null)
+      : null;
+    return jsonOk({ version, publishedAt }, CACHE.none);
   }
 
   if (params.v !== undefined) {
@@ -434,6 +438,18 @@ async function handleTranslate(
   console.log("[phrases/translate] Firebase PUT phrases:", { ok: phrasesResult.ok, status: phrasesResult.status, errorBody: phrasesResult.errorBody });
   if (!phrasesResult.ok) {
     return jsonErr(502, `Firebase write failed for phrases (status ${phrasesResult.status}): ${phrasesResult.errorBody ?? ""}`);
+  }
+
+  const publishedAt = new Date(Date.now()).toISOString();
+  const publicationResult = await firebasePut(
+    `phrasesVersions/${encodedNewVersion}/publishedAt`,
+    publishedAt
+  );
+  if (!publicationResult.ok) {
+    return jsonErr(
+      502,
+      `Firebase write failed for phrases publication date (status ${publicationResult.status}): ${publicationResult.errorBody ?? ""}`
+    );
   }
 
   const versionResult = await firebasePut(

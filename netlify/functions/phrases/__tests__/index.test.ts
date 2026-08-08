@@ -91,6 +91,9 @@ beforeEach(() => {
   delete process.env.GOOGLE_API_KEY;
   jest.resetAllMocks();
 });
+afterEach(() => {
+  jest.restoreAllMocks();
+});
 
 // ── GET /phrases (bare) ────────────────────────────────────────────────────────
 
@@ -130,18 +133,39 @@ describe("GET /phrases — bare (no query params)", () => {
 // ── GET /phrases?versionOnly=1 ─────────────────────────────────────────────────
 
 describe("GET /phrases?versionOnly=1", () => {
-  test("returns { version } without reading phrases data", async () => {
+  test("returns the current version and its publication date", async () => {
+    mockFetch([
+      { url: /phrases\/currentVersion/, body: "2.3" },
+      {
+        url: /phrasesVersions\/2_dot_3\/publishedAt/,
+        body: "2026-08-08T12:00:00.000Z",
+      },
+    ]);
+
+    const res = await handler(makeGetEvent({ versionOnly: "1" }));
+
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body)).toEqual({
+      version: "2.3",
+      publishedAt: "2026-08-08T12:00:00.000Z",
+    });
+  });
+
+  test("returns version metadata without reading phrases data", async () => {
     mockFetch([{ url: /phrases\/currentVersion/, body: "2.3" }]);
 
     const res = await handler(makeGetEvent({ versionOnly: "1" }));
 
     expect(res.statusCode).toBe(200);
-    expect(JSON.parse(res.body)).toEqual({ version: "2.3" });
+    expect(JSON.parse(res.body)).toEqual({
+      version: "2.3",
+      publishedAt: null,
+    });
 
     const fetchedUrls: string[] = (
       global as unknown as { fetch: jest.Mock }
     ).fetch.mock.calls.map(([url]: [string]) => url);
-    expect(fetchedUrls.some((u) => u.includes("phrasesVersions"))).toBe(false);
+    expect(fetchedUrls.some((u) => u.includes("/phrases.json"))).toBe(false);
   });
 
   test("returns { version: null } when Firebase has no currentVersion", async () => {
@@ -149,7 +173,10 @@ describe("GET /phrases?versionOnly=1", () => {
 
     const res = await handler(makeGetEvent({ versionOnly: "1" }));
     expect(res.statusCode).toBe(200);
-    expect(JSON.parse(res.body)).toEqual({ version: null });
+    expect(JSON.parse(res.body)).toEqual({
+      version: null,
+      publishedAt: null,
+    });
   });
 });
 
@@ -418,6 +445,34 @@ describe("POST /phrases { action: 'translate' } — guards", () => {
 });
 
 describe("POST /phrases { action: 'translate' } — happy path", () => {
+  test("stores the publication date with a newly released version", async () => {
+    jest.spyOn(Date, "now").mockReturnValue(1786190400000);
+    mockFetch([
+      { url: /phrases\/currentVersion/, body: "1.0" },
+      { url: /phrasesVersions\/1_dot_0\/phrases/, body: SAMPLE_PHRASES },
+    ]);
+
+    const res = await handler(
+      makePostEvent({
+        action: "translate",
+        changedPhrases: { hello: "Hello updated" },
+        colorMask: {},
+        sentValues: {},
+        currentVersion: "1.0",
+      })
+    );
+
+    expect(res.statusCode).toBe(200);
+    expect(capturedPuts()).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          url: expect.stringContaining("/phrasesVersions/1_dot_1/publishedAt"),
+          body: "2026-08-08T12:00:00.000Z",
+        }),
+      ])
+    );
+  });
+
   test("writes new version to Firebase and returns { newVersion, translatedRows }", async () => {
     mockFetch([
       { url: /phrases\/currentVersion/, body: "1.0" },

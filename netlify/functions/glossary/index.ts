@@ -86,7 +86,6 @@ function transformRawRows(rows: string[][]): Record<string, GlossaryEntry> {
 
   return result;
 }
-
 function firebaseUrl(path: string): string {
   return `${FIREBASE_ROOT}/${path}.json?auth=${process.env.FIREBASE_DB}`;
 }
@@ -268,8 +267,13 @@ async function handleGet(event: NetlifyEvent): Promise<NetlifyResponse> {
 
   if (params.versionOnly !== undefined) {
     const version = (await firebaseGet("currentVersion")) as string | null;
+    const publishedAt = version
+      ? ((await firebaseGet(
+          `versions/${encodeFirebaseSegment(version)}/publishedAt`,
+        )) as string | null)
+      : null;
     console.log(`[glossary] GET versionOnly currentVersion=${version}`);
-    return jsonOk({ version }, CACHE.none);
+    return jsonOk({ version, publishedAt }, CACHE.none);
   }
 
   const currentVersion = (await firebaseGet("currentVersion")) as string | null;
@@ -417,6 +421,22 @@ async function handlePost(event: NetlifyEvent): Promise<NetlifyResponse> {
         error: "Firebase write failed for glossary",
         firebaseStatus: glossaryResult.status,
         firebaseBody: glossaryResult.body,
+      }),
+    };
+  }
+
+  const publishedAt = new Date(Date.now()).toISOString();
+  const publicationResult = await firebasePut(
+    `versions/${encodedVersion}/publishedAt`,
+    publishedAt,
+  );
+  if (!publicationResult.ok) {
+    return {
+      statusCode: 502,
+      body: JSON.stringify({
+        error: "Firebase write failed for glossary publication date",
+        firebaseStatus: publicationResult.status,
+        firebaseBody: publicationResult.body,
       }),
     };
   }
