@@ -288,6 +288,10 @@ async function handleTranslate(
       : null,
     skipSizeGuard,
   });
+  console.log("[phrases/translate] non-white spreadsheet cells:", {
+    phraseCount: Object.keys(nonCyanPhrases).length,
+    phrases: nonCyanPhrases,
+  });
 
   if (
     !changedPhrases ||
