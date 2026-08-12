@@ -465,6 +465,48 @@ describe("translateCells — HTML tag protection", () => {
   });
 });
 
+describe("translateCells — emoji protection", () => {
+  test("sends emoji as ignored XML and restores them after DeepL repositions them", async () => {
+    const deeplFetch = makeDeeplFetch([
+      {
+        status: 200,
+        body: {
+          translations: [
+            {
+              text: 'Arrêter avec <ee-icon id="1">❤️</ee-icon> puis <ee-icon id="0">🚫</ee-icon>.',
+            },
+          ],
+        },
+      },
+    ]);
+    const deps: TranslateDeps = {
+      deeplFetch: deeplFetch as unknown as FetchLike,
+      googleFetch: jest.fn() as unknown as FetchLike,
+      googleApiKey: undefined,
+      deeplApiKey: "dkey",
+      sleep: noSleep,
+    };
+
+    const result = await translateCells(
+      { k1: "Stop with 🚫, then ❤️." },
+      { k1: { fr: "#ffffff" } },
+      { k1: { fr: "" } },
+      deps,
+    );
+
+    const request = JSON.parse(deeplFetch.mock.calls[0][1].body);
+    expect(request.text).toEqual([
+      'Stop with <ee-icon id="0">🚫</ee-icon>, then <ee-icon id="1">❤️</ee-icon>.',
+    ]);
+    expect(request).toMatchObject({
+      tag_handling: "xml",
+      tag_handling_version: "v2",
+      ignore_tags: ["ee-icon"],
+    });
+    expect(result.k1.fr).toBe("Arrêter avec ❤️ puis 🚫.");
+  });
+});
+
 describe("translateCells — unmapped language failure", () => {
   test("DeepL 400 for unknown lang code → rejects instead of passing through the existing translation", async () => {
     const deeplFetch = makeDeeplFetch([{ status: 400, body: null }]);
@@ -556,7 +598,9 @@ describe("translateCells — DeepL authorization failure", () => {
     const deps: TranslateDeps = {
       deeplFetch: jest
         .fn()
-        .mockRejectedValue(new Error("connection reset")) as unknown as FetchLike,
+        .mockRejectedValue(
+          new Error("connection reset"),
+        ) as unknown as FetchLike,
       googleFetch: jest.fn() as unknown as FetchLike,
       googleApiKey: undefined,
       deeplApiKey: "dkey",
@@ -570,9 +614,7 @@ describe("translateCells — DeepL authorization failure", () => {
         { k1: { fr: "Bonjour" } },
         deps,
       ),
-    ).rejects.toEqual(
-      new DeepLTranslationError(null, "connection reset"),
-    );
+    ).rejects.toEqual(new DeepLTranslationError(null, "connection reset"));
   });
 
   test("a malformed successful DeepL response rejects as a fatal translation error", async () => {

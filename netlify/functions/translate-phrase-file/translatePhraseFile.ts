@@ -1,5 +1,6 @@
 import * as zlib from "zlib";
 import * as XLSX from "xlsx";
+import { protectEmojiForDeepL, restoreEmojiFromDeepL } from "../shared/emojiProtection";
 
 export type FetchLike = (
   url: string,
@@ -42,28 +43,31 @@ function readZip(buf: Buffer): Map<string, Buffer> {
   const EOCD = 0x06054b50;
   let eocdOffset = -1;
   for (let i = buf.length - 22; i >= 0; i--) {
-    if (buf.readUInt32LE(i) === EOCD) { eocdOffset = i; break; }
+    if (buf.readUInt32LE(i) === EOCD) {
+      eocdOffset = i;
+      break;
+    }
   }
   if (eocdOffset < 0) throw new Error("Not a valid ZIP/xlsx");
 
   const numEntries = buf.readUInt16LE(eocdOffset + 8);
-  const cdOffset   = buf.readUInt32LE(eocdOffset + 16);
+  const cdOffset = buf.readUInt32LE(eocdOffset + 16);
 
   const files = new Map<string, Buffer>();
   let pos = cdOffset;
   for (let i = 0; i < numEntries; i++) {
-    const method         = buf.readUInt16LE(pos + 10);
-    const compSize       = buf.readUInt32LE(pos + 20);
-    const fileNameLen    = buf.readUInt16LE(pos + 28);
-    const extraLen       = buf.readUInt16LE(pos + 30);
-    const commentLen     = buf.readUInt16LE(pos + 32);
-    const localOffset    = buf.readUInt32LE(pos + 42);
-    const fileName       = buf.toString("utf8", pos + 46, pos + 46 + fileNameLen);
+    const method = buf.readUInt16LE(pos + 10);
+    const compSize = buf.readUInt32LE(pos + 20);
+    const fileNameLen = buf.readUInt16LE(pos + 28);
+    const extraLen = buf.readUInt16LE(pos + 30);
+    const commentLen = buf.readUInt16LE(pos + 32);
+    const localOffset = buf.readUInt32LE(pos + 42);
+    const fileName = buf.toString("utf8", pos + 46, pos + 46 + fileNameLen);
     pos += 46 + fileNameLen + extraLen + commentLen;
 
-    const lhNameLen  = buf.readUInt16LE(localOffset + 26);
+    const lhNameLen = buf.readUInt16LE(localOffset + 26);
     const lhExtraLen = buf.readUInt16LE(localOffset + 28);
-    const dataStart  = localOffset + 30 + lhNameLen + lhExtraLen;
+    const dataStart = localOffset + 30 + lhNameLen + lhExtraLen;
     const compressed = buf.slice(dataStart, dataStart + compSize);
 
     files.set(fileName, method === 0 ? compressed : zlib.inflateRawSync(compressed));
@@ -77,15 +81,15 @@ function writeZip(files: Map<string, Buffer>): Buffer {
   let offset = 0;
 
   for (const [name, data] of files) {
-    const nb   = Buffer.from(name, "utf8");
+    const nb = Buffer.from(name, "utf8");
     const comp = zlib.deflateRawSync(data, { level: 6 });
-    const crc  = zlibCrc32(data);
+    const crc = zlibCrc32(data);
 
     const lh = Buffer.alloc(30 + nb.length);
     lh.writeUInt32LE(0x04034b50, 0);
     lh.writeUInt16LE(20, 4);
     lh.writeUInt16LE(0, 6);
-    lh.writeUInt16LE(8, 8);   // DEFLATE
+    lh.writeUInt16LE(8, 8); // DEFLATE
     lh.writeUInt16LE(0, 10);
     lh.writeUInt16LE(0, 12);
     lh.writeUInt32LE(crc, 14);
@@ -120,8 +124,8 @@ function writeZip(files: Map<string, Buffer>): Buffer {
     offset += lh.length + comp.length;
   }
 
-  const cdBuf  = Buffer.concat(centralDir);
-  const eocdr  = Buffer.alloc(22);
+  const cdBuf = Buffer.concat(centralDir);
+  const eocdr = Buffer.alloc(22);
   eocdr.writeUInt32LE(0x06054b50, 0);
   eocdr.writeUInt16LE(0, 4);
   eocdr.writeUInt16LE(0, 6);
@@ -146,14 +150,11 @@ function appendSharedStrings(
 
   const countMatch = xml.match(/uniqueCount="(\d+)"/);
   const startIndex = countMatch ? parseInt(countMatch[1], 10) : 0;
-  const total      = startIndex + newStrings.length;
+  const total = startIndex + newStrings.length;
 
   const entries = newStrings
     .map((s) => {
-      const esc = s
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;");
+      const esc = s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
       return `<si><t>${esc}</t></si>`;
     })
     .join("");
@@ -171,22 +172,24 @@ function patchSheetCells(xml: string, updates: Map<string, number>): string {
   for (const [addr, newIndex] of updates) {
     // Self-closing: <c r="C2" ... />
     const selfRe = new RegExp(`<c r="${addr}"([^/]*)\\/>`, "");
-    const selfM  = selfRe.exec(result);
+    const selfM = selfRe.exec(result);
     if (selfM) {
-      const attrs    = ensureSharedStringType(selfM[1]);
-      result = result.slice(0, selfM.index)
-        + `<c r="${addr}"${attrs}><v>${newIndex}</v></c>`
-        + result.slice(selfM.index + selfM[0].length);
+      const attrs = ensureSharedStringType(selfM[1]);
+      result =
+        result.slice(0, selfM.index) +
+        `<c r="${addr}"${attrs}><v>${newIndex}</v></c>` +
+        result.slice(selfM.index + selfM[0].length);
       continue;
     }
     // Paired: <c r="C2" ...>...</c>
     const pairedRe = new RegExp(`<c r="${addr}"([^>]*)>[\\s\\S]*?<\\/c>`, "");
-    const pairedM  = pairedRe.exec(result);
+    const pairedM = pairedRe.exec(result);
     if (pairedM) {
       const attrs = ensureSharedStringType(pairedM[1]);
-      result = result.slice(0, pairedM.index)
-        + `<c r="${addr}"${attrs}><v>${newIndex}</v></c>`
-        + result.slice(pairedM.index + pairedM[0].length);
+      result =
+        result.slice(0, pairedM.index) +
+        `<c r="${addr}"${attrs}><v>${newIndex}</v></c>` +
+        result.slice(pairedM.index + pairedM[0].length);
     }
   }
   return result;
@@ -205,7 +208,7 @@ const DEEPL_CODE_MAP: Record<string, string> = {
   "zh-CN": "ZH-HANS",
   "zh-TW": "ZH-HANT",
   no: "NB",
-  "pt-pt": "PT-PT",
+  "pt-pt": "PT-PT"
 };
 
 function toDeeplTargetLang(lang: string): string {
@@ -213,9 +216,7 @@ function toDeeplTargetLang(lang: string): string {
 }
 
 function deeplBaseUrl(apiKey: string): string {
-  return apiKey.endsWith(":fx")
-    ? "https://api-free.deepl.com"
-    : "https://api.deepl.com";
+  return apiKey.endsWith(":fx") ? "https://api-free.deepl.com" : "https://api.deepl.com";
 }
 
 function isWhiteOrNoColor(cell: XLSX.CellObject | undefined): boolean {
@@ -257,6 +258,13 @@ async function callDeepL(
     text: texts,
     source_lang: sourceLang.toUpperCase(),
     target_lang: toDeeplTargetLang(targetLang),
+    ...(texts.some((text) => text.includes("<ee-icon "))
+      ? {
+          tag_handling: "xml",
+          tag_handling_version: "v2",
+          ignore_tags: ["ee-icon"]
+        }
+      : {})
   };
   console.log(`[DeepL] request to ${targetLang}:`, JSON.stringify(requestBody));
 
@@ -265,9 +273,9 @@ async function callDeepL(
       method: "POST",
       headers: {
         Authorization: `DeepL-Auth-Key ${deps.deeplApiKey}`,
-        "Content-Type": "application/json",
+        "Content-Type": "application/json"
       },
-      body: JSON.stringify(requestBody),
+      body: JSON.stringify(requestBody)
     });
 
     console.log(`[DeepL] response status for ${targetLang}: ${res.status}`);
@@ -288,14 +296,10 @@ async function callDeepL(
       continue;
     }
 
-    throw new Error(
-      `DeepL translation to "${targetLang}" failed with status ${res.status}`
-    );
+    throw new Error(`DeepL translation to "${targetLang}" failed with status ${res.status}`);
   }
 
-  throw new Error(
-    `DeepL translation to "${targetLang}" failed after 3 attempts`
-  );
+  throw new Error(`DeepL translation to "${targetLang}" failed after 3 attempts`);
 }
 
 // Q&A phrases are encoded as "SHORTCUT|correctAnswer|question|answer1|answer2|...".
@@ -304,9 +308,10 @@ async function callDeepL(
 // e.g. "PRED||Is there anything..." losing its "PRED||" prefix). So instead of trusting
 // DeepL to preserve non-language scaffolding, we carve the cell into segments, translate
 // only the natural-language ones, and rejoin with the original pipes.
-function splitForTranslation(
-  text: string
-): { segments: string[]; translatable: boolean[] } {
+function splitForTranslation(text: string): {
+  segments: string[];
+  translatable: boolean[];
+} {
   const segments = text.split("|");
   if (segments.length === 1) {
     return { segments, translatable: [true] };
@@ -326,7 +331,7 @@ async function callGoogle(text: string, deps: Deps): Promise<string> {
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ q: text, target: "kn", format: "text" }),
+      body: JSON.stringify({ q: text, target: "kn", format: "text" })
     }
   );
 
@@ -344,10 +349,7 @@ async function callGoogle(text: string, deps: Deps): Promise<string> {
 // Main entry point
 // ---------------------------------------------------------------------------
 
-export async function translatePhraseFile(
-  xlsxBuffer: Buffer,
-  deps: Deps
-): Promise<Buffer> {
+export async function translatePhraseFile(xlsxBuffer: Buffer, deps: Deps): Promise<Buffer> {
   // Read as raw ZIP so we can patch styles/sheet XML without SheetJS write
   const zipFiles = readZip(xlsxBuffer);
 
@@ -367,18 +369,23 @@ export async function translatePhraseFile(
   }
 
   if (langCodeRow === -1) {
-    throw new Error(
-      'Phrase file is missing the required "LanguageCode" row.'
-    );
+    throw new Error('Phrase file is missing the required "LanguageCode" row.');
   }
 
   // Column 1 (B) = source language
   const sourceCell = ws[XLSX.utils.encode_cell({ r: langCodeRow, c: 1 })];
   const sourceLang = sourceCell ? String(sourceCell.v) : "en";
-  console.log(`[translate] LanguageCode row index: ${langCodeRow}, sourceLang: ${sourceLang}, sheet range: ${ws["!ref"]}`);
+  console.log(
+    `[translate] LanguageCode row index: ${langCodeRow}, sourceLang: ${sourceLang}, sheet range: ${ws["!ref"]}`
+  );
 
   // Collect target language columns (index 2+)
-  type ColJob = { colIdx: number; langCode: string; rows: number[]; texts: string[] };
+  type ColJob = {
+    colIdx: number;
+    langCode: string;
+    rows: number[];
+    texts: string[];
+  };
   const deeplCols: ColJob[] = [];
   const googleCol: ColJob | null = (() => {
     let g: ColJob | null = null;
@@ -394,11 +401,12 @@ export async function translatePhraseFile(
         if (r === langCodeRow) continue;
         const addr = XLSX.utils.encode_cell({ r, c });
         const cell = ws[addr];
-        const bg = (cell?.s as { fgColor?: { rgb?: string } } | undefined)
-          ?.fgColor?.rgb;
+        const bg = (cell?.s as { fgColor?: { rgb?: string } } | undefined)?.fgColor?.rgb;
         const shouldTranslate = isWhiteOrNoColor(cell);
         console.log(
-          `[bg-check] ${addr} t=${cell?.t ?? "undefined"} fgColor=${bg ?? "none"} shouldTranslate=${shouldTranslate}`
+          `[bg-check] ${addr} t=${cell?.t ?? "undefined"} fgColor=${
+            bg ?? "none"
+          } shouldTranslate=${shouldTranslate}`
         );
         if (!shouldTranslate) continue;
         // Source text comes from column B (index 1) of the same row
@@ -408,7 +416,9 @@ export async function translatePhraseFile(
         texts.push(srcText);
       }
 
-      console.log(`[translate] col ${c} lang="${langCode}": ${rows.length} cells queued for translation`);
+      console.log(
+        `[translate] col ${c} lang="${langCode}": ${rows.length} cells queued for translation`
+      );
       if (langCode === "kn") {
         g = { colIdx: c, langCode, rows, texts };
       } else {
@@ -431,11 +441,24 @@ export async function translatePhraseFile(
       // Flatten every translatable segment across all rows in this column into
       // one list, so the SHORTCUT tokens and numeric answer options never reach
       // DeepL and batching stays within DeepL's per-request text limit.
-      type Piece = { rowIdx: number; segIdx: number; text: string };
+      type Piece = {
+        rowIdx: number;
+        segIdx: number;
+        text: string;
+        icons: string[];
+      };
       const pieces: Piece[] = [];
       parsed.forEach(({ segments, translatable }, rowIdx) => {
         segments.forEach((seg, segIdx) => {
-          if (translatable[segIdx]) pieces.push({ rowIdx, segIdx, text: seg });
+          if (translatable[segIdx]) {
+            const protectedText = protectEmojiForDeepL(seg);
+            pieces.push({
+              rowIdx,
+              segIdx,
+              text: protectedText.text,
+              icons: protectedText.icons
+            });
+          }
         });
       });
 
@@ -449,7 +472,10 @@ export async function translatePhraseFile(
           deps
         );
         batch.forEach((p, j) =>
-          translatedBySeg.set(`${p.rowIdx}:${p.segIdx}`, translated[j])
+          translatedBySeg.set(
+            `${p.rowIdx}:${p.segIdx}`,
+            restoreEmojiFromDeepL(translated[j], p.icons)
+          )
         );
       }
 
@@ -483,19 +509,22 @@ export async function translatePhraseFile(
 
   // Locate the sheet XML and shared-strings files inside the ZIP
   const rawSheetPath =
-    (wb as unknown as { Directory?: { sheets?: string[] } }).Directory
-      ?.sheets?.[0] ?? "/xl/worksheets/sheet1.xml";
+    (wb as unknown as { Directory?: { sheets?: string[] } }).Directory?.sheets?.[0] ??
+    "/xl/worksheets/sheet1.xml";
   const sheetPath = rawSheetPath.startsWith("/") ? rawSheetPath.slice(1) : rawSheetPath;
 
   let ssPath = "";
   for (const key of zipFiles.keys()) {
-    if (/sharedStrings\.xml$/i.test(key)) { ssPath = key; break; }
+    if (/sharedStrings\.xml$/i.test(key)) {
+      ssPath = key;
+      break;
+    }
   }
 
   // Append translated strings to sharedStrings.xml
-  const ssXml            = ssPath ? (zipFiles.get(ssPath)?.toString("utf8") ?? "") : "";
+  const ssXml = ssPath ? zipFiles.get(ssPath)?.toString("utf8") ?? "" : "";
   const translationOrder = [...cellUpdates.entries()];
-  const newStrings       = translationOrder.map(([, t]) => t);
+  const newStrings = translationOrder.map(([, t]) => t);
   const { xml: newSsXml, startIndex } = appendSharedStrings(ssXml, newStrings);
 
   // Build addr → shared-string index map
@@ -503,7 +532,7 @@ export async function translatePhraseFile(
   translationOrder.forEach(([addr], i) => indexUpdates.set(addr, startIndex + i));
 
   // Patch the sheet XML (updates <v> for each translated cell, preserves s="N")
-  const sheetXml    = zipFiles.get(sheetPath)?.toString("utf8") ?? "";
+  const sheetXml = zipFiles.get(sheetPath)?.toString("utf8") ?? "";
   const newSheetXml = patchSheetCells(sheetXml, indexUpdates);
 
   // Return ZIP with only sharedStrings + sheet XML replaced; styles.xml untouched

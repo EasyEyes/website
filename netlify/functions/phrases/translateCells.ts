@@ -2,6 +2,10 @@ import {
   segmentHtmlTags,
   rejoinHtmlTagSegments,
 } from "../shared/htmlTagSegments";
+import {
+  protectEmojiForDeepL,
+  restoreEmojiFromDeepL,
+} from "../shared/emojiProtection";
 import type { PhraseMap, TranslateDeps } from "./types";
 
 const DEEPL_CODE_MAP: Record<string, string> = {
@@ -102,6 +106,13 @@ async function callDeepL(
           text: texts,
           target_lang: targetLang,
           source_lang: "EN",
+          ...(texts.some((text) => text.includes("<ee-icon "))
+            ? {
+                tag_handling: "xml",
+                tag_handling_version: "v2",
+                ignore_tags: ["ee-icon"],
+              }
+            : {}),
         }),
       });
     } catch (error) {
@@ -136,9 +147,11 @@ async function callDeepL(
       ) {
         throw new DeepLTranslationError(200, "Malformed DeepL response");
       }
-      const translations = (data as {
-        translations: Array<{ text: string }>;
-      }).translations;
+      const translations = (
+        data as {
+          translations: Array<{ text: string }>;
+        }
+      ).translations;
       const results = translations.map((t) => t.text);
       console.log("[deepl] translations:", { targetLang, results });
       return results;
@@ -176,11 +189,24 @@ async function translateForLanguage(
   // first; only the "text" segments are flattened, batched, and translated.
   const jobSegments = jobs.map((job) => segmentHtmlTags(job.engText));
 
-  type Piece = { jobIdx: number; segIdx: number; text: string };
+  type Piece = {
+    jobIdx: number;
+    segIdx: number;
+    text: string;
+    icons: string[];
+  };
   const pieces: Piece[] = [];
   jobSegments.forEach((segments, jobIdx) => {
     segments.forEach((seg, segIdx) => {
-      if (seg.type === "text") pieces.push({ jobIdx, segIdx, text: seg.value });
+      if (seg.type === "text") {
+        const protectedText = protectEmojiForDeepL(seg.value);
+        pieces.push({
+          jobIdx,
+          segIdx,
+          text: protectedText.text,
+          icons: protectedText.icons,
+        });
+      }
     });
   });
 
@@ -196,9 +222,12 @@ async function translateForLanguage(
       sleep,
     );
 
-    batch.forEach((p, j) =>
-      translatedBySeg.set(`${p.jobIdx}:${p.segIdx}`, translations[j]),
-    );
+    batch.forEach((p, j) => {
+      translatedBySeg.set(
+        `${p.jobIdx}:${p.segIdx}`,
+        restoreEmojiFromDeepL(translations[j], p.icons),
+      );
+    });
   }
 
   jobs.forEach((job, jobIdx) => {
