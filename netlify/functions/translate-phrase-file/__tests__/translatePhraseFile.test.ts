@@ -8,16 +8,14 @@ import { translatePhraseFile, type Deps } from "../translatePhraseFile";
 
 const noSleep = () => Promise.resolve();
 
-function makeDeeplFetch(
-  responses: Array<{ status: number; body?: unknown }>
-): jest.Mock {
+function makeDeeplFetch(responses: Array<{ status: number; body?: unknown }>): jest.Mock {
   let callCount = 0;
   return jest.fn(() => {
     const resp = responses[Math.min(callCount++, responses.length - 1)];
     return Promise.resolve({
       ok: resp.status >= 200 && resp.status < 300,
       status: resp.status,
-      json: () => Promise.resolve(resp.body),
+      json: () => Promise.resolve(resp.body)
     });
   });
 }
@@ -25,7 +23,7 @@ function makeDeeplFetch(
 function deeplOk(texts: string[]): { status: number; body: unknown } {
   return {
     status: 200,
-    body: { translations: texts.map((t) => ({ text: `[${t}]` })) },
+    body: { translations: texts.map((t) => ({ text: `[${t}]` })) }
   };
 }
 
@@ -36,8 +34,8 @@ function makeGoogleFetch(translatedText: string): jest.Mock {
       status: 200,
       json: () =>
         Promise.resolve({
-          data: { translations: [{ translatedText }] },
-        }),
+          data: { translations: [{ translatedText }] }
+        })
     })
   );
 }
@@ -55,9 +53,7 @@ function makeZip(entries: Array<{ name: string; data: string | Buffer }>): Buffe
     const nameBytes = Buffer.from(name, "utf8");
     const dataBytes = Buffer.isBuffer(data) ? data : Buffer.from(data, "utf8");
     const compressed = zlib.deflateRawSync(dataBytes, { level: 6 });
-    const crc = (zlib as unknown as { crc32(buf: Buffer): number }).crc32(
-      dataBytes
-    );
+    const crc = (zlib as unknown as { crc32(buf: Buffer): number }).crc32(dataBytes);
 
     const lh = Buffer.alloc(30 + nameBytes.length);
     lh.writeUInt32LE(0x04034b50, 0);
@@ -149,9 +145,7 @@ function buildPhraseXlsx(opts: {
 
   // Build sheet XML rows
   const colCount = 1 + 1 + targetColumns.length;
-  const colLetters = Array.from({ length: colCount }, (_, i) =>
-    String.fromCharCode(65 + i)
-  );
+  const colLetters = Array.from({ length: colCount }, (_, i) => String.fromCharCode(65 + i));
 
   const rows: string[] = [];
 
@@ -160,25 +154,20 @@ function buildPhraseXlsx(opts: {
     `<c r="${colLetters[0]}1" t="s"><v>${si("~LanguageCode")}</v></c>`,
     `<c r="${colLetters[1]}1" t="s"><v>${si(sourceCode)}</v></c>`,
     ...targetColumns.map(
-      (col, ci) =>
-        `<c r="${colLetters[2 + ci]}1" t="s"><v>${si(col.code)}</v></c>`
-    ),
+      (col, ci) => `<c r="${colLetters[2 + ci]}1" t="s"><v>${si(col.code)}</v></c>`
+    )
   ];
   rows.push(`<row r="1">${headerCells.join("")}</row>`);
 
   // Symbol rows
   symbols.forEach((sym, ri) => {
     const rowNum = ri + 2;
-    const cells: string[] = [
-      `<c r="${colLetters[0]}${rowNum}" t="s"><v>${si(sym)}</v></c>`,
-    ];
+    const cells: string[] = [`<c r="${colLetters[0]}${rowNum}" t="s"><v>${si(sym)}</v></c>`];
 
     const sc = sourceCells[ri];
     if (sc) {
       const styleAttr = sc.colored ? ' s="1"' : "";
-      cells.push(
-        `<c r="${colLetters[1]}${rowNum}" t="s"${styleAttr}><v>${si(sc.value)}</v></c>`
-      );
+      cells.push(`<c r="${colLetters[1]}${rowNum}" t="s"${styleAttr}><v>${si(sc.value)}</v></c>`);
     }
 
     targetColumns.forEach((col, ci) => {
@@ -203,8 +192,12 @@ function buildPhraseXlsx(opts: {
 </worksheet>`;
 
   const SS = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" count="${strings.length}" uniqueCount="${strings.length}">
-${strings.map((s) => `  <si><t>${s.replace(/&/g, "&amp;").replace(/</g, "&lt;")}</t></si>`).join("\n")}
+<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" count="${
+    strings.length
+  }" uniqueCount="${strings.length}">
+${strings
+  .map((s) => `  <si><t>${s.replace(/&/g, "&amp;").replace(/</g, "&lt;")}</t></si>`)
+  .join("\n")}
 </sst>`;
 
   return makeZip([
@@ -218,21 +211,21 @@ ${strings.map((s) => `  <si><t>${s.replace(/&/g, "&amp;").replace(/</g, "&lt;")}
   <Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
   <Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>
   <Override PartName="/xl/sharedStrings.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sharedStrings+xml"/>
-</Types>`,
+</Types>`
     },
     {
       name: "_rels/.rels",
       data: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
   <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>
-</Relationships>`,
+</Relationships>`
     },
     {
       name: "xl/workbook.xml",
       data: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
   <sheets><sheet name="Sheet1" sheetId="1" r:id="rId1"/></sheets>
-</workbook>`,
+</workbook>`
     },
     {
       name: "xl/_rels/workbook.xml.rels",
@@ -241,7 +234,7 @@ ${strings.map((s) => `  <si><t>${s.replace(/&/g, "&amp;").replace(/</g, "&lt;")}
   <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>
   <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
   <Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/sharedStrings" Target="sharedStrings.xml"/>
-</Relationships>`,
+</Relationships>`
     },
     { name: "xl/sharedStrings.xml", data: SS },
     {
@@ -260,9 +253,9 @@ ${strings.map((s) => `  <si><t>${s.replace(/&/g, "&amp;").replace(/</g, "&lt;")}
     <xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>
     <xf numFmtId="0" fontId="0" fillId="2" borderId="0" xfId="0" applyFill="1"/>
   </cellXfs>
-</styleSheet>`,
+</styleSheet>`
     },
-    { name: "xl/worksheets/sheet1.xml", data: SHEET },
+    { name: "xl/worksheets/sheet1.xml", data: SHEET }
   ]);
 }
 
@@ -282,7 +275,7 @@ describe("white/no-color cell in target column → translated via DeepL", () => 
       sourceCode: "en",
       symbols: ["~Greeting"],
       sourceCells: [{ value: "Hello" }],
-      targetColumns: [{ code: "fr", cells: [{ value: "" }] }],
+      targetColumns: [{ code: "fr", cells: [{ value: "" }] }]
     });
 
     const deeplFetch = makeDeeplFetch([deeplOk(["Bonjour"])]);
@@ -290,7 +283,7 @@ describe("white/no-color cell in target column → translated via DeepL", () => 
       deeplFetch: deeplFetch as unknown as Deps["deeplFetch"],
       googleFetch: jest.fn() as unknown as Deps["googleFetch"],
       deeplApiKey: "dkey",
-      sleep: noSleep,
+      sleep: noSleep
     };
 
     const out = await translatePhraseFile(buf, deps);
@@ -302,6 +295,44 @@ describe("white/no-color cell in target column → translated via DeepL", () => 
     expect(body.target_lang).toBe("FR");
     expect(body.source_lang).toBe("EN");
     expect(body.text).toEqual(["Hello"]);
+  });
+
+  test("emoji are ignored XML and restored at DeepL's translated position", async () => {
+    const buf = buildPhraseXlsx({
+      sourceCode: "en",
+      symbols: ["~Warning"],
+      sourceCells: [{ value: "Stop with 🚫, then ❤️." }],
+      targetColumns: [{ code: "fr", cells: [{ value: "" }] }]
+    });
+    const deeplFetch = makeDeeplFetch([
+      {
+        status: 200,
+        body: {
+          translations: [
+            {
+              text: 'Arrêter avec <ee-icon id="1">❤️</ee-icon> puis <ee-icon id="0">🚫</ee-icon>.'
+            }
+          ]
+        }
+      }
+    ]);
+    const deps: Deps = {
+      deeplFetch: deeplFetch as unknown as Deps["deeplFetch"],
+      googleFetch: jest.fn() as unknown as Deps["googleFetch"],
+      deeplApiKey: "dkey",
+      sleep: noSleep
+    };
+
+    const out = await translatePhraseFile(buf, deps);
+    const body = JSON.parse(deeplFetch.mock.calls[0][1].body);
+
+    expect(body).toMatchObject({
+      text: ['Stop with <ee-icon id="0">🚫</ee-icon>, then <ee-icon id="1">❤️</ee-icon>.'],
+      tag_handling: "xml",
+      tag_handling_version: "v2",
+      ignore_tags: ["ee-icon"]
+    });
+    expect(readCell(out, "C2")).toBe("Arrêter avec ❤️ puis 🚫.");
   });
 });
 
@@ -315,7 +346,7 @@ describe("source column skipped regardless of color", () => {
       sourceCode: "en",
       symbols: ["~Greeting"],
       sourceCells: [{ value: "Hello", colored: true }], // source col B has color but is always skipped
-      targetColumns: [{ code: "fr", cells: [{ value: "" }] }],
+      targetColumns: [{ code: "fr", cells: [{ value: "" }] }]
     });
 
     const deeplFetch = makeDeeplFetch([deeplOk(["Bonjour"])]);
@@ -323,7 +354,7 @@ describe("source column skipped regardless of color", () => {
       deeplFetch: deeplFetch as unknown as Deps["deeplFetch"],
       googleFetch: jest.fn() as unknown as Deps["googleFetch"],
       deeplApiKey: "dkey",
-      sleep: noSleep,
+      sleep: noSleep
     };
 
     const out = await translatePhraseFile(buf, deps);
@@ -347,9 +378,7 @@ describe("colored cell in target column → unchanged", () => {
       sourceCode: "en",
       symbols: ["~Greeting"],
       sourceCells: [{ value: "Hello" }],
-      targetColumns: [
-        { code: "fr", cells: [{ value: "Bonjour existant", colored: true }] },
-      ],
+      targetColumns: [{ code: "fr", cells: [{ value: "Bonjour existant", colored: true }] }]
     });
 
     const deeplFetch = jest.fn();
@@ -357,7 +386,7 @@ describe("colored cell in target column → unchanged", () => {
       deeplFetch: deeplFetch as unknown as Deps["deeplFetch"],
       googleFetch: jest.fn() as unknown as Deps["googleFetch"],
       deeplApiKey: "dkey",
-      sleep: noSleep,
+      sleep: noSleep
     };
 
     const out = await translatePhraseFile(buf, deps);
@@ -377,7 +406,7 @@ describe("missing LanguageCode row", () => {
     const buf = buildPhraseXlsx({
       sourceCode: "en",
       symbols: ["~Greeting"], // no ~LanguageCode — buildPhraseXlsx puts it in row 1 normally
-      targetColumns: [{ code: "fr", cells: [{ value: "", cyan: true }] }],
+      targetColumns: [{ code: "fr", cells: [{ value: "", cyan: true }] }]
     });
 
     // Patch: rebuild without the header row by reading and removing A1
@@ -385,17 +414,18 @@ describe("missing LanguageCode row", () => {
     const ws = wb.Sheets[wb.SheetNames[0]];
     // Overwrite A1 to remove ~LanguageCode
     ws["A1"] = { v: "~SomethingElse", t: "s" };
-    const patched = XLSX.write(wb, { type: "buffer", bookType: "xlsx" }) as Buffer;
+    const patched = XLSX.write(wb, {
+      type: "buffer",
+      bookType: "xlsx"
+    }) as Buffer;
 
     const deps: Deps = {
       deeplFetch: jest.fn() as unknown as Deps["deeplFetch"],
       googleFetch: jest.fn() as unknown as Deps["googleFetch"],
-      deeplApiKey: "dkey",
+      deeplApiKey: "dkey"
     };
 
-    await expect(translatePhraseFile(patched, deps)).rejects.toThrow(
-      /LanguageCode/i
-    );
+    await expect(translatePhraseFile(patched, deps)).rejects.toThrow(/LanguageCode/i);
   });
 });
 
@@ -409,7 +439,7 @@ describe("DeepL failure → throws", () => {
       sourceCode: "en",
       symbols: ["~Greeting"],
       sourceCells: [{ value: "Hello" }],
-      targetColumns: [{ code: "fr", cells: [{ value: "" }] }],
+      targetColumns: [{ code: "fr", cells: [{ value: "" }] }]
     });
 
     const deeplFetch = makeDeeplFetch([{ status: 500, body: null }]);
@@ -417,7 +447,7 @@ describe("DeepL failure → throws", () => {
       deeplFetch: deeplFetch as unknown as Deps["deeplFetch"],
       googleFetch: jest.fn() as unknown as Deps["googleFetch"],
       deeplApiKey: "dkey",
-      sleep: noSleep,
+      sleep: noSleep
     };
 
     await expect(translatePhraseFile(buf, deps)).rejects.toThrow(/500/);
@@ -428,25 +458,19 @@ describe("DeepL failure → throws", () => {
       sourceCode: "en",
       symbols: ["~Greeting"],
       sourceCells: [{ value: "Hello" }],
-      targetColumns: [{ code: "fr", cells: [{ value: "" }] }],
+      targetColumns: [{ code: "fr", cells: [{ value: "" }] }]
     });
 
     // Always 429 → 3 attempts then throw
-    const deeplFetch = makeDeeplFetch([
-      { status: 429 },
-      { status: 429 },
-      { status: 429 },
-    ]);
+    const deeplFetch = makeDeeplFetch([{ status: 429 }, { status: 429 }, { status: 429 }]);
     const deps: Deps = {
       deeplFetch: deeplFetch as unknown as Deps["deeplFetch"],
       googleFetch: jest.fn() as unknown as Deps["googleFetch"],
       deeplApiKey: "dkey",
-      sleep: noSleep,
+      sleep: noSleep
     };
 
-    await expect(translatePhraseFile(buf, deps)).rejects.toThrow(
-      /3 attempts|attempts/i
-    );
+    await expect(translatePhraseFile(buf, deps)).rejects.toThrow(/3 attempts|attempts/i);
     expect(deeplFetch).toHaveBeenCalledTimes(3);
   });
 });
@@ -461,7 +485,7 @@ describe("Kannada (kn) column → Google Translate", () => {
       sourceCode: "en",
       symbols: ["~Greeting"],
       sourceCells: [{ value: "Hello" }],
-      targetColumns: [{ code: "kn", cells: [{ value: "" }] }],
+      targetColumns: [{ code: "kn", cells: [{ value: "" }] }]
     });
 
     const deeplFetch = jest.fn();
@@ -471,7 +495,7 @@ describe("Kannada (kn) column → Google Translate", () => {
       googleFetch: googleFetch as unknown as Deps["googleFetch"],
       googleApiKey: "gkey",
       deeplApiKey: "dkey",
-      sleep: noSleep,
+      sleep: noSleep
     };
 
     const out = await translatePhraseFile(buf, deps);
@@ -498,11 +522,11 @@ describe("colored fill preserved after zip patching", () => {
         {
           code: "fr",
           cells: [
-            { value: "" },                         // white → translated
-            { value: "Au revoir", colored: true }, // colored → not translated, fill preserved
-          ],
-        },
-      ],
+            { value: "" }, // white → translated
+            { value: "Au revoir", colored: true } // colored → not translated, fill preserved
+          ]
+        }
+      ]
     });
 
     const deeplFetch = makeDeeplFetch([deeplOk(["Bonjour"])]);
@@ -510,7 +534,7 @@ describe("colored fill preserved after zip patching", () => {
       deeplFetch: deeplFetch as unknown as Deps["deeplFetch"],
       googleFetch: jest.fn() as unknown as Deps["googleFetch"],
       deeplApiKey: "dkey",
-      sleep: noSleep,
+      sleep: noSleep
     };
 
     const out = await translatePhraseFile(buf, deps);
@@ -525,7 +549,7 @@ describe("colored fill preserved after zip patching", () => {
     const wb2 = XLSX.read(out, { type: "buffer", cellStyles: true });
     const ws2 = wb2.Sheets[wb2.SheetNames[0]];
     const cell = ws2["C3"];
-    const rgb  = (cell?.s as { fgColor?: { rgb?: string } } | undefined)?.fgColor?.rgb ?? "";
+    const rgb = (cell?.s as { fgColor?: { rgb?: string } } | undefined)?.fgColor?.rgb ?? "";
     // Accept both 6-char "00FFFF" and 8-char "FF00FFFF" representations
     const hex = rgb.replace(/[^0-9A-Fa-f]/g, "");
     expect(hex.slice(-6).toUpperCase()).toBe("00FFFF");
@@ -550,10 +574,8 @@ describe("questionAndAnswer cell → shortcut and numeric options preserved", ()
     const buf = buildPhraseXlsx({
       sourceCode: "en",
       symbols: ["~Q"],
-      sourceCells: [
-        { value: "BTYSFL||Is beauty useful?|7|6|5|4|3|2|1" },
-      ],
-      targetColumns: [{ code: "fr", cells: [{ value: "" }] }],
+      sourceCells: [{ value: "BTYSFL||Is beauty useful?|7|6|5|4|3|2|1" }],
+      targetColumns: [{ code: "fr", cells: [{ value: "" }] }]
     });
 
     const deeplFetch = makeDeeplFetch([deeplOk(["La beauté est-elle utile ?"])]);
@@ -561,7 +583,7 @@ describe("questionAndAnswer cell → shortcut and numeric options preserved", ()
       deeplFetch: deeplFetch as unknown as Deps["deeplFetch"],
       googleFetch: jest.fn() as unknown as Deps["googleFetch"],
       deeplApiKey: "dkey",
-      sleep: noSleep,
+      sleep: noSleep
     };
 
     const out = await translatePhraseFile(buf, deps);
@@ -573,9 +595,7 @@ describe("questionAndAnswer cell → shortcut and numeric options preserved", ()
 
     // Reassembled cell keeps SHORTCUT and numbers verbatim, question translated.
     // (deeplOk() wraps the mocked translation in "[...]".)
-    expect(readCell(out, "C2")).toBe(
-      "BTYSFL||[La beauté est-elle utile ?]|7|6|5|4|3|2|1"
-    );
+    expect(readCell(out, "C2")).toBe("BTYSFL||[La beauté est-elle utile ?]|7|6|5|4|3|2|1");
   });
 
   test("freeform question with no pipes at all after shortcut||: shortcut preserved", async () => {
@@ -583,7 +603,7 @@ describe("questionAndAnswer cell → shortcut and numeric options preserved", ()
       sourceCode: "en",
       symbols: ["~Q"],
       sourceCells: [{ value: "PRED||Is there anything about you?" }],
-      targetColumns: [{ code: "fr", cells: [{ value: "" }] }],
+      targetColumns: [{ code: "fr", cells: [{ value: "" }] }]
     });
 
     const deeplFetch = makeDeeplFetch([deeplOk(["Y a-t-il quelque chose ?"])]);
@@ -591,7 +611,7 @@ describe("questionAndAnswer cell → shortcut and numeric options preserved", ()
       deeplFetch: deeplFetch as unknown as Deps["deeplFetch"],
       googleFetch: jest.fn() as unknown as Deps["googleFetch"],
       deeplApiKey: "dkey",
-      sleep: noSleep,
+      sleep: noSleep
     };
 
     const out = await translatePhraseFile(buf, deps);
@@ -606,7 +626,7 @@ describe("questionAndAnswer cell → shortcut and numeric options preserved", ()
       sourceCode: "en",
       symbols: ["~Greeting"],
       sourceCells: [{ value: "Hello" }],
-      targetColumns: [{ code: "fr", cells: [{ value: "" }] }],
+      targetColumns: [{ code: "fr", cells: [{ value: "" }] }]
     });
 
     const deeplFetch = makeDeeplFetch([deeplOk(["Bonjour"])]);
@@ -614,7 +634,7 @@ describe("questionAndAnswer cell → shortcut and numeric options preserved", ()
       deeplFetch: deeplFetch as unknown as Deps["deeplFetch"],
       googleFetch: jest.fn() as unknown as Deps["googleFetch"],
       deeplApiKey: "dkey",
-      sleep: noSleep,
+      sleep: noSleep
     };
 
     const out = await translatePhraseFile(buf, deps);
@@ -633,19 +653,19 @@ describe("multiple target columns → each translated", () => {
       sourceCells: [{ value: "Hello" }],
       targetColumns: [
         { code: "fr", cells: [{ value: "" }] },
-        { code: "es", cells: [{ value: "" }] },
-      ],
+        { code: "es", cells: [{ value: "" }] }
+      ]
     });
 
     const deeplFetch = makeDeeplFetch([
       deeplOk(["Bonjour"]), // fr batch
-      deeplOk(["Hola"]),    // es batch
+      deeplOk(["Hola"]) // es batch
     ]);
     const deps: Deps = {
       deeplFetch: deeplFetch as unknown as Deps["deeplFetch"],
       googleFetch: jest.fn() as unknown as Deps["googleFetch"],
       deeplApiKey: "dkey",
-      sleep: noSleep,
+      sleep: noSleep
     };
 
     const out = await translatePhraseFile(buf, deps);
@@ -656,8 +676,7 @@ describe("multiple target columns → each translated", () => {
     expect(deeplFetch).toHaveBeenCalledTimes(2);
 
     const langs = deeplFetch.mock.calls.map(
-      ([, init]: [string, { body: string }]) =>
-        JSON.parse(init.body).target_lang
+      ([, init]: [string, { body: string }]) => JSON.parse(init.body).target_lang
     );
     expect(langs).toContain("FR");
     expect(langs).toContain("ES");
