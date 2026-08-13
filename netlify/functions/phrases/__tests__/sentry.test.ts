@@ -1,10 +1,12 @@
 const mockInit = jest.fn();
 const mockCaptureException = jest.fn();
+const mockCaptureMessage = jest.fn();
 const mockFlush = jest.fn().mockResolvedValue(true);
 
 jest.mock("@sentry/node", () => ({
   init: mockInit,
   captureException: mockCaptureException,
+  captureMessage: mockCaptureMessage,
   flush: mockFlush,
 }));
 
@@ -55,6 +57,30 @@ describe("phrase persistence Sentry reporting", () => {
         attempts: 3,
       },
     });
+    expect(mockFlush).toHaveBeenCalledWith(2000);
+  });
+
+  test("captures temporary retranslateSelectedCells usage", async () => {
+    process.env.SENTRY_DSN = "https://public@example.ingest.sentry.io/123";
+    const { reportRetranslateSelectedCells } = await import("../sentry");
+
+    await reportRetranslateSelectedCells({
+      phraseCount: 2,
+      currentVersion: "1.4",
+    });
+
+    expect(mockCaptureMessage).toHaveBeenCalledWith(
+      "retranslateSelectedCells called",
+      {
+        level: "info",
+        tags: {
+          component: "phrases-api",
+          operation: "retranslateSelectedCells",
+          temporaryInstrumentation: "true",
+        },
+        extra: { phraseCount: 2, currentVersion: "1.4" },
+      },
+    );
     expect(mockFlush).toHaveBeenCalledWith(2000);
   });
 });

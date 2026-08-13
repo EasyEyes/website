@@ -5,7 +5,10 @@ import { DeepLTranslationError, translateCells } from "./translateCells";
 import { buildNewVersion } from "./buildNewVersion";
 import { encodeFirebaseSegment } from "../glossary/encodeFirebaseSegment";
 import { corsHeaders } from "../shared/cors";
-import { reportPersistenceVerificationFailure } from "./sentry";
+import {
+  reportPersistenceVerificationFailure,
+  reportRetranslateSelectedCells,
+} from "./sentry";
 import type { VersionedPhrases, PhraseMap, TranslateDeps } from "./types";
 
 type NetlifyEvent = {
@@ -401,6 +404,20 @@ async function handleTranslate(
       400,
       "Too many changed phrases (max 50 per synchronous call)",
     );
+  }
+
+  if (body.sentryEvent === "retranslateSelectedCells") {
+    try {
+      await reportRetranslateSelectedCells({
+        phraseCount: Object.keys(changedPhrases).length,
+        currentVersion: requestVersion ?? null,
+      });
+    } catch (error) {
+      console.error("[phrases/retranslate] Sentry reporting failed", {
+        event: "sentry_report_failed",
+        errorName: error instanceof Error ? error.name : "UnknownError",
+      });
+    }
   }
 
   const firebaseVersion = await getCurrentVersion();
