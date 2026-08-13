@@ -94,14 +94,28 @@ async function verifyFirebaseValue(
 ): Promise<boolean> {
   for (let attempt = 0; attempt < attempts; attempt++) {
     try {
-      if (isDeepStrictEqual(await firebaseGet(path), expected)) return true;
+      const matches = isDeepStrictEqual(await firebaseGet(path), expected);
+      const verificationLog = {
+        event: "firebase_read_after_write",
+        path,
+        attempt: attempt + 1,
+        maxAttempts: attempts,
+        outcome: matches ? "match" : "mismatch",
+      };
+      if (matches) {
+        console.log("[phrases/verification]", verificationLog);
+        return true;
+      }
+      console.warn("[phrases/verification]", verificationLog);
     } catch (error) {
-      console.warn(
-        `[phrases] Firebase verification read ${
-          attempt + 1
-        } failed for ${path}:`,
-        error,
-      );
+      console.warn("[phrases/verification]", {
+        event: "firebase_read_after_write",
+        path,
+        attempt: attempt + 1,
+        maxAttempts: attempts,
+        outcome: "read_error",
+        errorName: error instanceof Error ? error.name : "UnknownError",
+      });
     }
     if (attempt + 1 < attempts) {
       await new Promise((resolve) => setTimeout(resolve, 100 * (attempt + 1)));

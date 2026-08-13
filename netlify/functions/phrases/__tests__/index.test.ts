@@ -456,6 +456,7 @@ describe("POST /phrases { action: 'translate' } — guards", () => {
 
 describe("POST /phrases { action: 'translate' } — happy path", () => {
   test("reads the published phrases and current version back before returning success", async () => {
+    const logSpy = jest.spyOn(console, "log").mockImplementation();
     mockFetch([
       { url: /phrases\/currentVersion/, body: "1.0" },
       { url: /phrasesVersions\/1_dot_0\/phrases/, body: SAMPLE_PHRASES },
@@ -545,9 +546,24 @@ describe("POST /phrases { action: 'translate' } — happy path", () => {
           init?.method !== "PUT",
       ),
     ).toBe(true);
+    expect(logSpy).toHaveBeenCalledWith("[phrases/verification]", {
+      event: "firebase_read_after_write",
+      path: "phrasesVersions/1_dot_1/phrases",
+      attempt: 1,
+      maxAttempts: 3,
+      outcome: "match",
+    });
+    expect(logSpy).toHaveBeenCalledWith("[phrases/verification]", {
+      event: "firebase_read_after_write",
+      path: "phrases/currentVersion",
+      attempt: 1,
+      maxAttempts: 3,
+      outcome: "match",
+    });
   });
 
   test("returns a fatal error when Firebase read-back does not match the write", async () => {
+    const warnSpy = jest.spyOn(console, "warn").mockImplementation();
     mockFetch([
       { url: /phrases\/currentVersion/, body: "1.0" },
       { url: /phrasesVersions\/1_dot_0\/phrases/, body: SAMPLE_PHRASES },
@@ -583,6 +599,13 @@ describe("POST /phrases { action: 'translate' } — happy path", () => {
     expect(JSON.parse(res.body)).toMatchObject({
       code: "PERSISTENCE_VERIFICATION_FAILED",
       fatal: true,
+    });
+    expect(warnSpy).toHaveBeenLastCalledWith("[phrases/verification]", {
+      event: "firebase_read_after_write",
+      path: "phrasesVersions/1_dot_1/phrases",
+      attempt: 3,
+      maxAttempts: 3,
+      outcome: "mismatch",
     });
   });
 
