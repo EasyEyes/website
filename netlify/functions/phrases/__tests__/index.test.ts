@@ -8,7 +8,9 @@ const PHRASES_SECRET = "phrases-secret";
 // Gzipped responders return a base64 body; decode it back to the JSON payload.
 function decodeBody(res: { body: string; isBase64Encoded?: boolean }): unknown {
   if (res.isBase64Encoded) {
-    return JSON.parse(gunzipSync(Buffer.from(res.body, "base64")).toString("utf-8"));
+    return JSON.parse(
+      gunzipSync(Buffer.from(res.body, "base64")).toString("utf-8"),
+    );
   }
   return JSON.parse(res.body);
 }
@@ -53,24 +55,32 @@ type MockResponse = {
 };
 
 function mockFetch(responses: MockResponse[]) {
+  const storedValues = new Map<string, unknown>();
   (global as unknown as { fetch: jest.Mock }).fetch = jest.fn(
-    (url: string) => {
+    (url: string, init?: RequestInit) => {
       const match = responses.find((r) =>
         r.url instanceof RegExp
           ? r.url.test(url)
-          : url.includes(r.url as string)
+          : url.includes(r.url as string),
       );
       const ok = match?.ok ?? true;
       const status = match?.status ?? 200;
-      const body = match?.body ?? null;
+      if (init?.method === "PUT" && ok) {
+        storedValues.set(url, JSON.parse((init.body as string) ?? "null"));
+      }
+      const body = storedValues.has(url)
+        ? storedValues.get(url)
+        : match?.body ?? null;
       return Promise.resolve({
         ok,
         status,
         json: () => Promise.resolve(body),
         text: () =>
-          Promise.resolve(typeof body === "string" ? body : JSON.stringify(body)),
+          Promise.resolve(
+            typeof body === "string" ? body : JSON.stringify(body),
+          ),
       });
-    }
+    },
   );
 }
 
@@ -276,7 +286,7 @@ describe("GET /phrases — cache directives", () => {
     ]);
     const res = await handler(makeGetEvent());
     expect(cacheOf(res)).toBe(
-      "public, max-age=60, stale-while-revalidate=86400"
+      "public, max-age=60, stale-while-revalidate=86400",
     );
   });
 });
@@ -289,7 +299,7 @@ describe("GET /phrases — failure handling", () => {
 
   test("a Firebase failure returns a controlled, uncached 503 (not an opaque 502)", async () => {
     (global as unknown as { fetch: jest.Mock }).fetch = jest.fn(() =>
-      Promise.reject(new Error("Firebase unreachable"))
+      Promise.reject(new Error("Firebase unreachable")),
     );
 
     const res = await handler(makeGetEvent());
@@ -318,7 +328,7 @@ describe("GET /phrases — failure handling", () => {
         colorMask: {},
         sentValues: {},
         currentVersion: "1.0",
-      })
+      }),
     );
 
     expect(res.statusCode).toBe(502);
@@ -333,7 +343,7 @@ describe("PUT /phrases — version pinning", () => {
     mockFetch([{ url: /phrases\/currentVersion/, body: "1.7" }]);
 
     const res = await handler(
-      makePutEvent({ username: "alice", experimentName: "myExp" })
+      makePutEvent({ username: "alice", experimentName: "myExp" }),
     );
 
     expect(res.statusCode).toBe(200);
@@ -344,8 +354,8 @@ describe("PUT /phrases — version pinning", () => {
       puts.some(
         (p) =>
           p.url.includes("/users/alice/myExp/phrasesVersion") &&
-          p.body === "1.7"
-      )
+          p.body === "1.7",
+      ),
     ).toBe(true);
   });
 
@@ -379,7 +389,7 @@ describe("POST /phrases { action: 'diff' }", () => {
       makePostEvent({
         action: "diff",
         english: { hello: "Hello", newPhrase: "New text" },
-      })
+      }),
     );
 
     expect(res.statusCode).toBe(200);
@@ -396,7 +406,7 @@ describe("POST /phrases { action: 'diff' }", () => {
     mockFetch([{ url: /phrases\/currentVersion/, body: null }]);
 
     const res = await handler(
-      makePostEvent({ action: "diff", english: { a: "A", b: "B" } })
+      makePostEvent({ action: "diff", english: { a: "A", b: "B" } }),
     );
 
     expect(res.statusCode).toBe(200);
@@ -420,7 +430,7 @@ describe("POST /phrases { action: 'translate' } — guards", () => {
         colorMask: {},
         sentValues: {},
         currentVersion: "1.0",
-      })
+      }),
     );
 
     expect(res.statusCode).toBe(409);
@@ -437,7 +447,7 @@ describe("POST /phrases { action: 'translate' } — guards", () => {
         colorMask: {},
         sentValues: {},
         currentVersion: "1.0",
-      })
+      }),
     );
 
     expect(res.statusCode).toBe(400);
@@ -445,6 +455,137 @@ describe("POST /phrases { action: 'translate' } — guards", () => {
 });
 
 describe("POST /phrases { action: 'translate' } — happy path", () => {
+  test("reads the published phrases and current version back before returning success", async () => {
+    mockFetch([
+      { url: /phrases\/currentVersion/, body: "1.0" },
+      { url: /phrasesVersions\/1_dot_0\/phrases/, body: SAMPLE_PHRASES },
+      {
+        url: /phrasesVersions\/1_dot_1\/phrases/,
+        body: {
+          hello: { en: "Hello updated", fr: "Bonjour" },
+          bye: SAMPLE_PHRASES.bye,
+        },
+      },
+    ]);
+
+    const fetchMock = (global as unknown as { fetch: jest.Mock }).fetch;
+    const writtenValues = new Map<string, unknown>();
+    fetchMock.mockImplementation((url: string, init?: RequestInit) => {
+      if (init?.method === "PUT") {
+        writtenValues.set(url, JSON.parse(init.body as string));
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve(JSON.parse(init.body as string)),
+          text: () => Promise.resolve(init.body as string),
+        });
+      }
+      if (url.includes("phrasesVersions/1_dot_1/phrases")) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () =>
+            Promise.resolve({
+              hello: { en: "Hello updated", fr: "Bonjour" },
+              bye: SAMPLE_PHRASES.bye,
+            }),
+          text: () => Promise.resolve(""),
+        });
+      }
+      if (url.includes("phrases/currentVersion")) {
+        const currentVersionReads = fetchMock.mock.calls.filter(
+          ([calledUrl, calledInit]: [string, RequestInit | undefined]) =>
+            calledUrl.includes("phrases/currentVersion") &&
+            calledInit?.method !== "PUT",
+        ).length;
+        const version = currentVersionReads > 1 ? "1.1" : "1.0";
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve(version),
+          text: () => Promise.resolve(JSON.stringify(version)),
+        });
+      }
+      if (url.includes("phrasesVersions/1_dot_0/phrases")) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve(SAMPLE_PHRASES),
+          text: () => Promise.resolve(JSON.stringify(SAMPLE_PHRASES)),
+        });
+      }
+      if (writtenValues.has(url)) {
+        const value = writtenValues.get(url);
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve(value),
+          text: () => Promise.resolve(JSON.stringify(value)),
+        });
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+
+    const res = await handler(
+      makePostEvent({
+        action: "translate",
+        changedPhrases: { hello: "Hello updated" },
+        colorMask: {},
+        sentValues: {},
+        currentVersion: "1.0",
+      }),
+    );
+
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body).verified).toBe(true);
+    expect(
+      fetchMock.mock.calls.some(
+        ([url, init]: [string, RequestInit | undefined]) =>
+          url.includes("phrasesVersions/1_dot_1/phrases") &&
+          init?.method !== "PUT",
+      ),
+    ).toBe(true);
+  });
+
+  test("returns a fatal error when Firebase read-back does not match the write", async () => {
+    mockFetch([
+      { url: /phrases\/currentVersion/, body: "1.0" },
+      { url: /phrasesVersions\/1_dot_0\/phrases/, body: SAMPLE_PHRASES },
+    ]);
+    const fetchMock = (global as unknown as { fetch: jest.Mock }).fetch;
+    const defaultImplementation = fetchMock.getMockImplementation();
+    fetchMock.mockImplementation((url: string, init?: RequestInit) => {
+      if (
+        url.includes("phrasesVersions/1_dot_1/phrases") &&
+        init?.method !== "PUT"
+      ) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve({ hello: { en: "Wrong value" } }),
+          text: () => Promise.resolve(""),
+        });
+      }
+      return defaultImplementation?.(url, init);
+    });
+
+    const res = await handler(
+      makePostEvent({
+        action: "translate",
+        changedPhrases: { hello: "Hello updated" },
+        colorMask: {},
+        sentValues: {},
+        currentVersion: "1.0",
+      }),
+    );
+
+    expect(res.statusCode).toBe(502);
+    expect(JSON.parse(res.body)).toMatchObject({
+      code: "PERSISTENCE_VERIFICATION_FAILED",
+      fatal: true,
+    });
+  });
+
   test("stores the publication date with a newly released version", async () => {
     jest.spyOn(Date, "now").mockReturnValue(1786190400000);
     mockFetch([
@@ -459,7 +600,7 @@ describe("POST /phrases { action: 'translate' } — happy path", () => {
         colorMask: {},
         sentValues: {},
         currentVersion: "1.0",
-      })
+      }),
     );
 
     expect(res.statusCode).toBe(200);
@@ -469,7 +610,7 @@ describe("POST /phrases { action: 'translate' } — happy path", () => {
           url: expect.stringContaining("/phrasesVersions/1_dot_1/publishedAt"),
           body: "2026-08-08T12:00:00.000Z",
         }),
-      ])
+      ]),
     );
   });
 
@@ -487,17 +628,25 @@ describe("POST /phrases { action: 'translate' } — happy path", () => {
         colorMask: {},
         sentValues: {},
         currentVersion: "1.0",
-      })
+      }),
     );
 
     expect(res.statusCode).toBe(200);
     const data = JSON.parse(res.body);
     expect(data.newVersion).toBe("1.1");
-    expect(data.translatedRows).toMatchObject({ hello: { en: "Hello updated" } });
+    expect(data.translatedRows).toMatchObject({
+      hello: { en: "Hello updated" },
+    });
 
     const puts = capturedPuts();
-    expect(puts.some((p) => p.url.includes("phrasesVersions/1_dot_1/phrases"))).toBe(true);
-    expect(puts.some((p) => p.url.includes("phrases/currentVersion") && p.body === "1.1")).toBe(true);
+    expect(
+      puts.some((p) => p.url.includes("phrasesVersions/1_dot_1/phrases")),
+    ).toBe(true);
+    expect(
+      puts.some(
+        (p) => p.url.includes("phrases/currentVersion") && p.body === "1.1",
+      ),
+    ).toBe(true);
   });
 
   test("removes phrase keys omitted from the spreadsheet", async () => {
@@ -514,7 +663,7 @@ describe("POST /phrases { action: 'translate' } — happy path", () => {
         colorMask: {},
         sentValues: {},
         currentVersion: "1.0",
-      })
+      }),
     );
 
     expect(res.statusCode).toBe(200);
@@ -522,7 +671,7 @@ describe("POST /phrases { action: 'translate' } — happy path", () => {
     expect(data.newVersion).toBe("2.0");
 
     const phrasesPut = capturedPuts().find((put) =>
-      put.url.includes("phrasesVersions/2_dot_0/phrases")
+      put.url.includes("phrasesVersions/2_dot_0/phrases"),
     );
     expect(phrasesPut).toBeDefined();
     expect(phrasesPut?.body).toEqual({ hello: SAMPLE_PHRASES.hello });
@@ -549,7 +698,7 @@ describe("POST /phrases { action: 'translate' } — happy path", () => {
         sentValues: {},
         activeLanguages: ["en", "fr"],
         currentVersion: "1.0",
-      })
+      }),
     );
 
     expect(res.statusCode).toBe(200);
@@ -557,7 +706,7 @@ describe("POST /phrases { action: 'translate' } — happy path", () => {
     expect(data.newVersion).toBe("2.0");
 
     const phrasesPut = capturedPuts().find((put) =>
-      put.url.includes("phrasesVersions/2_dot_0/phrases")
+      put.url.includes("phrasesVersions/2_dot_0/phrases"),
     );
     expect(phrasesPut?.body).toEqual(SAMPLE_PHRASES);
   });
@@ -583,7 +732,7 @@ describe("POST /phrases { action: 'translate' } — DeepL failure", () => {
         colorMask: { hello: { fr: "#ffffff" } },
         sentValues: { hello: { fr: "Bonjour" } },
         currentVersion: "1.0",
-      })
+      }),
     );
 
     expect(res.statusCode).toBe(502);
@@ -617,7 +766,7 @@ describe("POST /phrases { action: 'translate' } — DeepL failure", () => {
         colorMask: { hello: { fr: "#ffffff" } },
         sentValues: { hello: { fr: "Bonjour" } },
         currentVersion: "1.0",
-      })
+      }),
     );
 
     expect(res.statusCode).toBe(502);
@@ -651,7 +800,7 @@ describe("POST /phrases { action: 'translate' } — DeepL failure", () => {
         colorMask: { hello: { fr: "#ffffff" } },
         sentValues: { hello: { fr: "Bonjour" } },
         currentVersion: "1.0",
-      })
+      }),
     );
 
     expect(res.statusCode).toBe(502);
@@ -682,7 +831,7 @@ describe("POST /phrases { action: 'translate' } — nonCyanPhrases", () => {
         sentValues: {},
         nonCyanPhrases: { hello: { fr: "Salut" } },
         currentVersion: "1.0",
-      })
+      }),
     );
 
     expect(res.statusCode).toBe(200);
@@ -690,9 +839,15 @@ describe("POST /phrases { action: 'translate' } — nonCyanPhrases", () => {
     expect(data.newVersion).toBe("1.1");
 
     const puts = capturedPuts();
-    expect(puts.some((p) => p.url.includes("phrasesVersions/1_dot_1/phrases"))).toBe(true);
-    const phrasesPut = puts.find((p) => p.url.includes("phrasesVersions/1_dot_1/phrases"));
-    expect((phrasesPut?.body as Record<string, Record<string, string>>).hello?.fr).toBe("Salut");
+    expect(
+      puts.some((p) => p.url.includes("phrasesVersions/1_dot_1/phrases")),
+    ).toBe(true);
+    const phrasesPut = puts.find((p) =>
+      p.url.includes("phrasesVersions/1_dot_1/phrases"),
+    );
+    expect(
+      (phrasesPut?.body as Record<string, Record<string, string>>).hello?.fr,
+    ).toBe("Salut");
   });
 
   test("non-cyan value identical to Firebase creates no new version", async () => {
@@ -709,7 +864,7 @@ describe("POST /phrases { action: 'translate' } — nonCyanPhrases", () => {
         sentValues: {},
         nonCyanPhrases: { hello: { fr: "Bonjour" } },
         currentVersion: "1.0",
-      })
+      }),
     );
 
     expect(res.statusCode).toBe(200);
@@ -732,7 +887,7 @@ describe("POST /phrases { action: 'translate' } — nonCyanPhrases", () => {
         sentValues: {},
         nonCyanPhrases: { hello: { fr: "Salut" } },
         currentVersion: "1.0",
-      })
+      }),
     );
 
     expect(res.statusCode).toBe(200);
@@ -760,7 +915,7 @@ describe("POST /phrases { action: 'fullResync' }", () => {
         colorMask: {},
         sentValues: {},
         currentVersion: "1.0",
-      })
+      }),
     );
 
     expect(res.statusCode).toBe(200);
@@ -780,7 +935,7 @@ describe("CORS — OPTIONS preflight", () => {
 
     expect(res.statusCode).toBe(204);
     expect(res.headers?.["Access-Control-Allow-Origin"]).toBe(
-      "https://easyeyes.app"
+      "https://easyeyes.app",
     );
   });
 
