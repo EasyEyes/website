@@ -1,14 +1,10 @@
 import { gunzipSync } from "zlib";
-import {
-  reportPersistenceVerificationFailure,
-  reportRetranslateSelectedCells,
-} from "../sentry";
+import { reportPersistenceVerificationFailure } from "../sentry";
 import { handler } from "../index";
 import type { PhraseMap } from "../types";
 
 jest.mock("../sentry", () => ({
   reportPersistenceVerificationFailure: jest.fn().mockResolvedValue(undefined),
-  reportRetranslateSelectedCells: jest.fn().mockResolvedValue(undefined),
 }));
 
 const FIREBASE_DB = "firebase-db-secret";
@@ -429,30 +425,6 @@ describe("POST /phrases { action: 'diff' }", () => {
 // ── POST /phrases { action: "translate" } ─────────────────────────────────────
 
 describe("POST /phrases { action: 'translate' } — guards", () => {
-  test("reports a marked retranslateSelectedCells batch to Sentry", async () => {
-    mockFetch([
-      { url: /phrases\/currentVersion/, body: "1.0" },
-      { url: /phrasesVersions\/1_dot_0\/phrases/, body: SAMPLE_PHRASES },
-    ]);
-
-    const res = await handler(
-      makePostEvent({
-        action: "translate",
-        sentryEvent: "retranslateSelectedCells",
-        changedPhrases: { hello: "Hello" },
-        colorMask: {},
-        sentValues: {},
-        currentVersion: "1.0",
-      }),
-    );
-
-    expect(res.statusCode).toBe(200);
-    expect(reportRetranslateSelectedCells).toHaveBeenCalledWith({
-      phraseCount: 1,
-      currentVersion: "1.0",
-    });
-  });
-
   test("TOCTOU: returns 409 when request currentVersion differs from Firebase", async () => {
     mockFetch([{ url: /phrases\/currentVersion/, body: "1.1" }]);
 
