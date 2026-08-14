@@ -430,6 +430,7 @@ describe("POST /phrases { action: 'diff' }", () => {
 
 describe("POST /phrases { action: 'translate' } — guards", () => {
   test("reports a marked retranslateSelectedCells batch to Sentry", async () => {
+    const logSpy = jest.spyOn(console, "log").mockImplementation();
     mockFetch([
       { url: /phrases\/currentVersion/, body: "1.0" },
       { url: /phrasesVersions\/1_dot_0\/phrases/, body: SAMPLE_PHRASES },
@@ -450,6 +451,13 @@ describe("POST /phrases { action: 'translate' } — guards", () => {
     expect(reportRetranslateSelectedCells).toHaveBeenCalledWith({
       phraseCount: 1,
       currentVersion: "1.0",
+    });
+    expect(logSpy).toHaveBeenCalledWith("[DEBUG-sentry-retranslate]", {
+      stage: "request_received",
+      marker: "retranslateSelectedCells",
+      phraseCount: 1,
+      currentVersion: "1.0",
+      dsnConfigured: expect.any(Boolean),
     });
   });
 

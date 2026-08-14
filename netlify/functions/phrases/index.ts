@@ -407,6 +407,13 @@ async function handleTranslate(
   }
 
   if (body.sentryEvent === "retranslateSelectedCells") {
+    console.log("[DEBUG-sentry-retranslate]", {
+      stage: "request_received",
+      marker: body.sentryEvent,
+      phraseCount: Object.keys(changedPhrases).length,
+      currentVersion: requestVersion,
+      dsnConfigured: Boolean(process.env.SENTRY_DSN),
+    });
     try {
       await reportRetranslateSelectedCells({
         phraseCount: Object.keys(changedPhrases).length,
