@@ -52,16 +52,9 @@ export async function reportPersistenceVerificationFailure(
 export async function reportRetranslateSelectedCells(
   event: RetranslateSelectedCellsEvent,
 ): Promise<void> {
-  if (!process.env.SENTRY_DSN) {
-    console.log("[DEBUG-sentry-retranslate]", {
-      stage: "disabled",
-      reason: "SENTRY_DSN_not_configured",
-    });
-    return;
-  }
-  initializeSentry();
+  if (!initializeSentry()) return;
 
-  const eventId = Sentry.captureMessage("retranslateSelectedCells called", {
+  Sentry.captureMessage("retranslateSelectedCells called", {
     level: "info",
     tags: {
       component: "phrases-api",
@@ -73,11 +66,5 @@ export async function reportRetranslateSelectedCells(
       currentVersion: event.currentVersion,
     },
   });
-  const flushSucceeded = await Sentry.flush(2000);
-  console.log("[DEBUG-sentry-retranslate]", {
-    stage: "flushed",
-    eventId,
-    flushSucceeded,
-    environment: process.env.SENTRY_ENVIRONMENT || "production",
-  });
+  await Sentry.flush(2000);
 }

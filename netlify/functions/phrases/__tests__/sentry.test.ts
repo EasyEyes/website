@@ -31,21 +31,6 @@ describe("phrase persistence Sentry reporting", () => {
     expect(mockCaptureException).not.toHaveBeenCalled();
   });
 
-  test("logs why temporary retranslation reporting is disabled", async () => {
-    const logSpy = jest.spyOn(console, "log").mockImplementation();
-    const { reportRetranslateSelectedCells } = await import("../sentry");
-
-    await reportRetranslateSelectedCells({
-      phraseCount: 1,
-      currentVersion: "1.0",
-    });
-
-    expect(logSpy).toHaveBeenCalledWith("[DEBUG-sentry-retranslate]", {
-      stage: "disabled",
-      reason: "SENTRY_DSN_not_configured",
-    });
-  });
-
   test("captures terminal verification failure with safe metadata and flushes", async () => {
     process.env.SENTRY_DSN = "https://public@example.ingest.sentry.io/123";
     process.env.SENTRY_ENVIRONMENT = "production";
@@ -76,8 +61,6 @@ describe("phrase persistence Sentry reporting", () => {
   });
 
   test("captures temporary retranslateSelectedCells usage", async () => {
-    const logSpy = jest.spyOn(console, "log").mockImplementation();
-    mockCaptureMessage.mockReturnValueOnce("event-123");
     process.env.SENTRY_DSN = "https://public@example.ingest.sentry.io/123";
     const { reportRetranslateSelectedCells } = await import("../sentry");
 
@@ -99,11 +82,5 @@ describe("phrase persistence Sentry reporting", () => {
       },
     );
     expect(mockFlush).toHaveBeenCalledWith(2000);
-    expect(logSpy).toHaveBeenCalledWith("[DEBUG-sentry-retranslate]", {
-      stage: "flushed",
-      eventId: "event-123",
-      flushSucceeded: true,
-      environment: "production",
-    });
   });
 });
