@@ -5,6 +5,7 @@ import { DeepLTranslationError, translateCells } from "./translateCells";
 import { buildNewVersion } from "./buildNewVersion";
 import { encodeFirebaseSegment } from "../glossary/encodeFirebaseSegment";
 import { corsHeaders } from "../shared/cors";
+import { reportPersistenceVerificationFailure } from "./sentry";
 import type { VersionedPhrases, PhraseMap, TranslateDeps } from "./types";
 
 type NetlifyEvent = {
@@ -91,7 +92,11 @@ async function verifyFirebaseValue(
   path: string,
   expected: unknown,
   attempts = 3,
-): Promise<boolean> {
+): Promise<{
+  verified: boolean;
+  finalOutcome: "match" | "mismatch" | "read_error";
+}> {
+  let finalOutcome: "mismatch" | "read_error" = "mismatch";
   for (let attempt = 0; attempt < attempts; attempt++) {
     try {
       const matches = isDeepStrictEqual(await firebaseGet(path), expected);
@@ -104,10 +109,12 @@ async function verifyFirebaseValue(
       };
       if (matches) {
         console.log("[phrases/verification]", verificationLog);
-        return true;
+        return { verified: true, finalOutcome: "match" };
       }
+      finalOutcome = "mismatch";
       console.warn("[phrases/verification]", verificationLog);
     } catch (error) {
+      finalOutcome = "read_error";
       console.warn("[phrases/verification]", {
         event: "firebase_read_after_write",
         path,
@@ -121,10 +128,27 @@ async function verifyFirebaseValue(
       await new Promise((resolve) => setTimeout(resolve, 100 * (attempt + 1)));
     }
   }
-  return false;
+  return { verified: false, finalOutcome };
 }
 
-function persistenceVerificationError(path: string): NetlifyResponse {
+async function persistenceVerificationError(
+  path: string,
+  attempts: number,
+  finalOutcome: "mismatch" | "read_error",
+): Promise<NetlifyResponse> {
+  try {
+    await reportPersistenceVerificationFailure({
+      path,
+      attempts,
+      finalOutcome,
+    });
+  } catch (error) {
+    console.error("[phrases/verification] Sentry reporting failed", {
+      event: "sentry_report_failed",
+      path,
+      errorName: error instanceof Error ? error.name : "UnknownError",
+    });
+  }
   return jsonErr(
     502,
     `Firebase did not preserve the expected value at ${path}. The phrases operation is incomplete.`,
@@ -526,8 +550,16 @@ async function handleTranslate(
     );
   }
   const phrasesPath = `phrasesVersions/${encodedNewVersion}/phrases`;
-  if (!(await verifyFirebaseValue(phrasesPath, sanitizedPhrases))) {
-    return persistenceVerificationError(phrasesPath);
+  const phrasesVerification = await verifyFirebaseValue(
+    phrasesPath,
+    sanitizedPhrases,
+  );
+  if (!phrasesVerification.verified) {
+    return persistenceVerificationError(
+      phrasesPath,
+      3,
+      phrasesVerification.finalOutcome,
+    );
   }
 
   const publishedAt = new Date(Date.now()).toISOString();
@@ -544,8 +576,16 @@ async function handleTranslate(
     );
   }
   const publicationPath = `phrasesVersions/${encodedNewVersion}/publishedAt`;
-  if (!(await verifyFirebaseValue(publicationPath, publishedAt))) {
-    return persistenceVerificationError(publicationPath);
+  const publicationVerification = await verifyFirebaseValue(
+    publicationPath,
+    publishedAt,
+  );
+  if (!publicationVerification.verified) {
+    return persistenceVerificationError(
+      publicationPath,
+      3,
+      publicationVerification.finalOutcome,
+    );
   }
 
   const versionResult = await firebasePut(
@@ -566,10 +606,16 @@ async function handleTranslate(
       }): ${versionResult.errorBody ?? ""}`,
     );
   }
-  if (
-    !(await verifyFirebaseValue("phrases/currentVersion", newVersioned.version))
-  ) {
-    return persistenceVerificationError("phrases/currentVersion");
+  const versionVerification = await verifyFirebaseValue(
+    "phrases/currentVersion",
+    newVersioned.version,
+  );
+  if (!versionVerification.verified) {
+    return persistenceVerificationError(
+      "phrases/currentVersion",
+      3,
+      versionVerification.finalOutcome,
+    );
   }
 
   console.log("[phrases/translate] success:", {

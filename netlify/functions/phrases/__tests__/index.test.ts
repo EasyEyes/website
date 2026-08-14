@@ -1,6 +1,11 @@
 import { gunzipSync } from "zlib";
+import { reportPersistenceVerificationFailure } from "../sentry";
 import { handler } from "../index";
 import type { PhraseMap } from "../types";
+
+jest.mock("../sentry", () => ({
+  reportPersistenceVerificationFailure: jest.fn().mockResolvedValue(undefined),
+}));
 
 const FIREBASE_DB = "firebase-db-secret";
 const PHRASES_SECRET = "phrases-secret";
@@ -606,6 +611,55 @@ describe("POST /phrases { action: 'translate' } — happy path", () => {
       attempt: 3,
       maxAttempts: 3,
       outcome: "mismatch",
+    });
+    expect(reportPersistenceVerificationFailure).toHaveBeenCalledWith({
+      path: "phrasesVersions/1_dot_1/phrases",
+      attempts: 3,
+      finalOutcome: "mismatch",
+    });
+  });
+
+  test("preserves the fatal verification response when Sentry reporting fails", async () => {
+    (
+      reportPersistenceVerificationFailure as jest.MockedFunction<
+        typeof reportPersistenceVerificationFailure
+      >
+    ).mockRejectedValueOnce(new Error("Sentry unavailable"));
+    mockFetch([
+      { url: /phrases\/currentVersion/, body: "1.0" },
+      { url: /phrasesVersions\/1_dot_0\/phrases/, body: SAMPLE_PHRASES },
+    ]);
+    const fetchMock = (global as unknown as { fetch: jest.Mock }).fetch;
+    const defaultImplementation = fetchMock.getMockImplementation();
+    fetchMock.mockImplementation((url: string, init?: RequestInit) => {
+      if (
+        url.includes("phrasesVersions/1_dot_1/phrases") &&
+        init?.method !== "PUT"
+      ) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve({ hello: { en: "Wrong value" } }),
+          text: () => Promise.resolve(""),
+        });
+      }
+      return defaultImplementation?.(url, init);
+    });
+
+    const res = await handler(
+      makePostEvent({
+        action: "translate",
+        changedPhrases: { hello: "Hello updated" },
+        colorMask: {},
+        sentValues: {},
+        currentVersion: "1.0",
+      }),
+    );
+
+    expect(res.statusCode).toBe(502);
+    expect(JSON.parse(res.body)).toMatchObject({
+      code: "PERSISTENCE_VERIFICATION_FAILED",
+      fatal: true,
     });
   });
 
