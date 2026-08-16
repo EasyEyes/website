@@ -309,7 +309,7 @@ describe("GET /phrases — failure handling", () => {
     expect(JSON.parse(res.body).error).toMatch(/temporarily unavailable/i);
   });
 
-  test("a Firebase write non-2xx still yields the explicit 502 with the error body", async () => {
+  test("a Firebase write non-2xx yields a safe explicit 502", async () => {
     mockFetch([
       { url: /phrases\/currentVersion/, body: "1.0" },
       { url: /phrasesVersions\/1_dot_0\/phrases/, body: SAMPLE_PHRASES },
@@ -332,7 +332,11 @@ describe("GET /phrases — failure handling", () => {
     );
 
     expect(res.statusCode).toBe(502);
-    expect(JSON.parse(res.body).error).toMatch(/permission denied/i);
+    expect(JSON.parse(res.body)).toMatchObject({
+      code: "FIREBASE_PHRASES_WRITE_FAILED",
+      fatal: true,
+    });
+    expect(res.body).not.toContain("permission denied");
   });
 });
 
@@ -455,6 +459,54 @@ describe("POST /phrases { action: 'translate' } — guards", () => {
 });
 
 describe("POST /phrases { action: 'translate' } — happy path", () => {
+  test("replays a completed operation batch without publishing another version", async () => {
+    mockFetch([
+      { url: /phrasesOperations\//, body: null },
+      { url: /phrases\/currentVersion/, body: "1.0" },
+      { url: /phrasesVersions\/1_dot_0\/phrases/, body: SAMPLE_PHRASES },
+    ]);
+    const event = makePostEvent({
+      action: "translate",
+      changedPhrases: { hello: "Hello updated" },
+      colorMask: {},
+      sentValues: {},
+      currentVersion: "1.0",
+      operationId: "123e4567-e89b-42d3-a456-426614174000",
+      batchNumber: 1,
+      totalBatches: 2,
+      cellCount: 1,
+    });
+
+    const first = await handler(event);
+    const fetchMock = (global as unknown as { fetch: jest.Mock }).fetch;
+    await fetchMock(
+      "https://easyeyes-compiler-default-rtdb.firebaseio.com/phrases/currentVersion.json?auth=firebase-db-secret",
+      { method: "PUT", body: JSON.stringify("1.2") },
+    );
+    const replayEvent = makePostEvent({
+      action: "translate",
+      changedPhrases: { hello: "Hello updated" },
+      colorMask: {},
+      sentValues: { hello: { fr: "partially written value" } },
+      currentVersion: "1.2",
+      operationId: "123e4567-e89b-42d3-a456-426614174000",
+      batchNumber: 1,
+      totalBatches: 2,
+      cellCount: 1,
+    });
+    const second = await handler(replayEvent);
+
+    expect(first.statusCode).toBe(200);
+    expect(second.statusCode).toBe(200);
+    expect(JSON.parse(second.body)).toEqual(JSON.parse(first.body));
+    expect(
+      capturedPuts().filter(
+        (put) =>
+          put.url.includes("phrases/currentVersion") && put.body === "1.1",
+      ),
+    ).toHaveLength(1);
+  });
+
   test("reads the published phrases and current version back before returning success", async () => {
     const logSpy = jest.spyOn(console, "log").mockImplementation();
     mockFetch([
@@ -764,7 +816,7 @@ describe("POST /phrases { action: 'translate' } — DeepL failure", () => {
         "DeepL rejected the translation request (status 403). No new phrases version was created.",
       code: "DEEPL_TRANSLATION_FAILED",
       deeplStatus: 403,
-      technicalDetail: "Forbidden",
+      latestVersion: "1.0",
       fatal: true,
     });
     expect(capturedPuts()).toHaveLength(0);
@@ -798,13 +850,13 @@ describe("POST /phrases { action: 'translate' } — DeepL failure", () => {
         "DeepL rejected the translation request (status 500). No new phrases version was created.",
       code: "DEEPL_TRANSLATION_FAILED",
       deeplStatus: 500,
-      technicalDetail: "Internal error",
+      latestVersion: "1.0",
       fatal: true,
     });
     expect(capturedPuts()).toHaveLength(0);
   });
 
-  test("a plain-text DeepL failure preserves its technical detail", async () => {
+  test("a plain-text DeepL failure does not expose provider response text", async () => {
     mockFetch([
       { url: /phrases\/currentVersion/, body: "1.0" },
       { url: /phrasesVersions\/1_dot_0\/phrases/, body: SAMPLE_PHRASES },
@@ -827,10 +879,12 @@ describe("POST /phrases { action: 'translate' } — DeepL failure", () => {
     );
 
     expect(res.statusCode).toBe(502);
-    expect(JSON.parse(res.body)).toMatchObject({
+    expect(JSON.parse(res.body)).toEqual({
+      error:
+        "DeepL rejected the translation request (status 503). No new phrases version was created.",
       code: "DEEPL_TRANSLATION_FAILED",
       deeplStatus: 503,
-      technicalDetail: "upstream unavailable",
+      latestVersion: "1.0",
       fatal: true,
     });
     expect(capturedPuts()).toHaveLength(0);

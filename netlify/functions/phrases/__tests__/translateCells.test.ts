@@ -1,4 +1,8 @@
-import { DeepLTranslationError, translateCells } from "../translateCells";
+import {
+  DeepLTranslationError,
+  GoogleTranslationError,
+  translateCells,
+} from "../translateCells";
 import type { FetchLike, TranslateDeps } from "../types";
 
 const noSleep = () => Promise.resolve();
@@ -153,6 +157,96 @@ describe("translateCells — kn + googleApiKey", () => {
     expect(result.k1.kn).toBe("ಹಲೋ");
     expect(googleFetch).toHaveBeenCalledTimes(1);
     expect(deeplFetch).not.toHaveBeenCalled();
+  });
+
+  test("normalizes a Google network exception", async () => {
+    const deps: TranslateDeps = {
+      deeplFetch: jest.fn() as unknown as FetchLike,
+      googleFetch: jest
+        .fn()
+        .mockRejectedValue(new Error("socket closed")) as unknown as FetchLike,
+      googleApiKey: "gkey",
+      deeplApiKey: "dkey",
+      sleep: noSleep,
+    };
+
+    await expect(
+      translateCells(
+        { k1: "Hello" },
+        { k1: { kn: "#ffffff" } },
+        { k1: { kn: "" } },
+        deps,
+      ),
+    ).rejects.toEqual(
+      expect.objectContaining<Partial<GoogleTranslationError>>({
+        name: "GoogleTranslationError",
+        status: null,
+      }),
+    );
+  });
+
+  test("normalizes a malformed successful Google response", async () => {
+    const deps: TranslateDeps = {
+      deeplFetch: jest.fn() as unknown as FetchLike,
+      googleFetch: makeGoogleFetch({
+        data: { translations: [] },
+      }) as unknown as FetchLike,
+      googleApiKey: "gkey",
+      deeplApiKey: "dkey",
+      sleep: noSleep,
+    };
+
+    await expect(
+      translateCells(
+        { k1: "Hello" },
+        { k1: { kn: "#ffffff" } },
+        { k1: { kn: "" } },
+        deps,
+      ),
+    ).rejects.toEqual(
+      expect.objectContaining<Partial<GoogleTranslationError>>({
+        name: "GoogleTranslationError",
+        status: 200,
+      }),
+    );
+  });
+
+  test("batches 51 Kannada phrases into two Google requests", async () => {
+    const changedPhrases = Object.fromEntries(
+      Array.from({ length: 51 }, (_, index) => [`k${index}`, `Text ${index}`]),
+    );
+    const colorMask = Object.fromEntries(
+      Object.keys(changedPhrases).map((key) => [key, { kn: "#ffffff" }]),
+    );
+    const sentValues = Object.fromEntries(
+      Object.keys(changedPhrases).map((key) => [key, { kn: "" }]),
+    );
+    const googleFetch = jest.fn((url, init) => {
+      const texts = JSON.parse(init.body).q as string[];
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: () =>
+          Promise.resolve({
+            data: {
+              translations: texts.map((text) => ({ translatedText: text })),
+            },
+          }),
+      });
+    });
+
+    await translateCells(changedPhrases, colorMask, sentValues, {
+      deeplFetch: jest.fn() as unknown as FetchLike,
+      googleFetch: googleFetch as unknown as FetchLike,
+      googleApiKey: "gkey",
+      deeplApiKey: "dkey",
+      sleep: noSleep,
+    });
+
+    expect(googleFetch).toHaveBeenCalledTimes(2);
+    expect(
+      googleFetch.mock.calls.map(([, init]) => JSON.parse(init.body).q.length),
+    ).toEqual([50, 1]);
   });
 });
 

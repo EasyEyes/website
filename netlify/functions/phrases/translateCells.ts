@@ -29,6 +29,20 @@ export class DeepLTranslationError extends Error {
   }
 }
 
+export class GoogleTranslationError extends Error {
+  constructor(
+    public readonly status: number | null,
+    public readonly technicalDetail?: string,
+  ) {
+    super(
+      status === null
+        ? "Google translation failed before receiving a response"
+        : `Google translation failed with status ${status}`,
+    );
+    this.name = "GoogleTranslationError";
+  }
+}
+
 function technicalDetail(errorBody: unknown): string | undefined {
   if (errorBody === null) return undefined;
   let detail: string | undefined;
@@ -91,7 +105,6 @@ async function callDeepL(
     console.log("[deepl] request:", {
       targetLang,
       textCount: texts.length,
-      texts,
       attempt,
     });
     let res;
@@ -153,7 +166,10 @@ async function callDeepL(
         }
       ).translations;
       const results = translations.map((t) => t.text);
-      console.log("[deepl] translations:", { targetLang, results });
+      console.log("[deepl] translation completed:", {
+        targetLang,
+        textCount: results.length,
+      });
       return results;
     }
 
@@ -251,29 +267,70 @@ async function translateForLanguage(
   });
 }
 
-async function translateGooglePhrase(
-  key: string,
-  engText: string,
-  sentValue: string,
+type GoogleJob = { key: string; engText: string };
+
+async function translateGoogleBatch(
+  jobs: GoogleJob[],
   deps: TranslateDeps,
   result: PhraseMap,
 ): Promise<void> {
-  const res = await deps.googleFetch(
-    `https://translation.googleapis.com/language/translate/v2?key=${deps.googleApiKey}`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ q: engText, target: "kn", format: "text" }),
-    },
-  );
+  let res;
+  try {
+    res = await deps.googleFetch(
+      `https://translation.googleapis.com/language/translate/v2?key=${deps.googleApiKey}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          q: jobs.map((job) => job.engText),
+          target: "kn",
+          format: "text",
+        }),
+      },
+    );
+  } catch (error) {
+    throw new GoogleTranslationError(
+      null,
+      error instanceof Error ? error.message : String(error),
+    );
+  }
 
   if (res.ok) {
-    const data = (await res.json()) as {
-      data: { translations: Array<{ translatedText: string }> };
-    };
-    result[key]["kn"] = data.data.translations[0]?.translatedText ?? sentValue;
+    let data: unknown;
+    try {
+      data = await res.json();
+    } catch {
+      throw new GoogleTranslationError(200, "Malformed Google response");
+    }
+    const translations =
+      typeof data === "object" &&
+      data !== null &&
+      Array.isArray(
+        (data as { data?: { translations?: unknown } }).data?.translations,
+      )
+        ? (
+            data as {
+              data: { translations: Array<{ translatedText?: unknown }> };
+            }
+          ).data.translations
+        : null;
+    if (
+      translations === null ||
+      translations.length !== jobs.length ||
+      translations.some(
+        (translation) => typeof translation.translatedText !== "string",
+      )
+    ) {
+      throw new GoogleTranslationError(200, "Malformed Google response");
+    }
+    jobs.forEach((job, index) => {
+      result[job.key]["kn"] = translations[index].translatedText as string;
+    });
   } else {
-    result[key]["kn"] = sentValue;
+    throw new GoogleTranslationError(
+      res.status,
+      await responseTechnicalDetail(res),
+    );
   }
 }
 
@@ -291,8 +348,7 @@ export async function translateCells(
   }
 
   const deeplJobs = new Map<string, DeeplJob[]>();
-  const googleJobs: Array<{ key: string; engText: string; sentValue: string }> =
-    [];
+  const googleJobs: GoogleJob[] = [];
 
   for (const [key, engText] of Object.entries(changedPhrases)) {
     const mask = colorMask[key] ?? {};
@@ -310,7 +366,7 @@ export async function translateCells(
 
       if (lang === "kn") {
         if (deps.googleApiKey) {
-          googleJobs.push({ key, engText, sentValue });
+          googleJobs.push({ key, engText });
         } else {
           result[key][lang] = sentValue;
         }
@@ -326,8 +382,14 @@ export async function translateCells(
     ...[...deeplJobs.entries()].map(([lang, jobs]) =>
       translateForLanguage(lang, jobs, deps, sleep, result),
     ),
-    ...googleJobs.map(({ key, engText, sentValue }) =>
-      translateGooglePhrase(key, engText, sentValue, deps, result),
+    ...Array.from(
+      { length: Math.ceil(googleJobs.length / 50) },
+      (_, batchIndex) =>
+        translateGoogleBatch(
+          googleJobs.slice(batchIndex * 50, (batchIndex + 1) * 50),
+          deps,
+          result,
+        ),
     ),
   ]);
 
