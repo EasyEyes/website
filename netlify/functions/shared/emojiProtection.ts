@@ -54,13 +54,17 @@ export function restoreEmojiFromDeepL(
   const restoredIds = new Set<number>();
   const restored = translatedText.replace(
     PROTECTED_ICON_PATTERN,
-    (_match, rawId: string, icon: string) => {
+    (_match, rawId: string) => {
       const id = Number(rawId);
-      if (icons[id] !== icon || restoredIds.has(id)) {
+      if (
+        !Number.isSafeInteger(id) ||
+        id >= icons.length ||
+        restoredIds.has(id)
+      ) {
         throw new Error("DeepL changed protected emoji");
       }
       restoredIds.add(id);
-      return icon;
+      return icons[id];
     },
   );
 

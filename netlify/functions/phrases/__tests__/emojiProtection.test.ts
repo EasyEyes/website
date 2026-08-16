@@ -38,12 +38,18 @@ describe("DeepL emoji protection", () => {
     ).toBe("A < B et C > D 🚫");
   });
 
-  test("rejects a response that drops or changes a protected icon", () => {
-    expect(() =>
+  test("restores the original icon when DeepL changes protected tag content", () => {
+    expect(
       restoreEmojiFromDeepL(
         'Arrêter avec <ee-icon id="0">interdit</ee-icon>.',
         ["🚫"],
       ),
+    ).toBe("Arrêter avec 🚫.");
+  });
+
+  test("rejects a response that drops a protected icon tag", () => {
+    expect(() =>
+      restoreEmojiFromDeepL("Arrêter avec interdit.", ["🚫"]),
     ).toThrow("DeepL changed protected emoji");
   });
 });
