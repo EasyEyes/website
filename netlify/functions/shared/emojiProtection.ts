@@ -8,7 +8,8 @@ const EMOJI_SEQUENCE = new RegExp(
   "gu",
 );
 
-const PROTECTED_ICON_PATTERN = /<ee-icon\s+id="(\d+)">([\s\S]*?)<\/ee-icon>/g;
+const PROTECTED_ICON_PATTERN =
+  /<ee-icon\s+id\s*=\s*(?:"(\d+)"|'(\d+)')\s*(?:\/>|>[\s\S]*?<\/ee-icon\s*>)/gi;
 
 export type ProtectedEmojiText = { text: string; icons: string[] };
 
@@ -38,7 +39,7 @@ export function protectEmojiForDeepL(text: string): ProtectedEmojiText {
     const icon = match[0];
     const id = icons.length;
     icons.push(icon);
-    protectedText += `<ee-icon id="${id}">${icon}</ee-icon>`;
+    protectedText += `<ee-icon id="${id}"/>`;
     lastIndex = index + icon.length;
   }
   protectedText += escapeXmlText(text.slice(lastIndex));
@@ -54,8 +55,12 @@ export function restoreEmojiFromDeepL(
   const restoredIds = new Set<number>();
   const restored = translatedText.replace(
     PROTECTED_ICON_PATTERN,
-    (_match, rawId: string) => {
-      const id = Number(rawId);
+    (
+      _match,
+      doubleQuotedId: string | undefined,
+      singleQuotedId: string | undefined,
+    ) => {
+      const id = Number(doubleQuotedId ?? singleQuotedId);
       if (
         !Number.isSafeInteger(id) ||
         id >= icons.length ||

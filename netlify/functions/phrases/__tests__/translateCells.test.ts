@@ -567,7 +567,7 @@ describe("translateCells — emoji protection", () => {
         body: {
           translations: [
             {
-              text: 'Arrêter avec <ee-icon id="1">❤️</ee-icon> puis <ee-icon id="0">🚫</ee-icon>.',
+              text: 'Arrêter avec <ee-icon id="1"/> puis <ee-icon id="0"/>.',
             },
           ],
         },
@@ -590,12 +590,13 @@ describe("translateCells — emoji protection", () => {
 
     const request = JSON.parse(deeplFetch.mock.calls[0][1].body);
     expect(request.text).toEqual([
-      'Stop with <ee-icon id="0">🚫</ee-icon>, then <ee-icon id="1">❤️</ee-icon>.',
+      'Stop with <ee-icon id="0"/>, then <ee-icon id="1"/>.',
     ]);
     expect(request).toMatchObject({
       tag_handling: "xml",
       tag_handling_version: "v2",
-      ignore_tags: ["ee-icon"],
+      outline_detection: false,
+      non_splitting_tags: ["ee-icon"],
     });
     expect(result.k1.fr).toBe("Arrêter avec ❤️ puis 🚫.");
   });

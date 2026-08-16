@@ -262,7 +262,8 @@ async function callDeepL(
       ? {
           tag_handling: "xml",
           tag_handling_version: "v2",
-          ignore_tags: ["ee-icon"]
+          outline_detection: false,
+          non_splitting_tags: ["ee-icon"]
         }
       : {})
   };

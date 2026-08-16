@@ -310,7 +310,7 @@ describe("white/no-color cell in target column → translated via DeepL", () => 
         body: {
           translations: [
             {
-              text: 'Arrêter avec <ee-icon id="1">❤️</ee-icon> puis <ee-icon id="0">🚫</ee-icon>.'
+              text: 'Arrêter avec <ee-icon id="1"/> puis <ee-icon id="0"/>.'
             }
           ]
         }
@@ -327,10 +327,11 @@ describe("white/no-color cell in target column → translated via DeepL", () => 
     const body = JSON.parse(deeplFetch.mock.calls[0][1].body);
 
     expect(body).toMatchObject({
-      text: ['Stop with <ee-icon id="0">🚫</ee-icon>, then <ee-icon id="1">❤️</ee-icon>.'],
+      text: ['Stop with <ee-icon id="0"/>, then <ee-icon id="1"/>.'],
       tag_handling: "xml",
       tag_handling_version: "v2",
-      ignore_tags: ["ee-icon"]
+      outline_detection: false,
+      non_splitting_tags: ["ee-icon"]
     });
     expect(readCell(out, "C2")).toBe("Arrêter avec ❤️ puis 🚫.");
   });

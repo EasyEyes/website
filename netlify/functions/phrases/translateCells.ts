@@ -123,7 +123,8 @@ async function callDeepL(
             ? {
                 tag_handling: "xml",
                 tag_handling_version: "v2",
-                ignore_tags: ["ee-icon"],
+                outline_detection: false,
+                non_splitting_tags: ["ee-icon"],
               }
             : {}),
         }),
@@ -239,10 +240,23 @@ async function translateForLanguage(
     );
 
     batch.forEach((p, j) => {
-      translatedBySeg.set(
-        `${p.jobIdx}:${p.segIdx}`,
-        restoreEmojiFromDeepL(translations[j], p.icons),
-      );
+      try {
+        translatedBySeg.set(
+          `${p.jobIdx}:${p.segIdx}`,
+          restoreEmojiFromDeepL(translations[j], p.icons),
+        );
+      } catch (error) {
+        console.error("[deepl] protected emoji restoration failed:", {
+          targetLang: toDeeplTargetLang(lang),
+          batchOffset: i,
+          pieceOffset: j,
+          phraseKey: jobs[p.jobIdx].key,
+          expectedIconCount: p.icons.length,
+          returnedTags:
+            translations[j].match(/<\/?ee-icon\b[^>]*>?/gi)?.slice(0, 10) ?? [],
+        });
+        throw error;
+      }
     });
   }
 
