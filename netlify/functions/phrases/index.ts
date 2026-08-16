@@ -1,11 +1,23 @@
 import { gzipSync } from "zlib";
 import { isDeepStrictEqual } from "util";
+import { randomUUID } from "crypto";
+import { createHash } from "crypto";
 import { diffEnglish } from "./diffEnglish";
-import { DeepLTranslationError, translateCells } from "./translateCells";
+import {
+  DeepLTranslationError,
+  GoogleTranslationError,
+  translateCells,
+} from "./translateCells";
 import { buildNewVersion } from "./buildNewVersion";
 import { encodeFirebaseSegment } from "../glossary/encodeFirebaseSegment";
 import { corsHeaders } from "../shared/cors";
 import type { VersionedPhrases, PhraseMap, TranslateDeps } from "./types";
+import {
+  capturePhrasesFailure,
+  flushPhrasesTelemetry,
+  phrasesErrorStage,
+  runPhrasesStage,
+} from "./telemetry";
 
 type NetlifyEvent = {
   httpMethod: string;
@@ -21,6 +33,17 @@ type NetlifyResponse = {
   isBase64Encoded?: boolean;
 };
 
+type OperationRecord = {
+  requestHash: string;
+  requestVersion: string;
+  newVersion: string;
+  response: {
+    newVersion: string;
+    translatedRows: PhraseMap;
+    verified: true;
+  };
+};
+
 const FIREBASE_ROOT = "https://easyeyes-compiler-default-rtdb.firebaseio.com";
 const JSON_HEADERS = { "Content-Type": "application/json" };
 
@@ -28,7 +51,7 @@ function firebaseUrl(path: string): string {
   return `${FIREBASE_ROOT}/${path}.json?auth=${process.env.FIREBASE_DB}`;
 }
 // Firebase is a live dependency in the request path. A slow or degraded
-// Firebase must fail fast (well under Netlify's 10s function timeout) and
+// Firebase must fail fast (well under Netlify's 60s synchronous timeout) and
 // recover from transient blips, rather than hanging until Netlify kills the
 // invocation and returns an opaque 502. Each attempt is bounded by an
 // AbortController; reads retry once with a short backoff, writes never retry
@@ -222,6 +245,72 @@ async function getVersionedPhrases(
   return { version, phrases };
 }
 
+function operationPath(body: Record<string, unknown>): string | null {
+  const operationId = body.operationId;
+  const batchNumber = body.batchNumber;
+  if (
+    typeof operationId !== "string" ||
+    !/^[a-zA-Z0-9-]{8,80}$/.test(operationId) ||
+    !Number.isInteger(batchNumber) ||
+    (batchNumber as number) < 1
+  ) {
+    return null;
+  }
+  return `phrasesOperations/${operationId}/batches/${batchNumber}`;
+}
+
+function operationRequestHash(body: Record<string, unknown>): string {
+  return createHash("sha256")
+    .update(
+      JSON.stringify({
+        action: body.action,
+        changedPhrases: body.changedPhrases,
+        colorMask: body.colorMask,
+        nonCyanPhrases: body.nonCyanPhrases,
+        removedKeys: body.removedKeys,
+        activeLanguages: body.activeLanguages,
+        batchNumber: body.batchNumber,
+      }),
+    )
+    .digest("hex");
+}
+
+async function publishCurrentVersion(
+  version: string,
+  requestId: string,
+  operation: string,
+): Promise<NetlifyResponse | null> {
+  const versionResult = await runPhrasesStage(
+    "current_version_write",
+    requestId,
+    operation,
+    () => firebasePut("phrases/currentVersion", version),
+  );
+  console.log("[phrases/translate] Firebase PUT currentVersion:", {
+    ok: versionResult.ok,
+    status: versionResult.status,
+    newVersion: version,
+  });
+  if (!versionResult.ok) {
+    return jsonErr(
+      502,
+      `Firebase write failed for currentVersion (status ${versionResult.status})`,
+      { code: "FIREBASE_WRITE_FAILED", fatal: true },
+    );
+  }
+  if (
+    !(await runPhrasesStage(
+      "current_version_verification",
+      requestId,
+      operation,
+      () => verifyFirebaseValue("phrases/currentVersion", version),
+    ))
+  ) {
+    return persistenceVerificationError("phrases/currentVersion");
+  }
+  return null;
+}
+
 async function handleGet(event: NetlifyEvent): Promise<NetlifyResponse> {
   const params = event.queryStringParameters ?? {};
 
@@ -307,6 +396,7 @@ async function handlePut(event: NetlifyEvent): Promise<NetlifyResponse> {
 async function handleTranslate(
   body: Record<string, unknown>,
   skipSizeGuard: boolean,
+  requestId: string,
 ): Promise<NetlifyResponse> {
   const changedPhrases = body.changedPhrases as Record<string, string>;
   const colorMask = (body.colorMask ?? {}) as Record<
@@ -324,13 +414,19 @@ async function handleTranslate(
   const removedKeys = body.removedKeys ?? [];
   const activeLanguages = body.activeLanguages as string[] | undefined;
   const requestVersion = body.currentVersion as string;
+  const operation = skipSizeGuard ? "fullResync" : "translate";
+  const batchNumber =
+    typeof body.batchNumber === "number" ? body.batchNumber : undefined;
+  const totalBatches =
+    typeof body.totalBatches === "number" ? body.totalBatches : undefined;
+  const cellCount =
+    typeof body.cellCount === "number" ? body.cellCount : undefined;
 
   console.log("[phrases/translate] input:", {
-    changedPhrases,
     requestVersion,
     changedCount: changedPhrases ? Object.keys(changedPhrases).length : 0,
-    colorMaskKeys: Object.keys(colorMask),
-    sentValuesKeys: Object.keys(sentValues),
+    colorMaskCount: Object.keys(colorMask).length,
+    sentValuesCount: Object.keys(sentValues).length,
     removedCount: Array.isArray(removedKeys) ? removedKeys.length : null,
     activeLanguageCount: Array.isArray(activeLanguages)
       ? activeLanguages.length
@@ -339,7 +435,6 @@ async function handleTranslate(
   });
   console.log("[phrases/translate] non-white spreadsheet cells:", {
     phraseCount: Object.keys(nonCyanPhrases).length,
-    phrases: nonCyanPhrases,
   });
 
   if (!changedPhrases || typeof changedPhrases !== "object") {
@@ -379,7 +474,45 @@ async function handleTranslate(
     );
   }
 
-  const firebaseVersion = await getCurrentVersion();
+  const idempotencyPath = operationPath(body);
+  const requestHash = idempotencyPath ? operationRequestHash(body) : null;
+  if (idempotencyPath && requestHash) {
+    const prior = (await firebaseGet(
+      idempotencyPath,
+    )) as OperationRecord | null;
+    if (prior) {
+      if (prior.requestHash !== requestHash) {
+        return jsonErr(409, "Operation batch was reused with different data", {
+          code: "IDEMPOTENCY_CONFLICT",
+          fatal: true,
+        });
+      }
+      const current = await getCurrentVersion();
+      if (current === prior.requestVersion) {
+        const publishError = await publishCurrentVersion(
+          prior.newVersion,
+          requestId,
+          operation,
+        );
+        if (publishError) return publishError;
+      }
+      console.log({
+        event: "phrases_batch_replayed",
+        requestId,
+        operation,
+        batchNumber,
+        newVersion: prior.newVersion,
+      });
+      return jsonOk(prior.response);
+    }
+  }
+
+  const firebaseVersion = await runPhrasesStage(
+    "current_version_read",
+    requestId,
+    operation,
+    getCurrentVersion,
+  );
   console.log("[phrases/translate] version check:", {
     requestVersion,
     firebaseVersion,
@@ -391,7 +524,9 @@ async function handleTranslate(
   }
 
   const prevVersioned = firebaseVersion
-    ? await getVersionedPhrases(firebaseVersion)
+    ? await runPhrasesStage("current_phrases_read", requestId, operation, () =>
+        getVersionedPhrases(firebaseVersion),
+      )
     : null;
 
   console.log("[phrases/translate] prevVersioned:", {
@@ -413,11 +548,11 @@ async function handleTranslate(
 
   let translatedRows: PhraseMap;
   try {
-    translatedRows = await translateCells(
-      changedPhrases,
-      colorMask,
-      sentValues,
-      deps,
+    translatedRows = await runPhrasesStage(
+      "translation_providers",
+      requestId,
+      operation,
+      () => translateCells(changedPhrases, colorMask, sentValues, deps),
     );
   } catch (error) {
     if (error instanceof DeepLTranslationError) {
@@ -425,7 +560,6 @@ async function handleTranslate(
         "[phrases/translate] DeepL translation failed; aborting before Firebase write:",
         {
           status: error.status,
-          technicalDetail: error.technicalDetail,
         },
       );
       const statusDescription =
@@ -438,9 +572,26 @@ async function handleTranslate(
         {
           code: "DEEPL_TRANSLATION_FAILED",
           deeplStatus: error.status,
-          ...(error.technicalDetail
-            ? { technicalDetail: error.technicalDetail }
-            : {}),
+          latestVersion: firebaseVersion,
+          fatal: true,
+        },
+      );
+    }
+    if (error instanceof GoogleTranslationError) {
+      console.error("[phrases/translate] Google translation failed", {
+        status: error.status,
+      });
+      const statusDescription =
+        error.status === null
+          ? "before receiving a response"
+          : `status ${error.status}`;
+      return jsonErr(
+        502,
+        `Google rejected the translation request (${statusDescription}). No new phrases version was created for this batch.`,
+        {
+          code: "GOOGLE_TRANSLATION_FAILED",
+          googleStatus: error.status,
+          latestVersion: firebaseVersion,
           fatal: true,
         },
       );
@@ -448,7 +599,9 @@ async function handleTranslate(
     throw error;
   }
 
-  console.log("[phrases/translate] translatedRows:", translatedRows);
+  console.log("[phrases/translate] translation output:", {
+    phraseCount: Object.keys(translatedRows).length,
+  });
 
   // Merge non-cyan updates: for keys not already handled by translateCells,
   // store any values that differ from what is currently in Firebase.
@@ -481,11 +634,37 @@ async function handleTranslate(
     console.log(
       "[phrases/translate] no changes detected — returning existing version without Firebase write",
     );
-    return jsonOk({
+    const response = {
       newVersion: firebaseVersion,
       translatedRows,
-      verified: true,
-    });
+      verified: true as const,
+    };
+    if (idempotencyPath && requestHash && firebaseVersion) {
+      const record: OperationRecord = {
+        requestHash,
+        requestVersion,
+        newVersion: firebaseVersion,
+        response,
+      };
+      const recordResult = await runPhrasesStage(
+        "idempotency_record_write",
+        requestId,
+        operation,
+        () => firebasePut(idempotencyPath, record),
+      );
+      if (
+        !recordResult.ok ||
+        !(await runPhrasesStage(
+          "idempotency_record_verification",
+          requestId,
+          operation,
+          () => verifyFirebaseValue(idempotencyPath, record),
+        ))
+      ) {
+        return persistenceVerificationError(idempotencyPath);
+      }
+    }
+    return jsonOk(response);
   }
 
   const FIREBASE_INVALID_KEY = /[.$#[\]/]|[\x00-\x1f\x7f]|^$/;
@@ -508,82 +687,118 @@ async function handleTranslate(
   }
 
   const encodedNewVersion = encodeFirebaseSegment(newVersioned.version);
-  const phrasesResult = await firebasePut(
-    `phrasesVersions/${encodedNewVersion}/phrases`,
-    sanitizedPhrases,
+  const phrasesResult = await runPhrasesStage(
+    "phrase_version_write",
+    requestId,
+    operation,
+    () =>
+      firebasePut(
+        `phrasesVersions/${encodedNewVersion}/phrases`,
+        sanitizedPhrases,
+      ),
   );
   console.log("[phrases/translate] Firebase PUT phrases:", {
     ok: phrasesResult.ok,
     status: phrasesResult.status,
-    errorBody: phrasesResult.errorBody,
   });
   if (!phrasesResult.ok) {
     return jsonErr(
       502,
-      `Firebase write failed for phrases (status ${phrasesResult.status}): ${
-        phrasesResult.errorBody ?? ""
-      }`,
+      `Firebase write failed for phrases (status ${phrasesResult.status}).`,
+      { code: "FIREBASE_PHRASES_WRITE_FAILED", fatal: true },
     );
   }
   const phrasesPath = `phrasesVersions/${encodedNewVersion}/phrases`;
-  if (!(await verifyFirebaseValue(phrasesPath, sanitizedPhrases))) {
+  if (
+    !(await runPhrasesStage(
+      "phrase_version_verification",
+      requestId,
+      operation,
+      () => verifyFirebaseValue(phrasesPath, sanitizedPhrases),
+    ))
+  ) {
     return persistenceVerificationError(phrasesPath);
   }
 
   const publishedAt = new Date(Date.now()).toISOString();
-  const publicationResult = await firebasePut(
-    `phrasesVersions/${encodedNewVersion}/publishedAt`,
-    publishedAt,
+  const publicationResult = await runPhrasesStage(
+    "publication_metadata_write",
+    requestId,
+    operation,
+    () =>
+      firebasePut(
+        `phrasesVersions/${encodedNewVersion}/publishedAt`,
+        publishedAt,
+      ),
   );
   if (!publicationResult.ok) {
     return jsonErr(
       502,
-      `Firebase write failed for phrases publication date (status ${
-        publicationResult.status
-      }): ${publicationResult.errorBody ?? ""}`,
+      `Firebase write failed for phrases publication date (status ${publicationResult.status}).`,
+      { code: "FIREBASE_PUBLICATION_WRITE_FAILED", fatal: true },
     );
   }
   const publicationPath = `phrasesVersions/${encodedNewVersion}/publishedAt`;
-  if (!(await verifyFirebaseValue(publicationPath, publishedAt))) {
+  if (
+    !(await runPhrasesStage(
+      "publication_metadata_verification",
+      requestId,
+      operation,
+      () => verifyFirebaseValue(publicationPath, publishedAt),
+    ))
+  ) {
     return persistenceVerificationError(publicationPath);
   }
 
-  const versionResult = await firebasePut(
-    "phrases/currentVersion",
-    newVersioned.version,
-  );
-  console.log("[phrases/translate] Firebase PUT currentVersion:", {
-    ok: versionResult.ok,
-    status: versionResult.status,
-    errorBody: versionResult.errorBody,
+  const response = {
     newVersion: newVersioned.version,
-  });
-  if (!versionResult.ok) {
-    return jsonErr(
-      502,
-      `Firebase write failed for currentVersion (status ${
-        versionResult.status
-      }): ${versionResult.errorBody ?? ""}`,
+    translatedRows,
+    verified: true as const,
+  };
+  if (idempotencyPath && requestHash) {
+    const record: OperationRecord = {
+      requestHash,
+      requestVersion,
+      newVersion: newVersioned.version,
+      response,
+    };
+    const recordResult = await runPhrasesStage(
+      "idempotency_record_write",
+      requestId,
+      operation,
+      () => firebasePut(idempotencyPath, record),
     );
+    if (
+      !recordResult.ok ||
+      !(await runPhrasesStage(
+        "idempotency_record_verification",
+        requestId,
+        operation,
+        () => verifyFirebaseValue(idempotencyPath, record),
+      ))
+    ) {
+      return persistenceVerificationError(idempotencyPath);
+    }
   }
-  if (
-    !(await verifyFirebaseValue("phrases/currentVersion", newVersioned.version))
-  ) {
-    return persistenceVerificationError("phrases/currentVersion");
-  }
+
+  const publishError = await publishCurrentVersion(
+    newVersioned.version,
+    requestId,
+    operation,
+  );
+  if (publishError) return publishError;
 
   console.log("[phrases/translate] success:", {
     newVersion: newVersioned.version,
     translatedRowCount: Object.keys(translatedRows).length,
   });
-  return jsonOk({
-    newVersion: newVersioned.version,
-    translatedRows,
-    verified: true,
-  });
+  return jsonOk(response);
 }
 
-async function handlePost(event: NetlifyEvent): Promise<NetlifyResponse> {
+async function handlePost(
+  event: NetlifyEvent,
+  requestId: string,
+): Promise<NetlifyResponse> {
   let parsed: unknown;
   try {
     parsed = JSON.parse(event.body ?? "");
@@ -616,18 +831,107 @@ async function handlePost(event: NetlifyEvent): Promise<NetlifyResponse> {
   }
 
   if (body.action === "translate") {
-    return handleTranslate(body, false);
+    return handleTranslate(body, false, requestId);
   }
 
   if (body.action === "fullResync") {
-    return handleTranslate(body, true);
+    return handleTranslate(body, true, requestId);
   }
 
   return jsonErr(400, `Unknown action: ${String(body.action)}`);
 }
 
+async function captureHandledFailure(
+  response: NetlifyResponse,
+  event: NetlifyEvent,
+  requestId: string,
+  elapsedMs: number,
+): Promise<void> {
+  if (response.statusCode < 500) return;
+  let responseBody: Record<string, unknown> = {};
+  let requestBody: Record<string, unknown> = {};
+  try {
+    responseBody = JSON.parse(response.body);
+  } catch {
+    responseBody = {};
+  }
+  try {
+    requestBody = JSON.parse(event.body ?? "{}");
+  } catch {
+    requestBody = {};
+  }
+  const errorCode =
+    typeof responseBody.code === "string"
+      ? responseBody.code
+      : "PHRASES_API_FAILURE";
+  const provider = errorCode.startsWith("DEEPL_")
+    ? "deepl"
+    : errorCode.startsWith("GOOGLE_")
+    ? "google"
+    : errorCode.startsWith("FIREBASE_") ||
+      errorCode === "PERSISTENCE_VERIFICATION_FAILED"
+    ? "firebase"
+    : "unknown";
+  const stage =
+    provider === "deepl"
+      ? "deepl_translate"
+      : provider === "google"
+      ? "google_translate"
+      : errorCode === "PERSISTENCE_VERIFICATION_FAILED"
+      ? "persistence_verification"
+      : provider === "firebase"
+      ? "firebase_write"
+      : "request";
+  capturePhrasesFailure(
+    new Error(
+      typeof responseBody.error === "string"
+        ? responseBody.error
+        : "Phrases API request failed",
+    ),
+    {
+      requestId,
+      operation:
+        typeof requestBody.action === "string"
+          ? requestBody.action
+          : event.httpMethod,
+      stage,
+      batchNumber:
+        typeof requestBody.batchNumber === "number"
+          ? requestBody.batchNumber
+          : undefined,
+      totalBatches:
+        typeof requestBody.totalBatches === "number"
+          ? requestBody.totalBatches
+          : undefined,
+      phraseCount:
+        requestBody.changedPhrases &&
+        typeof requestBody.changedPhrases === "object"
+          ? Object.keys(requestBody.changedPhrases).length
+          : undefined,
+      cellCount:
+        typeof requestBody.cellCount === "number"
+          ? requestBody.cellCount
+          : undefined,
+      statusCode: response.statusCode,
+      errorCode,
+      elapsedMs,
+      latestVersion:
+        typeof responseBody.latestVersion === "string"
+          ? responseBody.latestVersion
+          : undefined,
+      provider,
+    },
+  );
+  await flushPhrasesTelemetry();
+}
+
 export async function handler(event: NetlifyEvent): Promise<NetlifyResponse> {
   const origin = event.headers["origin"] ?? event.headers["Origin"];
+  const requestId =
+    event.headers["x-request-id"] ??
+    event.headers["X-Request-Id"] ??
+    randomUUID();
+  const startedAt = Date.now();
 
   if (event.httpMethod === "OPTIONS") {
     return { statusCode: 204, headers: corsHeaders(origin), body: "" };
@@ -647,16 +951,42 @@ export async function handler(event: NetlifyEvent): Promise<NetlifyResponse> {
       return withCors(await handleGet(event), origin);
     if (event.httpMethod === "PUT")
       return withCors(await handlePut(event), origin);
-    if (event.httpMethod === "POST")
-      return withCors(await handlePost(event), origin);
+    if (event.httpMethod === "POST") {
+      const response = withCors(await handlePost(event, requestId), origin);
+      await captureHandledFailure(
+        response,
+        event,
+        requestId,
+        Date.now() - startedAt,
+      );
+      return {
+        ...response,
+        headers: { ...response.headers, "X-Request-Id": requestId },
+      };
+    }
 
     return jsonErr(405, "Method not allowed");
   } catch (err) {
     // Fail in a controlled way (503) instead of letting the rejection surface
     // as Netlify's opaque 502. The body is never cached, so clients can retry.
     console.error(`[phrases] ${event.httpMethod} failed:`, err);
+    capturePhrasesFailure(err, {
+      requestId,
+      operation: event.httpMethod,
+      stage: phrasesErrorStage(err),
+      errorCode: "PHRASES_BACKEND_UNEXPECTED",
+      elapsedMs: Date.now() - startedAt,
+      provider: "unknown",
+    });
+    await flushPhrasesTelemetry();
     return withCors(
-      jsonErr(503, "Phrases backend temporarily unavailable"),
+      {
+        ...jsonErr(503, "Phrases backend temporarily unavailable"),
+        headers: {
+          ...jsonErr(503, "Phrases backend temporarily unavailable").headers,
+          "X-Request-Id": requestId,
+        },
+      },
       origin,
     );
   }

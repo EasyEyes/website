@@ -10,7 +10,7 @@ describe("DeepL emoji protection", () => {
     );
 
     expect(protectedText.text).toBe(
-      'Click <ee-icon id="0">🚫</ee-icon>, then <ee-icon id="1">❤️</ee-icon> <ee-icon id="2">👨‍👩‍👧</ee-icon> <ee-icon id="3">👍🏽</ee-icon> <ee-icon id="4">🇦🇲</ee-icon> <ee-icon id="5">1️⃣</ee-icon>; keep 50% + $2 → x.',
+      'Click <ee-icon id="0"/>, then <ee-icon id="1"/> <ee-icon id="2"/> <ee-icon id="3"/> <ee-icon id="4"/> <ee-icon id="5"/>; keep 50% + $2 → x.',
     );
     expect(protectedText.icons).toEqual(["🚫", "❤️", "👨‍👩‍👧", "👍🏽", "🇦🇲", "1️⃣"]);
   });
@@ -18,7 +18,7 @@ describe("DeepL emoji protection", () => {
   test("restores icons wherever DeepL positions their protected tags", () => {
     expect(
       restoreEmojiFromDeepL(
-        'Arrêter avec <ee-icon id="1">❤️</ee-icon> puis <ee-icon id="0">🚫</ee-icon>.',
+        'Arrêter avec <ee-icon id="1"/> puis <ee-icon id="0"/>.',
         ["🚫", "❤️"],
       ),
     ).toBe("Arrêter avec ❤️ puis 🚫.");
@@ -28,22 +28,28 @@ describe("DeepL emoji protection", () => {
     const protectedText = protectEmojiForDeepL("A < B & C > D 🚫");
 
     expect(protectedText.text).toBe(
-      'A &lt; B &amp; C &gt; D <ee-icon id="0">🚫</ee-icon>',
+      'A &lt; B &amp; C &gt; D <ee-icon id="0"/>',
     );
     expect(
       restoreEmojiFromDeepL(
-        'A &lt; B et C &gt; D <ee-icon id="0">🚫</ee-icon>',
+        'A &lt; B et C &gt; D <ee-icon id="0"/>',
         protectedText.icons,
       ),
     ).toBe("A < B et C > D 🚫");
   });
 
-  test("rejects a response that drops or changes a protected icon", () => {
-    expect(() =>
+  test("accepts paired and flexibly serialized placeholder tags", () => {
+    expect(
       restoreEmojiFromDeepL(
-        'Arrêter avec <ee-icon id="0">interdit</ee-icon>.',
+        "Arrêter avec <ee-icon id = '0'>interdit</ee-icon >.",
         ["🚫"],
       ),
+    ).toBe("Arrêter avec 🚫.");
+  });
+
+  test("rejects a response that drops a protected icon tag", () => {
+    expect(() =>
+      restoreEmojiFromDeepL("Arrêter avec interdit.", ["🚫"]),
     ).toThrow("DeepL changed protected emoji");
   });
 });
