@@ -43,16 +43,33 @@ const SCOPE = "https://www.googleapis.com/auth/devstorage.full_control";
 const TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token";
 
 function serviceAccountFromEnv() {
-  let encoded = process.env.FIREBASE_MEDIA_SERVICE_ACCOUNT;
+  const env = (() => {
+    try {
+      return readFileSync(join(ROOT, ".env"), "utf8");
+    } catch {
+      return "";
+    }
+  })();
 
-  if (!encoded) {
-    const env = readFileSync(join(ROOT, ".env"), "utf8");
-    encoded = env.match(/^FIREBASE_MEDIA_SERVICE_ACCOUNT=(.+)$/m)?.[1];
-  }
+  const read = (name) =>
+    process.env[name] ?? env.match(new RegExp(`^${name}=(.+)$`, "m"))?.[1];
 
+  const clientEmail = read("FIREBASE_MEDIA_CLIENT_EMAIL");
+  const privateKey = read("FIREBASE_MEDIA_PRIVATE_KEY");
+
+  if (clientEmail && privateKey)
+    return {
+      client_email: clientEmail.trim(),
+      private_key: privateKey
+        .trim()
+        .replace(/^["']|["']$/g, "")
+        .replace(/\\n/g, "\n"),
+    };
+
+  const encoded = read("FIREBASE_MEDIA_SERVICE_ACCOUNT");
   if (!encoded)
     throw new Error(
-      "FIREBASE_MEDIA_SERVICE_ACCOUNT is not set, and no .env holds it",
+      "Set FIREBASE_MEDIA_CLIENT_EMAIL and FIREBASE_MEDIA_PRIVATE_KEY, or FIREBASE_MEDIA_SERVICE_ACCOUNT",
     );
 
   return JSON.parse(Buffer.from(encoded.trim(), "base64").toString("utf8"));

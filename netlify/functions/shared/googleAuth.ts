@@ -7,6 +7,8 @@ export type ServiceAccount = {
 };
 
 export const SERVICE_ACCOUNT_ENV_VAR = "FIREBASE_MEDIA_SERVICE_ACCOUNT";
+export const CLIENT_EMAIL_ENV_VAR = "FIREBASE_MEDIA_CLIENT_EMAIL";
+export const PRIVATE_KEY_ENV_VAR = "FIREBASE_MEDIA_PRIVATE_KEY";
 
 const TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token";
 const JWT_BEARER_GRANT = "urn:ietf:params:oauth:grant-type:jwt-bearer";
@@ -18,14 +20,45 @@ const ASSERTION_LIFETIME_SECONDS = 3600;
 const RENEWAL_MARGIN_MS = 60_000;
 
 /**
- * The key is carried base64-encoded because its `private_key` field contains
- * newlines, which environment variable editors routinely mangle.
+ * A PEM key survives an environment variable editor only if its newlines are
+ * escaped, so accept either form.
  */
-export function loadServiceAccount(
-  encoded: string | undefined = process.env[SERVICE_ACCOUNT_ENV_VAR],
-): ServiceAccount {
-  if (!encoded) throw new Error(`${SERVICE_ACCOUNT_ENV_VAR} is not set`);
+const restoreNewlines = (key: string): string =>
+  key.trim().replace(/^["']|["']$/g, "").replace(/\\n/g, "\n");
 
+/** Every service account address is `name@project.iam.gserviceaccount.com`. */
+const projectFromClientEmail = (clientEmail: string): string =>
+  clientEmail.split("@")[1]?.split(".")[0] ?? "";
+
+/**
+ * Reads the credential from the environment, preferring the two-variable form.
+ *
+ * The whole key as base64 JSON is convenient but costly: it inflates by a third
+ * and AWS Lambda caps all of a function's environment variables at 4KB
+ * together, which the full document is large enough to breach on its own. Only
+ * the address and the key are ever used, so only those need storing.
+ */
+export function loadServiceAccount(): ServiceAccount {
+  const clientEmail = process.env[CLIENT_EMAIL_ENV_VAR];
+  const privateKey = process.env[PRIVATE_KEY_ENV_VAR];
+
+  if (clientEmail && privateKey)
+    return {
+      projectId: projectFromClientEmail(clientEmail),
+      clientEmail: clientEmail.trim(),
+      privateKey: restoreNewlines(privateKey),
+    };
+
+  const encoded = process.env[SERVICE_ACCOUNT_ENV_VAR];
+  if (!encoded)
+    throw new Error(
+      `Set ${CLIENT_EMAIL_ENV_VAR} and ${PRIVATE_KEY_ENV_VAR} (or ${SERVICE_ACCOUNT_ENV_VAR})`,
+    );
+
+  return serviceAccountFromBase64(encoded);
+}
+
+export function serviceAccountFromBase64(encoded: string): ServiceAccount {
   let parsed: Record<string, unknown>;
   try {
     parsed = JSON.parse(Buffer.from(encoded, "base64").toString("utf8"));
@@ -36,16 +69,19 @@ export function loadServiceAccount(
   const { project_id: projectId, client_email: clientEmail } = parsed;
   const { private_key: privateKey } = parsed;
 
-  if (
-    typeof projectId !== "string" ||
-    typeof clientEmail !== "string" ||
-    typeof privateKey !== "string"
-  )
+  if (typeof clientEmail !== "string" || typeof privateKey !== "string")
     throw new Error(
-      `${SERVICE_ACCOUNT_ENV_VAR} is missing project_id, client_email, or private_key`,
+      `${SERVICE_ACCOUNT_ENV_VAR} is missing client_email or private_key`,
     );
 
-  return { projectId, clientEmail, privateKey };
+  return {
+    projectId:
+      typeof projectId === "string"
+        ? projectId
+        : projectFromClientEmail(clientEmail),
+    clientEmail,
+    privateKey: restoreNewlines(privateKey),
+  };
 }
 
 const base64url = (value: string): string =>
