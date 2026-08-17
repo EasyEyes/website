@@ -1,4 +1,5 @@
 import { corsHeaders } from "../shared/cors";
+import { hasServiceAccount } from "../shared/googleAuth";
 import { bearerToken, resolvePavloviaUsername } from "../shared/pavlovia";
 import {
   createResumableUpload,
@@ -61,6 +62,12 @@ function withCors(
     },
   };
 }
+
+const NOT_CONFIGURED = {
+  reason: "not-configured",
+  error:
+    "Firebase setup not done. The media library will work once its storage credentials are in place.",
+};
 
 /** Browsing is open to everyone, so listing asks for no credentials. */
 async function handleGet(): Promise<NetlifyResponse> {
@@ -180,6 +187,12 @@ export async function handler(event: NetlifyEvent): Promise<NetlifyResponse> {
       headers: corsHeaders(origin, ALLOWED_HEADERS),
       body: "",
     };
+
+  // Listing and uploading both reach the bucket, so neither can do anything
+  // until the credentials exist. Answered before the work starts, so the
+  // interface reports a setup step rather than an outage.
+  if (!hasServiceAccount())
+    return withCors(jsonResponse(503, NOT_CONFIGURED), origin);
 
   try {
     if (event.httpMethod === "GET") return withCors(await handleGet(), origin);

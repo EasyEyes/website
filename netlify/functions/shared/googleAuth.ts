@@ -58,6 +58,22 @@ export function loadServiceAccount(): ServiceAccount {
   return serviceAccountFromBase64(encoded);
 }
 
+/**
+ * Whether a media service account has been configured at all.
+ *
+ * Separate from `loadServiceAccount` so that callers can tell "the bucket is not
+ * set up yet" apart from "the bucket is set up but unreachable". The two read
+ * alike to a scientist otherwise, and only one of them is worth retrying.
+ */
+export function hasServiceAccount(): boolean {
+  const { env } = process;
+
+  return Boolean(
+    (env[CLIENT_EMAIL_ENV_VAR] && env[PRIVATE_KEY_ENV_VAR]) ||
+      env[SERVICE_ACCOUNT_ENV_VAR],
+  );
+}
+
 export function serviceAccountFromBase64(encoded: string): ServiceAccount {
   let parsed: Record<string, unknown>;
   try {

@@ -40,6 +40,10 @@ const validUpload = {
 
 beforeEach(() => {
   process.env[ROLE_ENV_VAR] = "yonathan:uploader";
+  // Storage itself is mocked, but the function checks that credentials exist
+  // before it will reach for storage at all.
+  process.env.FIREBASE_MEDIA_CLIENT_EMAIL = "media@easyeyes-media.iam.gserviceaccount.com";
+  process.env.FIREBASE_MEDIA_PRIVATE_KEY = "test-key";
   jest.clearAllMocks();
   jest.spyOn(console, "log").mockImplementation(() => {});
   jest.spyOn(console, "error").mockImplementation(() => {});
@@ -51,6 +55,44 @@ beforeEach(() => {
 
 afterEach(() => {
   delete process.env[ROLE_ENV_VAR];
+  delete process.env.FIREBASE_MEDIA_CLIENT_EMAIL;
+  delete process.env.FIREBASE_MEDIA_PRIVATE_KEY;
+});
+
+describe("before the bucket is set up", () => {
+  beforeEach(() => {
+    delete process.env.FIREBASE_MEDIA_CLIENT_EMAIL;
+    delete process.env.FIREBASE_MEDIA_PRIVATE_KEY;
+  });
+
+  it("says setup is outstanding rather than reporting an outage", async () => {
+    const response = await handler({
+      httpMethod: "GET",
+      headers: { origin: ORIGIN },
+      body: null,
+    });
+
+    expect(response.statusCode).toBe(503);
+    expect(JSON.parse(response.body).reason).toBe("not-configured");
+    expect(asMock(listMedia)).not.toHaveBeenCalled();
+  });
+
+  it("grants no upload, so nothing can be written before then", async () => {
+    const response = await post(validUpload);
+
+    expect(JSON.parse(response.body).reason).toBe("not-configured");
+    expect(asMock(createResumableUpload)).not.toHaveBeenCalled();
+  });
+
+  it("still answers preflight, so the browser sees the message", async () => {
+    const response = await handler({
+      httpMethod: "OPTIONS",
+      headers: { origin: ORIGIN },
+      body: null,
+    });
+
+    expect(response.statusCode).toBe(204);
+  });
 });
 
 describe("listing", () => {
