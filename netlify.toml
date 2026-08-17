@@ -43,11 +43,32 @@ for = "/compiler/dist/*"
 Cache-Control = "public, max-age=31536000, immutable"
 Netlify-CDN-Cache-Control = "public, max-age=31536000, immutable"
 
+# Media is consumed by remote-calibrator, speaker-calibration, and threshold,
+# which run under Cross-Origin-Embedder-Policy: require-corp. A raw Google
+# download URL cannot carry the matching Cross-Origin-Resource-Policy header,
+# so media is served through this origin instead.
+[[headers]]
+for = "/media/*"
+[headers.values]
+Cross-Origin-Resource-Policy = "cross-origin"
+Access-Control-Allow-Origin = "*"
+Cache-Control = "public, max-age=31536000, immutable"
+Netlify-CDN-Cache-Control = "public, max-age=31536000, immutable"
+
 [[headers]]
 # Define which paths this specific [[headers]] block will cover.
 for = "/*"
 [headers.values]
 Access-Control-Allow-Origin = "*"
+
+# Serve media from the bucket under this origin, so the headers above apply and
+# so the backing bucket can change without breaking links already pasted into
+# international phrases.
+[[redirects]]
+from = "/media/*"
+to = "https://storage.googleapis.com/easyeyes-media.firebasestorage.app/:splat"
+status = 200
+force = true
 
 # Rewrite /home to /home.html (keeps URL as /home)
 [[redirects]]
