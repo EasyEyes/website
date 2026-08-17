@@ -1,4 +1,5 @@
 import { handler } from "../index";
+import { ROLE_ENV_VAR } from "../mediaRoles";
 
 const ORIGIN = "https://easyeyes.app";
 
@@ -15,9 +16,15 @@ const mockPavloviaUser = (username: string, ok = true) => {
 };
 
 beforeEach(() => {
+  process.env[ROLE_ENV_VAR] = "denis:admin,yonathan";
   jest.restoreAllMocks();
   jest.spyOn(console, "log").mockImplementation(() => {});
+  jest.spyOn(console, "warn").mockImplementation(() => {});
   jest.spyOn(console, "error").mockImplementation(() => {});
+});
+
+afterEach(() => {
+  delete process.env[ROLE_ENV_VAR];
 });
 
 describe("media-auth handler", () => {
