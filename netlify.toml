@@ -63,6 +63,19 @@ to = "/compiler/:splat"
 status = 301
 force = true
 
+# Redirect the public status URLs to the hosted UptimeRobot status page.
+[[redirects]]
+from = "https://status.easyeyes.app/*"
+to = "https://stats.uptimerobot.com/OmxgUj9YpY"
+status = 301
+force = true
+
+[[redirects]]
+from = "/status"
+to = "https://stats.uptimerobot.com/OmxgUj9YpY"
+status = 301
+force = true
+
 # Rewrite /compiler/* to /experiment/* (serves content, keeps URL as /compiler/)
 [[redirects]]
 from = "/compiler/*"
