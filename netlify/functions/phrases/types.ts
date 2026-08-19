@@ -12,13 +12,24 @@ export type DiffResult = {
   currentVersion: string | null;
 };
 
+export type TranslationMatch = {
+  matchedEnglishText: string;
+  matchedAt: string;
+};
+
+export type FreshnessResult = {
+  phraseName: string;
+  languageCode: string;
+  fresh: boolean;
+};
+
 export type FetchLike = (
   url: string,
   init?: {
     method?: string;
     headers?: Record<string, string>;
     body?: string;
-  }
+  },
 ) => Promise<{
   ok: boolean;
   status: number;

@@ -192,6 +192,45 @@ a key counts as "changed" only when its English text changed **or** one of its _
 (human-owned) values differs from what Firebase already has — so a stray re-evaluation of a
 machine cell can no longer trigger a publish.
 
+### 2.4 Translation freshness and human-translation round trip
+
+The function stores operational freshness records separately from immutable
+participant phrase snapshots:
+
+```text
+phraseTranslationMatches/{encodedPhraseName}/{encodedLanguageCode}
+  matchedEnglishText: string
+  matchedAt: ISO-8601 UTC string
+```
+
+This root remains server-only under the deny-by-default Firebase rules. A translation is
+fresh only when its current value is nonblank, its record is well formed, and
+`matchedEnglishText` exactly equals the current English source. Successful `translate` and
+`fullResync` batches write and read back these records before returning `verified: true`.
+Completed operation records make retries return the same published result.
+
+Authenticated `POST {action: "checkFreshness", phrases}` accepts at most 50 unique phrase
+records. Each record contains `phraseName`, `englishText`, and unique `languageCodes`.
+Results use `phraseName + languageCode`, so row and column movement does not affect them.
+
+The International Phrases Apps Script provides three related commands:
+
+- **Color stale translation text red** checks freshness in batches and changes only font
+  colors. Fresh text is black; stale and blank translation cells are red.
+- **Tabulate needed translations** copies the complete spreadsheet, then prunes the copy to
+  stale non-white cells while preserving rows 1–9 and columns A–B. The source is not changed.
+- **Read new translations** opens an accessible Google Sheets URL, validates stable
+  identifiers and all included English sources before any write, then publishes non-white
+  returned values through `translate`. It writes and verifies values and ownership
+  backgrounds in the destination after each verified API batch.
+
+Freshness and import requests use batches of no more than 50 phrase names. Import retries
+reuse an operation ID and a user-property checkpoint keyed to the returned spreadsheet and
+validated contents. The checkpoint advances only after Firebase and destination-sheet
+read-back verification. These commands require spreadsheet access and the existing
+`PHRASES_SECRET` script property; opening a returned sheet also requires the executing user
+to have access to its URL.
+
 ---
 
 ## 3. The contract — three layers

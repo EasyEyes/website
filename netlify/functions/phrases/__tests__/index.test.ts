@@ -925,6 +925,13 @@ describe("POST /phrases { action: 'translate' } — nonCyanPhrases", () => {
     expect(
       (phrasesPut?.body as Record<string, Record<string, string>>).hello?.fr,
     ).toBe("Salut");
+    const matchPut = puts.find((p) =>
+      p.url.includes("phraseTranslationMatches/hello/fr"),
+    );
+    expect(matchPut?.body).toEqual({
+      matchedEnglishText: "Hello",
+      matchedAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/),
+    });
   });
 
   test("non-cyan value identical to Firebase creates no new version", async () => {
@@ -947,7 +954,14 @@ describe("POST /phrases { action: 'translate' } — nonCyanPhrases", () => {
     expect(res.statusCode).toBe(200);
     const data = JSON.parse(res.body);
     expect(data.newVersion).toBe("1.0");
-    expect(capturedPuts()).toHaveLength(0);
+    expect(
+      capturedPuts().some((put) =>
+        put.url.includes("phraseTranslationMatches/hello/fr"),
+      ),
+    ).toBe(true);
+    expect(
+      capturedPuts().some((put) => put.url.includes("phrasesVersions")),
+    ).toBe(false);
   });
 
   test("non-cyan update skips keys already in changedPhrases", async () => {
@@ -996,6 +1010,146 @@ describe("POST /phrases { action: 'fullResync' }", () => {
     );
 
     expect(res.statusCode).toBe(200);
+  });
+});
+
+describe("POST /phrases { action: 'checkFreshness' }", () => {
+  test("returns identifier-keyed freshness independently of request order", async () => {
+    mockFetch([
+      { url: /phrases\/currentVersion/, body: "1.0" },
+      { url: /phrasesVersions\/1_dot_0\/phrases/, body: SAMPLE_PHRASES },
+      {
+        url: /phraseTranslationMatches\/bye\/fr/,
+        body: {
+          matchedEnglishText: "Old goodbye",
+          matchedAt: "2026-08-19T10:00:00.000Z",
+        },
+      },
+      {
+        url: /phraseTranslationMatches\/hello\/fr/,
+        body: {
+          matchedEnglishText: "Hello",
+          matchedAt: "2026-08-19T10:00:00.000Z",
+        },
+      },
+    ]);
+
+    const res = await handler(
+      makePostEvent({
+        action: "checkFreshness",
+        phrases: [
+          {
+            phraseName: "bye",
+            englishText: "Goodbye",
+            languageCodes: ["fr"],
+          },
+          {
+            phraseName: "hello",
+            englishText: "Hello",
+            languageCodes: ["fr"],
+          },
+        ],
+      }),
+    );
+
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body)).toEqual({
+      freshness: [
+        { phraseName: "bye", languageCode: "fr", fresh: false },
+        { phraseName: "hello", languageCode: "fr", fresh: true },
+      ],
+    });
+  });
+
+  test.each([
+    ["missing metadata", null],
+    ["malformed metadata", { matchedEnglishText: "Hello", matchedAt: "soon" }],
+  ])("marks nonblank translations stale for %s", async (_label, metadata) => {
+    mockFetch([
+      { url: /phrases\/currentVersion/, body: "1.0" },
+      { url: /phrasesVersions\/1_dot_0\/phrases/, body: SAMPLE_PHRASES },
+      { url: /phraseTranslationMatches\/hello\/fr/, body: metadata },
+    ]);
+    const res = await handler(
+      makePostEvent({
+        action: "checkFreshness",
+        phrases: [
+          {
+            phraseName: "hello",
+            englishText: "Hello",
+            languageCodes: ["fr"],
+          },
+        ],
+      }),
+    );
+    expect(JSON.parse(res.body).freshness[0].fresh).toBe(false);
+  });
+
+  test("marks a blank translation stale even when metadata matches", async () => {
+    mockFetch([
+      { url: /phrases\/currentVersion/, body: "1.0" },
+      {
+        url: /phrasesVersions\/1_dot_0\/phrases/,
+        body: { hello: { en: "Hello", fr: "" } },
+      },
+      {
+        url: /phraseTranslationMatches\/hello\/fr/,
+        body: {
+          matchedEnglishText: "Hello",
+          matchedAt: "2026-08-19T10:00:00.000Z",
+        },
+      },
+    ]);
+    const res = await handler(
+      makePostEvent({
+        action: "checkFreshness",
+        phrases: [
+          {
+            phraseName: "hello",
+            englishText: "Hello",
+            languageCodes: ["fr"],
+          },
+        ],
+      }),
+    );
+    expect(JSON.parse(res.body).freshness[0].fresh).toBe(false);
+  });
+
+  test.each([
+    [
+      "duplicate phrases",
+      [
+        { phraseName: "hello", englishText: "Hello", languageCodes: ["fr"] },
+        { phraseName: "hello", englishText: "Hello", languageCodes: ["fr"] },
+      ],
+    ],
+    [
+      "duplicate languages",
+      [
+        {
+          phraseName: "hello",
+          englishText: "Hello",
+          languageCodes: ["fr", "fr"],
+        },
+      ],
+    ],
+    [
+      "unknown phrase",
+      [{ phraseName: "missing", englishText: "Hello", languageCodes: ["fr"] }],
+    ],
+    [
+      "unknown language",
+      [{ phraseName: "hello", englishText: "Hello", languageCodes: ["xx"] }],
+    ],
+  ])("rejects %s", async (_label, phrases) => {
+    mockFetch([
+      { url: /phrases\/currentVersion/, body: "1.0" },
+      { url: /phrasesVersions\/1_dot_0\/phrases/, body: SAMPLE_PHRASES },
+    ]);
+    const res = await handler(
+      makePostEvent({ action: "checkFreshness", phrases }),
+    );
+    expect(res.statusCode).toBe(400);
   });
 });
 
