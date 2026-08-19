@@ -752,13 +752,18 @@ async function handleTranslate(
     phraseCount: Object.keys(translatedRows).length,
   });
 
-  // Merge non-cyan updates: for keys not already handled by translateCells,
-  // store any values that differ from what is currently in Firebase.
+  const acceptedRows: PhraseMap = Object.fromEntries(
+    Object.entries(translatedRows).map(([key, row]) => [key, { ...row }]),
+  );
+  // Track every accepted non-white value for freshness, while publishing only
+  // values that differ from the current immutable snapshot.
   const prevPhrases = prevVersioned?.phrases ?? {};
   for (const [key, langVals] of Object.entries(nonCyanPhrases)) {
     if (key in changedPhrases) continue;
     const prevRow = prevPhrases[key] ?? {};
     for (const [lang, val] of Object.entries(langVals)) {
+      if (!acceptedRows[key]) acceptedRows[key] = {};
+      acceptedRows[key][lang] = val;
       if (prevRow[lang] !== val) {
         if (!translatedRows[key]) translatedRows[key] = {};
         translatedRows[key][lang] = val;
@@ -784,7 +789,7 @@ async function handleTranslate(
       "[phrases/translate] no changes detected — returning existing version without Firebase write",
     );
     const matchError = await persistTranslationMatches(
-      translatedRows,
+      acceptedRows,
       Object.fromEntries(
         Object.entries(prevPhrases).map(([phraseName, row]) => [
           phraseName,
@@ -913,7 +918,7 @@ async function handleTranslate(
   }
 
   const matchError = await persistTranslationMatches(
-    translatedRows,
+    acceptedRows,
     Object.fromEntries(
       Object.entries(newVersioned.phrases).map(([phraseName, row]) => [
         phraseName,

@@ -954,7 +954,14 @@ describe("POST /phrases { action: 'translate' } — nonCyanPhrases", () => {
     expect(res.statusCode).toBe(200);
     const data = JSON.parse(res.body);
     expect(data.newVersion).toBe("1.0");
-    expect(capturedPuts()).toHaveLength(0);
+    expect(
+      capturedPuts().some((put) =>
+        put.url.includes("phraseTranslationMatches/hello/fr"),
+      ),
+    ).toBe(true);
+    expect(
+      capturedPuts().some((put) => put.url.includes("phrasesVersions")),
+    ).toBe(false);
   });
 
   test("non-cyan update skips keys already in changedPhrases", async () => {
