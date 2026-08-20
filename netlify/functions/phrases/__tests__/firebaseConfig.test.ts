@@ -1,4 +1,4 @@
-import { getFirebaseDatabaseUrl } from "../firebaseConfig";
+import { getFirebaseDatabaseUrl } from "../../shared/firebaseConfig";
 
 const PRODUCTION_URL = "https://easyeyes-compiler-default-rtdb.firebaseio.com";
 const STAGING_URL =

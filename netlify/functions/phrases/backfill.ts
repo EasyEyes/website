@@ -1,7 +1,7 @@
 import { readFileSync } from "fs";
 import { join } from "path";
 import { encodeFirebaseSegment } from "../shared/encodeFirebaseSegment";
-import { getFirebaseDatabaseUrl } from "./firebaseConfig";
+import { getFirebaseDatabaseUrl } from "../shared/firebaseConfig";
 
 const INITIAL_VERSION = "1.0";
 

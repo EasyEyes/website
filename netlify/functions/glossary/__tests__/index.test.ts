@@ -2,7 +2,7 @@ import { handler } from "../index";
 
 const VALID_SECRET = "test-secret-123";
 const FIREBASE_DB = "firebase-db-secret";
-const FIREBASE_ROOT = "https://easyeyes-compiler-default-rtdb.firebaseio.com";
+const FIREBASE_ROOT = "https://test-staging-default-rtdb.firebaseio.com";
 
 const HEADERS = [
   "INPUT PARAMETER",
@@ -86,6 +86,7 @@ function capturedPuts(): Array<{ url: string; body: unknown }> {
 beforeEach(() => {
   process.env.GLOSSARY_SECRET = VALID_SECRET;
   process.env.FIREBASE_DB = FIREBASE_DB;
+  process.env.FIREBASE_DATABASE_URL = FIREBASE_ROOT;
   jest.resetAllMocks();
 });
 
@@ -259,6 +260,17 @@ describe("POST /glossary — versioning", () => {
 });
 
 describe("GET /glossary?versionOnly=1", () => {
+  test("reads from the Firebase database configured for this deploy context", async () => {
+    mockFetch([{ url: /currentVersion/, body: "2.3" }]);
+
+    await handler(makeGetEvent({ versionOnly: "1" }));
+
+    const fetchMock = (global as unknown as { fetch: jest.Mock }).fetch;
+    expect(fetchMock.mock.calls[0][0]).toMatch(
+      new RegExp(`^${FIREBASE_ROOT}/currentVersion\\.json`)
+    );
+  });
+
   test("returns the current version and its publication date", async () => {
     mockFetch([
       { url: /currentVersion/, body: "2.3" },

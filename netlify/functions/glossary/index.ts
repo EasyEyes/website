@@ -3,6 +3,7 @@ import {
   decodeFirebaseSegment,
 } from "./encodeFirebaseSegment";
 import { isAllowedOrigin, corsHeaders } from "../shared/cors";
+import { getFirebaseDatabaseUrl } from "../shared/firebaseConfig";
 
 type NetlifyEvent = {
   httpMethod: string;
@@ -26,8 +27,6 @@ type GlossaryEntry = {
   example: string;
   categories: string[];
 };
-
-const FIREBASE_ROOT = "https://easyeyes-compiler-default-rtdb.firebaseio.com";
 
 const COLUMN_MAP: Record<string, keyof Omit<GlossaryEntry, "categories">> = {
   "INPUT PARAMETER": "name",
@@ -87,7 +86,7 @@ function transformRawRows(rows: string[][]): Record<string, GlossaryEntry> {
   return result;
 }
 function firebaseUrl(path: string): string {
-  return `${FIREBASE_ROOT}/${path}.json?auth=${process.env.FIREBASE_DB}`;
+  return `${getFirebaseDatabaseUrl()}/${path}.json?auth=${process.env.FIREBASE_DB}`;
 }
 
 // Firebase is a live dependency in the request path. A slow or degraded

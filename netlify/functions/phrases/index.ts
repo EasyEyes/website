@@ -9,7 +9,7 @@ import {
   translateCells,
 } from "./translateCells";
 import { buildNewVersion } from "./buildNewVersion";
-import { getFirebaseDatabaseUrl } from "./firebaseConfig";
+import { getFirebaseDatabaseUrl } from "../shared/firebaseConfig";
 import { encodeFirebaseSegment } from "../glossary/encodeFirebaseSegment";
 import { corsHeaders } from "../shared/cors";
 import type {

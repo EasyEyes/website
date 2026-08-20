@@ -1,5 +1,5 @@
 import { decodeFirebaseSegment } from "../shared/encodeFirebaseSegment";
-import { getFirebaseDatabaseUrl } from "./firebaseConfig";
+import { getFirebaseDatabaseUrl } from "../shared/firebaseConfig";
 
 const DRY_RUN = process.argv.includes("--dry-run");
 const CONCURRENCY = 10;
