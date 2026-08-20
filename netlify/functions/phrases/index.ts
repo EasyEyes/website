@@ -305,6 +305,7 @@ async function persistTranslationMatches(
   requestId: string,
   operation: string,
 ): Promise<NetlifyResponse | null> {
+  const matches: Array<{ path: string; match: TranslationMatch }> = [];
   for (const [phraseName, row] of Object.entries(translatedRows)) {
     const englishText = englishByPhrase[phraseName];
     if (typeof englishText !== "string") continue;
@@ -317,23 +318,35 @@ async function persistTranslationMatches(
         matchedEnglishText: englishText,
         matchedAt,
       };
-      const result = await runPhrasesStage(
-        "translation_match_write",
-        requestId,
-        operation,
-        () => firebasePut(path, match),
-      );
-      if (
-        !result.ok ||
-        !(await runPhrasesStage(
+      matches.push({ path, match });
+    }
+  }
+
+  const concurrency = 20;
+  for (let offset = 0; offset < matches.length; offset += concurrency) {
+    const failures = await Promise.all(
+      matches.slice(offset, offset + concurrency).map(async ({ path, match }) => {
+        const result = await runPhrasesStage(
+          "translation_match_write",
+          requestId,
+          operation,
+          () => firebasePut(path, match),
+        );
+        if (!result.ok) return path;
+        const verified = await runPhrasesStage(
           "translation_match_verification",
           requestId,
           operation,
           () => verifyFirebaseValue(path, match),
-        ))
-      ) {
-        return persistenceVerificationError(path);
-      }
+        );
+        return verified ? null : path;
+      }),
+    );
+    const failedPath = failures.find(
+      (path): path is string => typeof path === "string",
+    );
+    if (failedPath) {
+      return persistenceVerificationError(failedPath);
     }
   }
   return null;

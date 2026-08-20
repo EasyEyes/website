@@ -896,6 +896,59 @@ describe("POST /phrases { action: 'translate' } — DeepL failure", () => {
 // ── POST /phrases { action: "translate" } + nonCyanPhrases ───────────────────
 
 describe("POST /phrases { action: 'translate' } — nonCyanPhrases", () => {
+  test("persists freshness metadata concurrently for a large non-white update", async () => {
+    const phrases = Object.fromEntries(
+      Array.from({ length: 20 }, (_, index) => [
+        `phrase${index}`,
+        { en: `English ${index}`, fr: `French ${index}` },
+      ]),
+    );
+    mockFetch([
+      { url: /phrases\/currentVersion/, body: "1.0" },
+      { url: /phrasesVersions\/1_dot_0\/phrases/, body: phrases },
+    ]);
+    const baseFetch = (global as unknown as { fetch: jest.Mock }).fetch;
+    let activeMetadataRequests = 0;
+    let maximumConcurrentMetadataRequests = 0;
+    (global as unknown as { fetch: jest.Mock }).fetch = jest.fn(
+      async (url: string, init?: RequestInit) => {
+        const isMetadataRequest = url.includes("phraseTranslationMatches");
+        if (isMetadataRequest) {
+          activeMetadataRequests += 1;
+          maximumConcurrentMetadataRequests = Math.max(
+            maximumConcurrentMetadataRequests,
+            activeMetadataRequests,
+          );
+          await new Promise((resolve) => setImmediate(resolve));
+        }
+        try {
+          return await baseFetch(url, init);
+        } finally {
+          if (isMetadataRequest) activeMetadataRequests -= 1;
+        }
+      },
+    );
+
+    const res = await handler(
+      makePostEvent({
+        action: "translate",
+        changedPhrases: {},
+        colorMask: {},
+        sentValues: {},
+        nonCyanPhrases: Object.fromEntries(
+          Object.entries(phrases).map(([phraseName, row]) => [
+            phraseName,
+            { fr: row.fr },
+          ]),
+        ),
+        currentVersion: "1.0",
+      }),
+    );
+
+    expect(res.statusCode).toBe(200);
+    expect(maximumConcurrentMetadataRequests).toBeGreaterThan(1);
+  });
+
   test("non-cyan value that differs from Firebase is stored in a new version", async () => {
     mockFetch([
       { url: /phrases\/currentVersion/, body: "1.0" },
