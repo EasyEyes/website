@@ -95,6 +95,8 @@ function capturedPuts(): Array<{ url: string; body: unknown }> {
 }
 
 beforeEach(() => {
+  process.env.FIREBASE_DATABASE_URL =
+    "https://easyeyes-compiler-default-rtdb.firebaseio.com";
   process.env.FIREBASE_DB = FIREBASE_DB;
   process.env.DEEPL_API_KEY = "test-deepl-key";
   process.env.PHRASES_SECRET = PHRASES_SECRET;

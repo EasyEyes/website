@@ -486,6 +486,12 @@ opaque `502`.
 Segments are run through `encodeFirebaseSegment()` so keys containing `.`/`#`/`$`/`[`/`]`/`/`
 are Firebase-safe; invalid phrase keys are dropped on write with a warning.
 
-**Secrets / env.** `FIREBASE_DB` (admin auth on every Firebase call), `PHRASES_SECRET`
-(gates `POST`), `DEEPL_API_KEY` (free vs. pro base URL auto-selected by `:fx` suffix),
-`GOOGLE_API_KEY` (Kannada only; cells fall back to `sentValue` when absent).
+**Secrets / env.** `FIREBASE_DATABASE_URL` selects the RTDB root from the active
+Netlify deploy context. Production supplies the production URL, while branch
+and Deploy Preview contexts supply the staging URL. The function requires a
+root HTTPS Firebase RTDB URL and has no hard-coded database fallback.
+`FIREBASE_DB` provides admin auth on every Firebase call, `PHRASES_SECRET` gates
+`POST`, `DEEPL_API_KEY` selects the free or pro base URL from its `:fx` suffix,
+and `GOOGLE_API_KEY` is used for Kannada only (cells fall back to `sentValue`
+when absent). Non-production contexts must not inherit production Firebase or
+provider credentials.

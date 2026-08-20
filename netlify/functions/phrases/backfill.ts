@@ -1,13 +1,12 @@
 import { readFileSync } from "fs";
 import { join } from "path";
 import { encodeFirebaseSegment } from "../shared/encodeFirebaseSegment";
+import { getFirebaseDatabaseUrl } from "./firebaseConfig";
 
-const FIREBASE_ROOT =
-  "https://easyeyes-compiler-default-rtdb.firebaseio.com";
 const INITIAL_VERSION = "1.0";
 
 export function buildBackfillPayload(
-  phrases: Record<string, Record<string, string>>
+  phrases: Record<string, Record<string, string>>,
 ): Record<string, Record<string, string>> {
   const result: Record<string, Record<string, string>> = {};
   for (const [key, row] of Object.entries(phrases)) {
@@ -16,7 +15,9 @@ export function buildBackfillPayload(
   return result;
 }
 
-function loadPhrasesFromFile(i18nPath: string): Record<string, Record<string, string>> {
+function loadPhrasesFromFile(
+  i18nPath: string,
+): Record<string, Record<string, string>> {
   const content = readFileSync(i18nPath, "utf8");
   const match = content.match(/export const phrases = \{/);
   if (!match || match.index === undefined) {
@@ -38,7 +39,9 @@ function loadPhrasesFromFile(i18nPath: string): Record<string, Record<string, st
 }
 
 function firebaseUrl(path: string): string {
-  return `${FIREBASE_ROOT}/${path}.json?auth=${process.env.FIREBASE_DB}`;
+  return `${getFirebaseDatabaseUrl()}/${path}.json?auth=${
+    process.env.FIREBASE_DB
+  }`;
 }
 
 async function firebasePut(path: string, value: unknown): Promise<void> {
@@ -57,16 +60,21 @@ async function firebasePut(path: string, value: unknown): Promise<void> {
 async function main(): Promise<void> {
   const i18nPath = join(
     __dirname,
-    "../../../docs/experiment/threshold/components/i18n.js"
+    "../../../docs/experiment/threshold/components/i18n.js",
   );
   const phrases = loadPhrasesFromFile(i18nPath);
   const payload = buildBackfillPayload(phrases);
   const phraseKeys = Object.keys(payload);
 
   const encodedVersion = encodeFirebaseSegment(INITIAL_VERSION);
-  console.log(`[backfill] writing ${phraseKeys.length} phrases to phrasesVersions/${encodedVersion}/phrases/`);
+  console.log(
+    `[backfill] writing ${phraseKeys.length} phrases to phrasesVersions/${encodedVersion}/phrases/`,
+  );
   for (const [encodedKey, row] of Object.entries(payload)) {
-    await firebasePut(`phrasesVersions/${encodedVersion}/phrases/${encodedKey}`, row);
+    await firebasePut(
+      `phrasesVersions/${encodedVersion}/phrases/${encodedKey}`,
+      row,
+    );
   }
 
   await firebasePut("phrases/currentVersion", INITIAL_VERSION);

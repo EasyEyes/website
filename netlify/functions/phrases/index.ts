@@ -9,6 +9,7 @@ import {
   translateCells,
 } from "./translateCells";
 import { buildNewVersion } from "./buildNewVersion";
+import { getFirebaseDatabaseUrl } from "./firebaseConfig";
 import { encodeFirebaseSegment } from "../glossary/encodeFirebaseSegment";
 import { corsHeaders } from "../shared/cors";
 import type {
@@ -50,11 +51,12 @@ type OperationRecord = {
   };
 };
 
-const FIREBASE_ROOT = "https://easyeyes-compiler-default-rtdb.firebaseio.com";
 const JSON_HEADERS = { "Content-Type": "application/json" };
 
 function firebaseUrl(path: string): string {
-  return `${FIREBASE_ROOT}/${path}.json?auth=${process.env.FIREBASE_DB}`;
+  return `${getFirebaseDatabaseUrl()}/${path}.json?auth=${
+    process.env.FIREBASE_DB
+  }`;
 }
 // Firebase is a live dependency in the request path. A slow or degraded
 // Firebase must fail fast (well under Netlify's 60s synchronous timeout) and
