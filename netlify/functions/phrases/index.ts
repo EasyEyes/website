@@ -793,16 +793,18 @@ async function handleTranslate(
   const acceptedRows: PhraseMap = Object.fromEntries(
     Object.entries(translatedRows).map(([key, row]) => [key, { ...row }]),
   );
-  // Track every accepted non-white value for freshness, while publishing only
-  // values that differ from the current immutable snapshot.
+  // Track non-white values as newly accepted only when they differ from the
+  // current immutable snapshot. An unchanged value may already be stale after
+  // its English source changed, so refreshing its match would falsely mark it
+  // as fresh.
   const prevPhrases = prevVersioned?.phrases ?? {};
   for (const [key, langVals] of Object.entries(nonCyanPhrases)) {
     if (key in changedPhrases) continue;
     const prevRow = prevPhrases[key] ?? {};
     for (const [lang, val] of Object.entries(langVals)) {
-      if (!acceptedRows[key]) acceptedRows[key] = {};
-      acceptedRows[key][lang] = val;
       if (prevRow[lang] !== val) {
+        if (!acceptedRows[key]) acceptedRows[key] = {};
+        acceptedRows[key][lang] = val;
         if (!translatedRows[key]) translatedRows[key] = {};
         translatedRows[key][lang] = val;
       }
