@@ -325,22 +325,24 @@ async function persistTranslationMatches(
   const concurrency = 20;
   for (let offset = 0; offset < matches.length; offset += concurrency) {
     const failures = await Promise.all(
-      matches.slice(offset, offset + concurrency).map(async ({ path, match }) => {
-        const result = await runPhrasesStage(
-          "translation_match_write",
-          requestId,
-          operation,
-          () => firebasePut(path, match),
-        );
-        if (!result.ok) return path;
-        const verified = await runPhrasesStage(
-          "translation_match_verification",
-          requestId,
-          operation,
-          () => verifyFirebaseValue(path, match),
-        );
-        return verified ? null : path;
-      }),
+      matches
+        .slice(offset, offset + concurrency)
+        .map(async ({ path, match }) => {
+          const result = await runPhrasesStage(
+            "translation_match_write",
+            requestId,
+            operation,
+            () => firebasePut(path, match),
+          );
+          if (!result.ok) return path;
+          const verified = await runPhrasesStage(
+            "translation_match_verification",
+            requestId,
+            operation,
+            () => verifyFirebaseValue(path, match),
+          );
+          return verified ? null : path;
+        }),
     );
     const failedPath = failures.find(
       (path): path is string => typeof path === "string",
@@ -416,15 +418,36 @@ async function handleCheckFreshness(
     }
   }
 
+  const metadataByPhrase = new Map<string, Record<string, unknown>>();
+  const concurrency = 20;
+  for (let offset = 0; offset < records.length; offset += concurrency) {
+    const metadata = await Promise.all(
+      records.slice(offset, offset + concurrency).map(async (record) => {
+        const value = await firebaseGet(
+          `phraseTranslationMatches/${encodeFirebaseSegment(
+            record.phraseName,
+          )}`,
+        );
+        return {
+          phraseName: record.phraseName,
+          value:
+            typeof value === "object" && value !== null
+              ? (value as Record<string, unknown>)
+              : {},
+        };
+      }),
+    );
+    for (const { phraseName, value } of metadata) {
+      metadataByPhrase.set(phraseName, value);
+    }
+  }
+
   const freshness: FreshnessResult[] = [];
   for (const record of records) {
+    const phraseMetadata = metadataByPhrase.get(record.phraseName) ?? {};
     for (const languageCode of record.languageCodes) {
       const translation = current.phrases[record.phraseName]?.[languageCode];
-      const match = await firebaseGet(
-        `phraseTranslationMatches/${encodeFirebaseSegment(
-          record.phraseName,
-        )}/${encodeFirebaseSegment(languageCode)}`,
-      );
+      const match = phraseMetadata[encodeFirebaseSegment(languageCode)];
       freshness.push({
         phraseName: record.phraseName,
         languageCode,

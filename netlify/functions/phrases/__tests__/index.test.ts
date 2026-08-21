@@ -1069,22 +1069,78 @@ describe("POST /phrases { action: 'fullResync' }", () => {
 });
 
 describe("POST /phrases { action: 'checkFreshness' }", () => {
+  test("fetches freshness metadata once per phrase instead of once per language", async () => {
+    const languageCodes = Array.from(
+      { length: 30 },
+      (_, index) => `lang${index}`,
+    );
+    const phrases = {
+      hello: Object.fromEntries([
+        ["en", "Hello"],
+        ...languageCodes.map((language) => [
+          language,
+          `Translation ${language}`,
+        ]),
+      ]),
+    };
+    const matches = Object.fromEntries(
+      languageCodes.map((language) => [
+        language,
+        {
+          matchedEnglishText: "Hello",
+          matchedAt: "2026-08-19T10:00:00.000Z",
+        },
+      ]),
+    );
+    mockFetch([
+      { url: /phrases\/currentVersion/, body: "1.0" },
+      { url: /phrasesVersions\/1_dot_0\/phrases/, body: phrases },
+      { url: /phraseTranslationMatches\/hello\.json/, body: matches },
+    ]);
+
+    const res = await handler(
+      makePostEvent({
+        action: "checkFreshness",
+        phrases: [
+          {
+            phraseName: "hello",
+            englishText: "Hello",
+            languageCodes,
+          },
+        ],
+      }),
+    );
+
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body).freshness).toHaveLength(languageCodes.length);
+    const metadataReads = (
+      global as unknown as { fetch: jest.Mock }
+    ).fetch.mock.calls.filter(([url]: [string]) =>
+      url.includes("phraseTranslationMatches"),
+    );
+    expect(metadataReads).toHaveLength(1);
+  });
+
   test("returns identifier-keyed freshness independently of request order", async () => {
     mockFetch([
       { url: /phrases\/currentVersion/, body: "1.0" },
       { url: /phrasesVersions\/1_dot_0\/phrases/, body: SAMPLE_PHRASES },
       {
-        url: /phraseTranslationMatches\/bye\/fr/,
+        url: /phraseTranslationMatches\/bye\.json/,
         body: {
-          matchedEnglishText: "Old goodbye",
-          matchedAt: "2026-08-19T10:00:00.000Z",
+          fr: {
+            matchedEnglishText: "Old goodbye",
+            matchedAt: "2026-08-19T10:00:00.000Z",
+          },
         },
       },
       {
-        url: /phraseTranslationMatches\/hello\/fr/,
+        url: /phraseTranslationMatches\/hello\.json/,
         body: {
-          matchedEnglishText: "Hello",
-          matchedAt: "2026-08-19T10:00:00.000Z",
+          fr: {
+            matchedEnglishText: "Hello",
+            matchedAt: "2026-08-19T10:00:00.000Z",
+          },
         },
       },
     ]);
@@ -1123,7 +1179,10 @@ describe("POST /phrases { action: 'checkFreshness' }", () => {
     mockFetch([
       { url: /phrases\/currentVersion/, body: "1.0" },
       { url: /phrasesVersions\/1_dot_0\/phrases/, body: SAMPLE_PHRASES },
-      { url: /phraseTranslationMatches\/hello\/fr/, body: metadata },
+      {
+        url: /phraseTranslationMatches\/hello\.json/,
+        body: metadata === null ? null : { fr: metadata },
+      },
     ]);
     const res = await handler(
       makePostEvent({
@@ -1148,10 +1207,12 @@ describe("POST /phrases { action: 'checkFreshness' }", () => {
         body: { hello: { en: "Hello", fr: "" } },
       },
       {
-        url: /phraseTranslationMatches\/hello\/fr/,
+        url: /phraseTranslationMatches\/hello\.json/,
         body: {
-          matchedEnglishText: "Hello",
-          matchedAt: "2026-08-19T10:00:00.000Z",
+          fr: {
+            matchedEnglishText: "Hello",
+            matchedAt: "2026-08-19T10:00:00.000Z",
+          },
         },
       },
     ]);
