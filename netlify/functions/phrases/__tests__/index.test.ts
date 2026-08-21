@@ -896,7 +896,7 @@ describe("POST /phrases { action: 'translate' } — DeepL failure", () => {
 // ── POST /phrases { action: "translate" } + nonCyanPhrases ───────────────────
 
 describe("POST /phrases { action: 'translate' } — nonCyanPhrases", () => {
-  test("persists freshness metadata concurrently for a large non-white update", async () => {
+  test("persists freshness metadata concurrently for a large validated import", async () => {
     const phrases = Object.fromEntries(
       Array.from({ length: 20 }, (_, index) => [
         `phrase${index}`,
@@ -932,15 +932,25 @@ describe("POST /phrases { action: 'translate' } — nonCyanPhrases", () => {
     const res = await handler(
       makePostEvent({
         action: "translate",
-        changedPhrases: {},
-        colorMask: {},
-        sentValues: {},
-        nonCyanPhrases: Object.fromEntries(
+        changedPhrases: Object.fromEntries(
+          Object.entries(phrases).map(([phraseName, row]) => [
+            phraseName,
+            row.en,
+          ]),
+        ),
+        colorMask: Object.fromEntries(
+          Object.keys(phrases).map((phraseName) => [
+            phraseName,
+            { fr: "#ffff00" },
+          ]),
+        ),
+        sentValues: Object.fromEntries(
           Object.entries(phrases).map(([phraseName, row]) => [
             phraseName,
             { fr: row.fr },
           ]),
         ),
+        translationImport: true,
         currentVersion: "1.0",
       }),
     );
@@ -983,13 +993,10 @@ describe("POST /phrases { action: 'translate' } — nonCyanPhrases", () => {
     const matchPut = puts.find((p) =>
       p.url.includes("phraseTranslationMatches/hello/fr"),
     );
-    expect(matchPut?.body).toEqual({
-      matchedEnglishText: "Hello",
-      matchedAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/),
-    });
+    expect(matchPut).toBeUndefined();
   });
 
-  test("non-cyan value identical to Firebase creates no new version", async () => {
+  test("generic non-cyan sync does not refresh unchanged metadata", async () => {
     mockFetch([
       { url: /phrases\/currentVersion/, body: "1.0" },
       { url: /phrasesVersions\/1_dot_0\/phrases/, body: SAMPLE_PHRASES },
@@ -1013,9 +1020,61 @@ describe("POST /phrases { action: 'translate' } — nonCyanPhrases", () => {
       capturedPuts().some((put) =>
         put.url.includes("phraseTranslationMatches/hello/fr"),
       ),
-    ).toBe(true);
+    ).toBe(false);
     expect(
       capturedPuts().some((put) => put.url.includes("phrasesVersions")),
+    ).toBe(false);
+  });
+
+  test("validated non-white import refreshes metadata for an unchanged value", async () => {
+    mockFetch([
+      { url: /phrases\/currentVersion/, body: "1.0" },
+      { url: /phrasesVersions\/1_dot_0\/phrases/, body: SAMPLE_PHRASES },
+    ]);
+
+    const res = await handler(
+      makePostEvent({
+        action: "translate",
+        changedPhrases: { hello: "Hello" },
+        colorMask: { hello: { fr: "#ffff00" } },
+        sentValues: { hello: { fr: "Bonjour" } },
+        translationImport: true,
+        currentVersion: "1.0",
+      }),
+    );
+
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body).newVersion).toBe("1.1");
+    const matchPut = capturedPuts().find((put) =>
+      put.url.includes("phraseTranslationMatches/hello/fr"),
+    );
+    expect(matchPut?.body).toEqual({
+      matchedEnglishText: "Hello",
+      matchedAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/),
+    });
+  });
+
+  test("ordinary retranslation does not refresh non-white metadata", async () => {
+    mockFetch([
+      { url: /phrases\/currentVersion/, body: "1.0" },
+      { url: /phrasesVersions\/1_dot_0\/phrases/, body: SAMPLE_PHRASES },
+    ]);
+
+    const res = await handler(
+      makePostEvent({
+        action: "translate",
+        changedPhrases: { hello: "Hello updated" },
+        colorMask: { hello: { fr: "#ffff00" } },
+        sentValues: { hello: { fr: "Bonjour" } },
+        currentVersion: "1.0",
+      }),
+    );
+
+    expect(res.statusCode).toBe(200);
+    expect(
+      capturedPuts().some((put) =>
+        put.url.includes("phraseTranslationMatches/hello/fr"),
+      ),
     ).toBe(false);
   });
 
