@@ -938,7 +938,7 @@ describe("POST /phrases { action: 'translate' } — nonCyanPhrases", () => {
         nonCyanPhrases: Object.fromEntries(
           Object.entries(phrases).map(([phraseName, row]) => [
             phraseName,
-            { fr: `${row.fr} updated` },
+            { fr: row.fr },
           ]),
         ),
         currentVersion: "1.0",
@@ -989,7 +989,7 @@ describe("POST /phrases { action: 'translate' } — nonCyanPhrases", () => {
     });
   });
 
-  test("unchanged non-cyan value stays stale and creates no new version", async () => {
+  test("non-cyan value identical to Firebase creates no new version", async () => {
     mockFetch([
       { url: /phrases\/currentVersion/, body: "1.0" },
       { url: /phrasesVersions\/1_dot_0\/phrases/, body: SAMPLE_PHRASES },
@@ -1013,7 +1013,7 @@ describe("POST /phrases { action: 'translate' } — nonCyanPhrases", () => {
       capturedPuts().some((put) =>
         put.url.includes("phraseTranslationMatches/hello/fr"),
       ),
-    ).toBe(false);
+    ).toBe(true);
     expect(
       capturedPuts().some((put) => put.url.includes("phrasesVersions")),
     ).toBe(false);
