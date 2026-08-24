@@ -346,7 +346,11 @@ describe("International Phrases freshness workflows", () => {
     };
     const translationsSheet = {
       copyTo: jest.fn(() => copySheet),
+      getSheetId: () => 123,
       getName: () => "Translations",
+    };
+    const translationsSheetByName = {
+      getSheetId: () => 123,
       getDataRange: () => ({
         getDisplayValues: () => rows,
         getBackgrounds: () => rows.map((row) => row.map(() => "#ffffff")),
@@ -354,12 +358,13 @@ describe("International Phrases freshness workflows", () => {
     };
     const metadataSheet = {
       copyTo: jest.fn(() => copiedOtherSheet),
+      getSheetId: () => 456,
       getName: () => "Metadata",
     };
     const createSpreadsheet = jest.fn(() => destination);
     const source = {
       getName: () => "International Phrases",
-      getSheetByName: () => translationsSheet,
+      getSheetByName: () => translationsSheetByName,
       getSheets: () => [translationsSheet, metadataSheet],
       copy: jest.fn(),
     };

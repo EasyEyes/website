@@ -2280,7 +2280,9 @@ function tabulateNeededTranslations() {
     var copySheet = null;
     source.getSheets().forEach(function (sheet) {
       var copiedSheet = sheet.copyTo(copy).setName(sheet.getName());
-      if (sheet === sourceSheet) copySheet = copiedSheet;
+      if (sheet.getSheetId() === sourceSheet.getSheetId()) {
+        copySheet = copiedSheet;
+      }
     });
     defaultSheets.forEach(function (sheet) {
       copy.deleteSheet(sheet);
