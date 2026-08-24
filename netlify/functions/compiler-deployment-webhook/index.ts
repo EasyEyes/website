@@ -2,6 +2,7 @@ import { createHash, timingSafeEqual } from "node:crypto";
 import jwt from "jsonwebtoken";
 
 import { createFirebaseNotificationWriter } from "./compilerDeployment";
+import { getFirebaseDatabaseUrl } from "../shared/firebaseConfig";
 
 type DeploymentNotification = {
   deploymentId: string;
@@ -17,6 +18,7 @@ type WebhookDependencies = {
   verifySignature: (signature: string, rawBody: string) => boolean;
   writeNotification: (write: NotificationWrite) => Promise<void>;
   logger: Pick<Console, "info" | "warn" | "error">;
+  firebaseRoot: string;
 };
 
 type WebhookPayload = {
@@ -25,8 +27,6 @@ type WebhookPayload = {
   published_at: unknown;
 };
 
-const productionFirebaseRoot =
-  "https://easyeyes-compiler-default-rtdb.firebaseio.com";
 const deploymentIdPattern = /^[A-Za-z0-9_-]{1,128}$/;
 const publishedAtPattern =
   /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d{1,9})?Z$/;
@@ -103,6 +103,7 @@ export function createCompilerDeploymentWebhook({
   verifySignature,
   writeNotification,
   logger,
+  firebaseRoot,
 }: WebhookDependencies) {
   return async function compilerDeploymentWebhook(
     request: Request,
@@ -161,7 +162,7 @@ export function createCompilerDeploymentWebhook({
         deploymentId: payload.id,
         publishedAt: payload.published_at,
       },
-      firebaseRoot: productionFirebaseRoot,
+      firebaseRoot,
     });
 
     return new Response(null, { status: 204 });
@@ -185,5 +186,6 @@ export default async function compilerDeploymentWebhook(request: Request) {
       logger: console,
     }),
     logger: console,
+    firebaseRoot: getFirebaseDatabaseUrl(),
   })(request);
 }

@@ -45,6 +45,7 @@ describe("compiler deployment webhook", () => {
       verifySignature,
       writeNotification,
       logger,
+      firebaseRoot: "https://test-staging-default-rtdb.firebaseio.com",
     });
     const rawBody = JSON.stringify(productionPayload);
 
@@ -66,7 +67,7 @@ describe("compiler deployment webhook", () => {
         deploymentId: "deploy-123",
         publishedAt: "2026-07-16T15:04:15.435Z",
       },
-      firebaseRoot: "https://easyeyes-compiler-default-rtdb.firebaseio.com",
+      firebaseRoot: "https://test-staging-default-rtdb.firebaseio.com",
     });
   });
 
@@ -77,6 +78,7 @@ describe("compiler deployment webhook", () => {
       verifySignature,
       writeNotification,
       logger: createLogger(),
+      firebaseRoot: "https://test-staging-default-rtdb.firebaseio.com",
     });
 
     const unsigned = await handler(
@@ -110,6 +112,7 @@ describe("compiler deployment webhook", () => {
       verifySignature: () => true,
       writeNotification,
       logger: createLogger(),
+      firebaseRoot: "https://test-staging-default-rtdb.firebaseio.com",
     });
 
     const preview = await handler(
