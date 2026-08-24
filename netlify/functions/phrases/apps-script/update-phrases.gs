@@ -550,12 +550,15 @@ function showSpinner(label, title) {
       html, body { width: 100%; height: 100%; }
       body {
         font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
-        display: flex;
-        align-items: center;
-        justify-content: center;
         background: transparent;
       }
-      .container { text-align: center; padding: 24px 32px; }
+      .container { position: relative; width: 100%; height: 100%; text-align: center; }
+      .spinner-position {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+      }
       .spinner {
         width: 44px;
         height: 44px;
@@ -563,16 +566,23 @@ function showSpinner(label, title) {
         border-top-color: #2563eb;
         border-radius: 50%;
         animation: spin 0.75s linear infinite;
-        margin: 0 auto 14px;
       }
       @keyframes spin { to { transform: rotate(360deg); } }
+      .status {
+        position: absolute;
+        top: calc(50% + 31px);
+        left: 16px;
+        right: 16px;
+      }
       .label { font-size: 14px; color: #374151; letter-spacing: 0.1px; }
       .progress { font-size: 12px; color: #6b7280; margin-top: 6px; min-height: 18px; }
     </style>
     <div class="container">
-      <div class="spinner"></div>
-      <div class="label">${label}</div>
-      <div class="progress" id="progress"></div>
+      <div class="spinner-position"><div class="spinner"></div></div>
+      <div class="status">
+        <div class="label">${label}</div>
+        <div class="progress" id="progress"></div>
+      </div>
     </div>
     <script>
       function poll() {

@@ -404,6 +404,10 @@ describe("International Phrases freshness workflows", () => {
     expect(copiedOtherSheet.setName).toHaveBeenCalledWith("Metadata");
     expect(destination.deleteSheet).toHaveBeenCalledWith(defaultSheet);
     expect(dialogTitles[0]).toBe("Creating translation request …");
+    expect(dialogHtml[0]).toContain(".spinner-position");
+    expect(dialogHtml[0]).toContain("top: 50%");
+    expect(dialogHtml[0]).toContain("transform: translate(-50%, -50%)");
+    expect(dialogHtml[0]).toContain('<div class="spinner-position">');
     expect(dialogTitles.at(-1)).toBe("Success");
     expect(dialogHtml.at(-1)).toContain(
       '<a href="https://docs.google.com/spreadsheets/d/translation-request/edit" target="_blank" rel="noopener noreferrer">https://docs.google.com/spreadsheets/d/translation-request/edit</a>',
