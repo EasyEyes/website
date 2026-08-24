@@ -1,7 +1,7 @@
 module.exports = {
   testEnvironment: "node",
   roots: ["<rootDir>/__tests__"],
-  testMatch: ["**/*.test.ts"],
+  testMatch: ["**/*.test.js", "**/*.test.ts"],
   transform: {
     "^.+\\.tsx?$": [
       "babel-jest",

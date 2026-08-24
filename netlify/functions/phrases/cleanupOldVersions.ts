@@ -1,11 +1,13 @@
 import { decodeFirebaseSegment } from "../shared/encodeFirebaseSegment";
+import { getFirebaseDatabaseUrl } from "../shared/firebaseConfig";
 
-const FIREBASE_ROOT = "https://easyeyes-compiler-default-rtdb.firebaseio.com";
 const DRY_RUN = process.argv.includes("--dry-run");
 const CONCURRENCY = 10;
 
 function firebaseUrl(path: string): string {
-  return `${FIREBASE_ROOT}/${path}.json?auth=${process.env.FIREBASE_DB}`;
+  return `${getFirebaseDatabaseUrl()}/${path}.json?auth=${
+    process.env.FIREBASE_DB
+  }`;
 }
 
 async function firebaseGet(path: string): Promise<unknown> {
@@ -16,7 +18,8 @@ async function firebaseGet(path: string): Promise<unknown> {
 
 async function firebaseGetShallowKeys(path: string): Promise<string[]> {
   const res = await fetch(`${firebaseUrl(path)}&shallow=true`);
-  if (!res.ok) throw new Error(`Firebase GET (shallow) ${path} → ${res.status}`);
+  if (!res.ok)
+    throw new Error(`Firebase GET (shallow) ${path} → ${res.status}`);
   const data = (await res.json()) as Record<string, true> | null;
   return Object.keys(data ?? {});
 }
@@ -54,7 +57,9 @@ async function collectReferencedVersions(): Promise<{
       `users/${encodedUser}`,
     );
     console.log(
-      `  ${decodeFirebaseSegment(encodedUser)}: ${encodedExperiments.length} experiment(s)`,
+      `  ${decodeFirebaseSegment(encodedUser)}: ${
+        encodedExperiments.length
+      } experiment(s)`,
     );
 
     type VersionField = "glossaryVersion" | "phrasesVersion";
@@ -92,15 +97,18 @@ async function main(): Promise<void> {
 
   if (DRY_RUN) console.log("[cleanup] DRY RUN — no deletions will be made\n");
 
-  const glossaryCurrent = (await firebaseGet("currentVersion")) as string | null;
-  const phrasesCurrent = (await firebaseGet(
-    "phrases/currentVersion",
-  )) as string | null;
+  const glossaryCurrent = (await firebaseGet("currentVersion")) as
+    | string
+    | null;
+  const phrasesCurrent = (await firebaseGet("phrases/currentVersion")) as
+    | string
+    | null;
   console.log(`Current glossary version : ${glossaryCurrent ?? "(none)"}`);
   console.log(`Current phrases version  : ${phrasesCurrent ?? "(none)"}\n`);
 
   const encodedGlossaryVersions = await firebaseGetShallowKeys("versions");
-  const encodedPhrasesVersions = await firebaseGetShallowKeys("phrasesVersions");
+  const encodedPhrasesVersions =
+    await firebaseGetShallowKeys("phrasesVersions");
   console.log(`Glossary versions in DB  : ${encodedGlossaryVersions.length}`);
   console.log(`Phrases versions in DB   : ${encodedPhrasesVersions.length}\n`);
 
@@ -109,10 +117,14 @@ async function main(): Promise<void> {
     await collectReferencedVersions();
 
   console.log(
-    `\nReferenced glossary versions : ${[...glossaryReferenced].sort().join(", ") || "(none)"}`,
+    `\nReferenced glossary versions : ${
+      [...glossaryReferenced].sort().join(", ") || "(none)"
+    }`,
   );
   console.log(
-    `Referenced phrases versions  : ${[...phrasesReferenced].sort().join(", ") || "(none)"}\n`,
+    `Referenced phrases versions  : ${
+      [...phrasesReferenced].sort().join(", ") || "(none)"
+    }\n`,
   );
 
   const PROTECTED_VERSION = "1.0";
@@ -159,12 +171,16 @@ async function main(): Promise<void> {
   console.log("\nDeleting...");
   for (const encoded of glossaryToDelete) {
     await firebaseDelete(`versions/${encoded}`);
-    console.log(`  deleted versions/${encoded}  (${decodeFirebaseSegment(encoded)})`);
+    console.log(
+      `  deleted versions/${encoded}  (${decodeFirebaseSegment(encoded)})`,
+    );
   }
   for (const encoded of phrasesToDelete) {
     await firebaseDelete(`phrasesVersions/${encoded}`);
     console.log(
-      `  deleted phrasesVersions/${encoded}  (${decodeFirebaseSegment(encoded)})`,
+      `  deleted phrasesVersions/${encoded}  (${decodeFirebaseSegment(
+        encoded,
+      )})`,
     );
   }
 

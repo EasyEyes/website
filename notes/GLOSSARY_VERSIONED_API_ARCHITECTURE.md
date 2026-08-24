@@ -253,8 +253,10 @@ never reimplement them.
 
 **Firebase RTDB rules** (`database.rules.json`): root denies read/write; public read only on
 `/currentVersion`, `/versions/$version/glossary`, and the single field
-`/users/$username/$experimentName/glossaryVersion`. All writes go through the function using
-the admin secret (`?auth=FIREBASE_DB`). The pin rule is scoped to the one field, so any future
+`/users/$username/$experimentName/glossaryVersion`. All reads and writes use the RTDB root from
+`FIREBASE_DATABASE_URL`, allowing production and preview deploy contexts to use separate
+databases. Writes go through the function using the admin secret (`?auth=FIREBASE_DB`). The pin
+rule is scoped to the one field, so any future
 per-user data under `/users/` stays private by default.
 
 ---
@@ -392,4 +394,3 @@ const version = getGlossaryVersion(); // e.g. "1.2" (or null pre-init)
 ```
 
 ```
-

@@ -9,9 +9,16 @@ import {
   translateCells,
 } from "./translateCells";
 import { buildNewVersion } from "./buildNewVersion";
+import { getFirebaseDatabaseUrl } from "../shared/firebaseConfig";
 import { encodeFirebaseSegment } from "../glossary/encodeFirebaseSegment";
 import { corsHeaders } from "../shared/cors";
-import type { VersionedPhrases, PhraseMap, TranslateDeps } from "./types";
+import type {
+  VersionedPhrases,
+  PhraseMap,
+  TranslateDeps,
+  TranslationMatch,
+  FreshnessResult,
+} from "./types";
 import {
   capturePhrasesFailure,
   flushPhrasesTelemetry,
@@ -44,11 +51,12 @@ type OperationRecord = {
   };
 };
 
-const FIREBASE_ROOT = "https://easyeyes-compiler-default-rtdb.firebaseio.com";
 const JSON_HEADERS = { "Content-Type": "application/json" };
 
 function firebaseUrl(path: string): string {
-  return `${FIREBASE_ROOT}/${path}.json?auth=${process.env.FIREBASE_DB}`;
+  return `${getFirebaseDatabaseUrl()}/${path}.json?auth=${
+    process.env.FIREBASE_DB
+  }`;
 }
 // Firebase is a live dependency in the request path. A slow or degraded
 // Firebase must fail fast (well under Netlify's 60s synchronous timeout) and
@@ -275,6 +283,185 @@ function operationRequestHash(body: Record<string, unknown>): string {
     .digest("hex");
 }
 
+function isTranslationMatch(value: unknown): value is TranslationMatch {
+  if (typeof value !== "object" || value === null) return false;
+  const match = value as Record<string, unknown>;
+  if (
+    typeof match.matchedEnglishText !== "string" ||
+    typeof match.matchedAt !== "string"
+  ) {
+    return false;
+  }
+  const parsed = new Date(match.matchedAt);
+  return (
+    !Number.isNaN(parsed.valueOf()) && parsed.toISOString() === match.matchedAt
+  );
+}
+
+async function persistTranslationMatches(
+  translatedRows: PhraseMap,
+  englishByPhrase: Record<string, string>,
+  matchedAt: string,
+  requestId: string,
+  operation: string,
+): Promise<NetlifyResponse | null> {
+  const matches: Array<{ path: string; match: TranslationMatch }> = [];
+  for (const [phraseName, row] of Object.entries(translatedRows)) {
+    const englishText = englishByPhrase[phraseName];
+    if (typeof englishText !== "string") continue;
+    for (const languageCode of Object.keys(row)) {
+      if (languageCode === "en") continue;
+      const path = `phraseTranslationMatches/${encodeFirebaseSegment(
+        phraseName,
+      )}/${encodeFirebaseSegment(languageCode)}`;
+      const match: TranslationMatch = {
+        matchedEnglishText: englishText,
+        matchedAt,
+      };
+      matches.push({ path, match });
+    }
+  }
+
+  const concurrency = 20;
+  for (let offset = 0; offset < matches.length; offset += concurrency) {
+    const failures = await Promise.all(
+      matches
+        .slice(offset, offset + concurrency)
+        .map(async ({ path, match }) => {
+          const result = await runPhrasesStage(
+            "translation_match_write",
+            requestId,
+            operation,
+            () => firebasePut(path, match),
+          );
+          if (!result.ok) return path;
+          const verified = await runPhrasesStage(
+            "translation_match_verification",
+            requestId,
+            operation,
+            () => verifyFirebaseValue(path, match),
+          );
+          return verified ? null : path;
+        }),
+    );
+    const failedPath = failures.find(
+      (path): path is string => typeof path === "string",
+    );
+    if (failedPath) {
+      return persistenceVerificationError(failedPath);
+    }
+  }
+  return null;
+}
+
+async function handleCheckFreshness(
+  body: Record<string, unknown>,
+): Promise<NetlifyResponse> {
+  const requested = body.phrases;
+  if (!Array.isArray(requested) || requested.length > 50) {
+    return jsonErr(400, "phrases must be an array of at most 50 records");
+  }
+
+  const records: Array<{
+    phraseName: string;
+    englishText: string;
+    languageCodes: string[];
+  }> = [];
+  const seenPhrases = new Set<string>();
+  for (const value of requested) {
+    if (typeof value !== "object" || value === null) {
+      return jsonErr(400, "Invalid freshness phrase record");
+    }
+    const record = value as Record<string, unknown>;
+    if (
+      typeof record.phraseName !== "string" ||
+      record.phraseName.length === 0 ||
+      typeof record.englishText !== "string" ||
+      !Array.isArray(record.languageCodes) ||
+      record.languageCodes.length === 0 ||
+      record.languageCodes.some(
+        (language) => typeof language !== "string" || language.length === 0,
+      )
+    ) {
+      return jsonErr(400, "Invalid freshness phrase record");
+    }
+    const languageCodes = record.languageCodes as string[];
+    if (
+      seenPhrases.has(record.phraseName) ||
+      new Set(languageCodes).size !== languageCodes.length
+    ) {
+      return jsonErr(400, "Duplicate freshness identifier");
+    }
+    seenPhrases.add(record.phraseName);
+    records.push({
+      phraseName: record.phraseName,
+      englishText: record.englishText,
+      languageCodes,
+    });
+  }
+
+  const version = await getCurrentVersion();
+  const current = version ? await getVersionedPhrases(version) : null;
+  if (!current) return jsonErr(409, "No current phrases version is available");
+  const knownLanguages = new Set(
+    Object.values(current.phrases).flatMap((row) => Object.keys(row)),
+  );
+  for (const record of records) {
+    if (!(record.phraseName in current.phrases)) {
+      return jsonErr(400, `Unknown phraseName: ${record.phraseName}`);
+    }
+    const unknownLanguage = record.languageCodes.find(
+      (language) => language === "en" || !knownLanguages.has(language),
+    );
+    if (unknownLanguage) {
+      return jsonErr(400, `Unknown languageCode: ${unknownLanguage}`);
+    }
+  }
+
+  const metadataByPhrase = new Map<string, Record<string, unknown>>();
+  const concurrency = 20;
+  for (let offset = 0; offset < records.length; offset += concurrency) {
+    const metadata = await Promise.all(
+      records.slice(offset, offset + concurrency).map(async (record) => {
+        const value = await firebaseGet(
+          `phraseTranslationMatches/${encodeFirebaseSegment(
+            record.phraseName,
+          )}`,
+        );
+        return {
+          phraseName: record.phraseName,
+          value:
+            typeof value === "object" && value !== null
+              ? (value as Record<string, unknown>)
+              : {},
+        };
+      }),
+    );
+    for (const { phraseName, value } of metadata) {
+      metadataByPhrase.set(phraseName, value);
+    }
+  }
+
+  const freshness: FreshnessResult[] = [];
+  for (const record of records) {
+    const phraseMetadata = metadataByPhrase.get(record.phraseName) ?? {};
+    for (const languageCode of record.languageCodes) {
+      const translation = current.phrases[record.phraseName]?.[languageCode];
+      const match = phraseMetadata[encodeFirebaseSegment(languageCode)];
+      freshness.push({
+        phraseName: record.phraseName,
+        languageCode,
+        fresh:
+          typeof translation === "string" &&
+          translation.length > 0 &&
+          isTranslationMatch(match) &&
+          match.matchedEnglishText === record.englishText,
+      });
+    }
+  }
+  return jsonOk({ freshness });
+}
+
 async function publishCurrentVersion(
   version: string,
   requestId: string,
@@ -411,6 +598,7 @@ async function handleTranslate(
     string,
     Record<string, string>
   >;
+  const translationImport = body.translationImport === true;
   const removedKeys = body.removedKeys ?? [];
   const activeLanguages = body.activeLanguages as string[] | undefined;
   const requestVersion = body.currentVersion as string;
@@ -603,8 +791,25 @@ async function handleTranslate(
     phraseCount: Object.keys(translatedRows).length,
   });
 
-  // Merge non-cyan updates: for keys not already handled by translateCells,
-  // store any values that differ from what is currently in Firebase.
+  // White translation output establishes a match with the English source.
+  // Non-white output does so only for the validated Read new translations
+  // workflow. Normal updates and legacy nonCyanPhrases publication must not
+  // certify human-owned values as fresh.
+  const matchedRows: PhraseMap = {};
+  for (const [key, row] of Object.entries(translatedRows)) {
+    for (const [language, value] of Object.entries(row)) {
+      if (language === "en") continue;
+      const background = colorMask[key]?.[language];
+      if (
+        !translationImport &&
+        String(background ?? "").toLowerCase() !== "#ffffff"
+      ) {
+        continue;
+      }
+      if (!matchedRows[key]) matchedRows[key] = {};
+      matchedRows[key][language] = value;
+    }
+  }
   const prevPhrases = prevVersioned?.phrases ?? {};
   for (const [key, langVals] of Object.entries(nonCyanPhrases)) {
     if (key in changedPhrases) continue;
@@ -634,6 +839,19 @@ async function handleTranslate(
     console.log(
       "[phrases/translate] no changes detected — returning existing version without Firebase write",
     );
+    const matchError = await persistTranslationMatches(
+      matchedRows,
+      Object.fromEntries(
+        Object.entries(prevPhrases).map(([phraseName, row]) => [
+          phraseName,
+          row.en,
+        ]),
+      ),
+      new Date(Date.now()).toISOString(),
+      requestId,
+      operation,
+    );
+    if (matchError) return matchError;
     const response = {
       newVersion: firebaseVersion,
       translatedRows,
@@ -750,6 +968,20 @@ async function handleTranslate(
     return persistenceVerificationError(publicationPath);
   }
 
+  const matchError = await persistTranslationMatches(
+    matchedRows,
+    Object.fromEntries(
+      Object.entries(newVersioned.phrases).map(([phraseName, row]) => [
+        phraseName,
+        row.en,
+      ]),
+    ),
+    publishedAt,
+    requestId,
+    operation,
+  );
+  if (matchError) return matchError;
+
   const response = {
     newVersion: newVersioned.version,
     translatedRows,
@@ -836,6 +1068,10 @@ async function handlePost(
 
   if (body.action === "fullResync") {
     return handleTranslate(body, true, requestId);
+  }
+
+  if (body.action === "checkFreshness") {
+    return handleCheckFreshness(body);
   }
 
   return jsonErr(400, `Unknown action: ${String(body.action)}`);
