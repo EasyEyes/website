@@ -5,6 +5,7 @@
     "strict": true,
     "esModuleInterop": true,
     "types": ["jest", "node"],
+    "rootDir": "..",
     "outDir": "dist"
   },
   "include": ["**/*.ts", "../shared/cors.ts"],
