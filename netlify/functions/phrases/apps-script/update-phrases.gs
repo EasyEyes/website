@@ -2029,13 +2029,17 @@ function buildFreshnessBatches(rows, batchSize) {
       return lang !== "en";
     },
   );
-  var records = Object.keys(index.rowsByPhrase).map(function (phraseName) {
-    return {
-      phraseName: phraseName,
-      englishText: rows[index.rowsByPhrase[phraseName]][index.enIdx] || "",
-      languageCodes: languageCodes,
-    };
-  });
+  var records = Object.keys(index.rowsByPhrase)
+    .filter(function (phraseName) {
+      return index.rowsByPhrase[phraseName] >= FIRST_TRANSLATION_ROW_INDEX;
+    })
+    .map(function (phraseName) {
+      return {
+        phraseName: phraseName,
+        englishText: rows[index.rowsByPhrase[phraseName]][index.enIdx] || "",
+        languageCodes: languageCodes,
+      };
+    });
   var batches = [];
   for (var offset = 0; offset < records.length; offset += batchSize || 50) {
     batches.push({
@@ -2064,6 +2068,7 @@ function planFreshnessFontColors(rows, currentColors, freshnessResults) {
   var lookup = freshnessLookup(freshnessResults);
   Object.keys(index.rowsByPhrase).forEach(function (phraseName) {
     var row = index.rowsByPhrase[phraseName];
+    if (row < FIRST_TRANSLATION_ROW_INDEX) return;
     Object.keys(index.columnsByLanguage).forEach(function (language) {
       if (language === "en") return;
       var column = index.columnsByLanguage[language];

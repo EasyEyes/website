@@ -90,7 +90,9 @@ describe("International Phrases freshness workflows", () => {
   });
 
   test("builds identifier-based batches independent of row order", () => {
-    const { buildFreshnessBatches } = loadAppsScript();
+    const context = loadAppsScript();
+    context.FIRST_TRANSLATION_ROW_INDEX = 1;
+    const { buildFreshnessBatches } = context;
     expect(buildFreshnessBatches(rows, 1)).toEqual([
       {
         action: "checkFreshness",
@@ -130,10 +132,12 @@ describe("International Phrases freshness workflows", () => {
         "French " + index,
       ]),
     ];
-    const { fetchFreshness } = loadAppsScript({
+    const context = loadAppsScript({
       UrlFetchApp: { fetchAll },
       Utilities: { getUuid: () => "request-id", sleep: jest.fn() },
     });
+    context.FIRST_TRANSLATION_ROW_INDEX = 1;
+    const { fetchFreshness } = context;
 
     expect(fetchFreshness(largeSheet, "secret")).toEqual([]);
     expect(fetchAll.mock.calls.map(([requests]) => requests.length)).toEqual([
@@ -177,7 +181,9 @@ describe("International Phrases freshness workflows", () => {
   });
 
   test("changes only target font colors and treats blanks as stale", () => {
-    const { planFreshnessFontColors } = loadAppsScript();
+    const context = loadAppsScript();
+    context.FIRST_TRANSLATION_ROW_INDEX = 1;
+    const { planFreshnessFontColors } = context;
     const values = rows.map((row) => row.slice());
     values[2][3] = "";
     const colors = values.map((row, rowIndex) =>
@@ -192,6 +198,43 @@ describe("International Phrases freshness workflows", () => {
     expect(planned[0]).toEqual(colors[0]);
     expect(planned[1]).toEqual(["#654321", "#654321", "#000000", "#ff0000"]);
     expect(planned[2]).toEqual(["#654321", "#654321", "#000000", "#ff0000"]);
+  });
+
+  test("checks and colors only rows in the translation section", () => {
+    const { buildFreshnessBatches, planFreshnessFontColors } = loadAppsScript();
+    const values = [
+      ["EE_LanguageCode", "en", "fr"],
+      ...Array.from({ length: 8 }, (_, index) => [
+        "metadata" + index,
+        "Metadata " + index,
+        "Métadonnée " + index,
+      ]),
+      ["translatedPhrase", "Hello", "Bonjour"],
+    ];
+    const colors = values.map((row) => row.map(() => "#123456"));
+    const freshness = [
+      { phraseName: "metadata0", languageCode: "fr", fresh: false },
+      { phraseName: "translatedPhrase", languageCode: "fr", fresh: false },
+    ];
+
+    expect(buildFreshnessBatches(values, 50)).toEqual([
+      {
+        action: "checkFreshness",
+        phrases: [
+          {
+            phraseName: "translatedPhrase",
+            englishText: "Hello",
+            languageCodes: ["fr"],
+          },
+        ],
+      },
+    ]);
+    expect(
+      planFreshnessFontColors(values, colors, freshness).slice(0, 9),
+    ).toEqual(colors.slice(0, 9));
+    expect(planFreshnessFontColors(values, colors, freshness)[9][2]).toBe(
+      "#ff0000",
+    );
   });
 
   test("shows a freshness loading dialog while colors are being checked", () => {
@@ -214,7 +257,7 @@ describe("International Phrases freshness workflows", () => {
       setHeight: jest.fn().mockReturnThis(),
       setWidth: jest.fn().mockReturnThis(),
     };
-    const { colorStaleTranslationTextRed } = loadAppsScript({
+    const context = loadAppsScript({
       CacheService: {
         getUserCache: () => ({ remove: jest.fn(), get: jest.fn() }),
       },
@@ -245,6 +288,8 @@ describe("International Phrases freshness workflows", () => {
       UrlFetchApp: { fetchAll: jest.fn(() => [response]) },
       Utilities: { getUuid: () => "request-id", sleep: jest.fn() },
     });
+    context.FIRST_TRANSLATION_ROW_INDEX = 1;
+    const { colorStaleTranslationTextRed } = context;
 
     colorStaleTranslationTextRed(
       "Translation freshness colors updated. Latest phrases version: 7.4.",
