@@ -397,11 +397,10 @@ function buildPhraseAuditHtml(audit) {
           }
           .cell-button:hover, .back-button:hover { background: #e8f0fe; }
           .cell-button:focus-visible, .back-button:focus-visible,
-          .sheet-value:focus-visible { outline: 3px solid #8ab4f8; outline-offset: 2px; }
+          .sheet-cell-link:focus-visible { outline: 3px solid #8ab4f8; outline-offset: 2px; }
           .empty { color: #5f6368; font-size: 16px; }
-          .detail { display: none; grid-template-rows: auto minmax(0, 1fr); gap: 12px; }
+          .detail { display: none; grid-template-rows: auto minmax(0, 1fr); gap: 8px; }
           .detail-header { display: flex; align-items: center; gap: 12px; }
-          .detail-header h1 { margin: 0; }
           .values {
             display: grid;
             grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -431,7 +430,7 @@ function buildPhraseAuditHtml(audit) {
             overflow-wrap: anywhere;
             font: 14px/1.5 Arial, sans-serif;
           }
-          .sheet-value { color: inherit; text-decoration-color: #1a73e8; }
+          .sheet-cell-link { color: #1967d2; text-decoration-color: #1a73e8; }
           @media (max-width: 700px) {
             .dates, .values { grid-template-columns: 1fr; }
           }
@@ -441,12 +440,12 @@ function buildPhraseAuditHtml(audit) {
         <main class="audit">
           <section class="dates" aria-label="Source dates">
             <div class="date">
-              <strong>Firebase copy</strong>
-              <time id="firebase-date"></time>
-            </div>
-            <div class="date">
               <strong>International Phrases spreadsheet</strong>
               <time id="sheet-date"></time>
+            </div>
+            <div class="date">
+              <strong>Firebase copy</strong>
+              <time id="firebase-date"></time>
             </div>
           </section>
           <section class="view">
@@ -459,16 +458,15 @@ function buildPhraseAuditHtml(audit) {
             <div class="detail" id="detail">
               <div class="detail-header">
                 <button class="back-button" id="back" type="button">Back to list</button>
-                <h1 id="detail-title"></h1>
               </div>
               <div class="values">
                 <section class="value-panel">
-                  <h2>Firebase copy</h2>
-                  <pre class="value" id="firebase-value"></pre>
+                  <h2><a class="sheet-cell-link" id="sheet-cell-link" target="_blank" rel="noopener noreferrer"></a> International Phrases spreadsheet</h2>
+                  <pre class="value" id="sheet-value"></pre>
                 </section>
                 <section class="value-panel">
-                  <h2>International Phrases spreadsheet — click to edit</h2>
-                  <a class="value sheet-value" id="sheet-value" target="_blank" rel="noopener noreferrer"></a>
+                  <h2><span id="firebase-coordinate"></span> in Firebase copy</h2>
+                  <pre class="value" id="firebase-value"></pre>
                 </section>
               </div>
             </div>
@@ -518,13 +516,13 @@ function buildPhraseAuditHtml(audit) {
 
           function showDetail(index) {
             var difference = audit.differences[index];
-            document.getElementById("detail-title").textContent =
-              "Differing cell: " + difference.coordinate;
-            document.getElementById("firebase-value").textContent = difference.firebaseValue;
-            var sheetValue = document.getElementById("sheet-value");
-            sheetValue.textContent = difference.sheetValue;
-            sheetValue.href = audit.sheetUrl.split("#")[0] + "#gid=" + audit.sheetId +
+            var sheetCellLink = document.getElementById("sheet-cell-link");
+            sheetCellLink.textContent = difference.coordinate;
+            sheetCellLink.href = audit.sheetUrl.split("#")[0] + "#gid=" + audit.sheetId +
               "&range=" + encodeURIComponent(difference.coordinate);
+            document.getElementById("sheet-value").textContent = difference.sheetValue;
+            document.getElementById("firebase-coordinate").textContent = difference.coordinate;
+            document.getElementById("firebase-value").textContent = difference.firebaseValue;
             document.getElementById("summary").style.display = "none";
             document.getElementById("detail").style.display = "grid";
             document.getElementById("back").focus();
@@ -621,7 +619,13 @@ function updatePhrases(options) {
 
 // Install this function as an authorized spreadsheet "On edit" trigger.
 function handleInternationalPhrasesEdit(e) {
-  if (!e || !e.range || e.range.getSheet().getName() !== "Translations") {
+  if (
+    !e ||
+    !e.range ||
+    e.range.getSheet().getName() !== "Translations" ||
+    e.range.getColumn() !== 2 ||
+    e.range.getRow() < FIRST_TRANSLATION_ROW_INDEX
+  ) {
     return;
   }
 
