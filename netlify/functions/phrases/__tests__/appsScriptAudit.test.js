@@ -131,11 +131,22 @@ describe("International Phrases Firebase audit", () => {
       ],
     });
 
-    expect(html).toContain("Firebase copy");
-    expect(html).toContain("International Phrases spreadsheet");
+    expect(html.indexOf("International Phrases spreadsheet")).toBeLessThan(
+      html.indexOf("Firebase copy"),
+    );
     expect(html).toContain("Differing cells: 1");
     expect(html).toContain("AA123");
-    expect(html).toContain('target="_blank"');
+    expect(html).toContain(
+      '<a class="sheet-cell-link" id="sheet-cell-link" target="_blank" rel="noopener noreferrer"></a> International Phrases spreadsheet',
+    );
+    expect(html).toContain(
+      '<span id="firebase-coordinate"></span> in Firebase copy',
+    );
+    expect(html).toContain('<pre class="value" id="sheet-value"></pre>');
+    expect(html.indexOf('id="sheet-cell-link"')).toBeLessThan(
+      html.indexOf('id="firebase-coordinate"'),
+    );
+    expect(html).not.toContain('id="detail-title"');
     expect(html).toContain("overflow: auto");
     expect(html).not.toContain("contenteditable");
     expect(html).not.toContain("</script><script>alert(1)</script>");
@@ -143,5 +154,57 @@ describe("International Phrases Firebase audit", () => {
     const inlineScript = html.match(/<script>([\s\S]*)<\/script>/)?.[1];
     expect(inlineScript).toBeDefined();
     expect(() => new vm.Script(inlineScript)).not.toThrow();
+
+    function createElement() {
+      return {
+        children: [],
+        listeners: {},
+        style: {},
+        textContent: "",
+        addEventListener(eventName, listener) {
+          this.listeners[eventName] = listener;
+        },
+        appendChild(child) {
+          this.children.push(child);
+        },
+        focus: jest.fn(),
+        setAttribute: jest.fn(),
+      };
+    }
+
+    const elements = {};
+    [
+      "firebase-date",
+      "sheet-date",
+      "cell-list",
+      "summary",
+      "detail",
+      "back",
+      "sheet-cell-link",
+      "sheet-value",
+      "firebase-coordinate",
+      "firebase-value",
+    ].forEach((id) => {
+      elements[id] = createElement();
+    });
+    const document = {
+      createDocumentFragment: createElement,
+      createElement,
+      getElementById: (id) => elements[id],
+    };
+
+    vm.runInNewContext(inlineScript, { document });
+    const firstCellButton = elements["cell-list"].children[0].children[0];
+    firstCellButton.listeners.click();
+
+    expect(elements["sheet-cell-link"].textContent).toBe("AA123");
+    expect(elements["sheet-cell-link"].href).toBe(
+      "https://docs.google.com/spreadsheets/d/id/edit#gid=7&range=AA123",
+    );
+    expect(elements["sheet-value"].textContent).toBe(
+      "International phrase </script><script>alert(1)</script>",
+    );
+    expect(elements["firebase-coordinate"].textContent).toBe("AA123");
+    expect(elements["firebase-value"].textContent).toBe("Firebase phrase");
   });
 });

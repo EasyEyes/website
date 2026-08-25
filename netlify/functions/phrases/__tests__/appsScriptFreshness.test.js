@@ -36,6 +36,8 @@ describe("International Phrases freshness workflows", () => {
     context.handleInternationalPhrasesEdit({
       range: {
         getSheet: () => ({ getName: () => "Translations" }),
+        getColumn: () => 2,
+        getRow: () => context.FIRST_TRANSLATION_ROW_INDEX,
       },
     });
 
@@ -57,6 +59,26 @@ describe("International Phrases freshness workflows", () => {
     context.handleInternationalPhrasesEdit({
       range: {
         getSheet: () => ({ getName: () => "Metadata" }),
+      },
+    });
+
+    expect(context.updatePhrases).not.toHaveBeenCalled();
+    expect(context.colorStaleTranslationTextRed).not.toHaveBeenCalled();
+  });
+
+  test.each([
+    ["outside the English source column", 3, 9],
+    ["above the first translation row", 2, 8],
+  ])("ignores edits %s", (_description, column, row) => {
+    const context = loadAppsScript();
+    context.updatePhrases = jest.fn();
+    context.colorStaleTranslationTextRed = jest.fn();
+
+    context.handleInternationalPhrasesEdit({
+      range: {
+        getSheet: () => ({ getName: () => "Translations" }),
+        getColumn: () => column,
+        getRow: () => row,
       },
     });
 
