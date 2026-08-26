@@ -392,7 +392,7 @@ export async function translatePhraseFile(xlsxBuffer: Buffer, deps: Deps): Promi
     let g: ColJob | null = null;
     for (let c = 2; c <= range.e.c; c++) {
       const codeCell = ws[XLSX.utils.encode_cell({ r: langCodeRow, c })];
-      if (!codeCell) continue;
+      if (codeCell?.v == null || String(codeCell.v).trim() === "") continue;
       const langCode = String(codeCell.v);
 
       const rows: number[] = [];

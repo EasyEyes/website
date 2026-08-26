@@ -109,7 +109,7 @@ function makeZip(entries: Array<{ name: string; data: string | Buffer }>): Buffe
 }
 
 type CellSpec = { value: string; colored?: boolean };
-type ColumnSpec = { code: string; cells: CellSpec[] };
+type ColumnSpec = { code?: string; cells: CellSpec[] };
 
 /**
  * Build a phrase xlsx buffer with proper OOXML fill colors.
@@ -138,7 +138,7 @@ function buildPhraseXlsx(opts: {
   // Pre-populate shared strings in order
   si("~LanguageCode");
   si(sourceCode);
-  for (const col of targetColumns) si(col.code);
+  for (const col of targetColumns) if (col.code !== undefined) si(col.code);
   for (const sym of symbols) si(sym);
   for (const sc of sourceCells) si(sc.value);
   for (const col of targetColumns) for (const c of col.cells) si(c.value);
@@ -153,8 +153,10 @@ function buildPhraseXlsx(opts: {
   const headerCells = [
     `<c r="${colLetters[0]}1" t="s"><v>${si("~LanguageCode")}</v></c>`,
     `<c r="${colLetters[1]}1" t="s"><v>${si(sourceCode)}</v></c>`,
-    ...targetColumns.map(
-      (col, ci) => `<c r="${colLetters[2 + ci]}1" t="s"><v>${si(col.code)}</v></c>`
+    ...targetColumns.map((col, ci) =>
+      col.code === undefined
+        ? `<c r="${colLetters[2 + ci]}1"/>`
+        : `<c r="${colLetters[2 + ci]}1" t="s"><v>${si(col.code)}</v></c>`
     )
   ];
   rows.push(`<row r="1">${headerCells.join("")}</row>`);
@@ -295,6 +297,30 @@ describe("white/no-color cell in target column → translated via DeepL", () => 
     expect(body.target_lang).toBe("FR");
     expect(body.source_lang).toBe("EN");
     expect(body.text).toEqual(["Hello"]);
+  });
+
+  test("blank target-language headers are ignored", async () => {
+    const buf = buildPhraseXlsx({
+      sourceCode: "en",
+      symbols: ["~Greeting"],
+      sourceCells: [{ value: "Hello" }],
+      targetColumns: [{ code: "fr", cells: [{ value: "" }] }, { cells: [{ value: "" }] }]
+    });
+
+    const deeplFetch = makeDeeplFetch([deeplOk(["Bonjour"])]);
+    const deps: Deps = {
+      deeplFetch: deeplFetch as unknown as Deps["deeplFetch"],
+      googleFetch: jest.fn() as unknown as Deps["googleFetch"],
+      deeplApiKey: "dkey",
+      sleep: noSleep
+    };
+
+    const out = await translatePhraseFile(buf, deps);
+
+    expect(readCell(out, "C2")).toBe("[Bonjour]");
+    expect(readCell(out, "D2")).toBe("");
+    expect(deeplFetch).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(deeplFetch.mock.calls[0][1].body).target_lang).toBe("FR");
   });
 
   test("emoji are ignored XML and restored at DeepL's translated position", async () => {
