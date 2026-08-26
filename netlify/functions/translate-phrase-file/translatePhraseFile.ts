@@ -270,14 +270,23 @@ async function callDeepL(
   console.log(`[DeepL] request to ${targetLang}:`, JSON.stringify(requestBody));
 
   for (let attempt = 0; attempt < 3; attempt++) {
-    const res = await deps.deeplFetch(`${baseUrl}/v2/translate`, {
-      method: "POST",
-      headers: {
-        Authorization: `DeepL-Auth-Key ${deps.deeplApiKey}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify(requestBody)
-    });
+    let res: Awaited<ReturnType<Deps["deeplFetch"]>>;
+    try {
+      res = await deps.deeplFetch(`${baseUrl}/v2/translate`, {
+        method: "POST",
+        headers: {
+          Authorization: `DeepL-Auth-Key ${deps.deeplApiKey}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(requestBody)
+      });
+    } catch (err) {
+      if (attempt < 2) {
+        await sleep(1000);
+        continue;
+      }
+      throw err;
+    }
 
     console.log(`[DeepL] response status for ${targetLang}: ${res.status}`);
 
@@ -392,7 +401,7 @@ export async function translatePhraseFile(xlsxBuffer: Buffer, deps: Deps): Promi
     let g: ColJob | null = null;
     for (let c = 2; c <= range.e.c; c++) {
       const codeCell = ws[XLSX.utils.encode_cell({ r: langCodeRow, c })];
-      if (!codeCell) continue;
+      if (codeCell?.v == null || String(codeCell.v).trim() === "") continue;
       const langCode = String(codeCell.v);
 
       const rows: number[] = [];
@@ -400,6 +409,10 @@ export async function translatePhraseFile(xlsxBuffer: Buffer, deps: Deps): Promi
 
       for (let r = range.s.r; r <= range.e.r; r++) {
         if (r === langCodeRow) continue;
+        const keyCell = ws[XLSX.utils.encode_cell({ r, c: 0 })];
+        if (keyCell?.v == null || String(keyCell.v).trim() === "") continue;
+        const srcCell = ws[XLSX.utils.encode_cell({ r, c: 1 })];
+        if (srcCell?.v == null || String(srcCell.v).trim() === "") continue;
         const addr = XLSX.utils.encode_cell({ r, c });
         const cell = ws[addr];
         const bg = (cell?.s as { fgColor?: { rgb?: string } } | undefined)?.fgColor?.rgb;
@@ -411,8 +424,7 @@ export async function translatePhraseFile(xlsxBuffer: Buffer, deps: Deps): Promi
         );
         if (!shouldTranslate) continue;
         // Source text comes from column B (index 1) of the same row
-        const srcCell = ws[XLSX.utils.encode_cell({ r, c: 1 })];
-        const srcText = srcCell ? String(srcCell.v) : "";
+        const srcText = String(srcCell.v);
         rows.push(r);
         texts.push(srcText);
       }
