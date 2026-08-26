@@ -409,6 +409,10 @@ export async function translatePhraseFile(xlsxBuffer: Buffer, deps: Deps): Promi
 
       for (let r = range.s.r; r <= range.e.r; r++) {
         if (r === langCodeRow) continue;
+        const keyCell = ws[XLSX.utils.encode_cell({ r, c: 0 })];
+        if (keyCell?.v == null || String(keyCell.v).trim() === "") continue;
+        const srcCell = ws[XLSX.utils.encode_cell({ r, c: 1 })];
+        if (srcCell?.v == null || String(srcCell.v).trim() === "") continue;
         const addr = XLSX.utils.encode_cell({ r, c });
         const cell = ws[addr];
         const bg = (cell?.s as { fgColor?: { rgb?: string } } | undefined)?.fgColor?.rgb;
@@ -420,8 +424,7 @@ export async function translatePhraseFile(xlsxBuffer: Buffer, deps: Deps): Promi
         );
         if (!shouldTranslate) continue;
         // Source text comes from column B (index 1) of the same row
-        const srcCell = ws[XLSX.utils.encode_cell({ r, c: 1 })];
-        const srcText = srcCell ? String(srcCell.v) : "";
+        const srcText = String(srcCell.v);
         rows.push(r);
         texts.push(srcText);
       }

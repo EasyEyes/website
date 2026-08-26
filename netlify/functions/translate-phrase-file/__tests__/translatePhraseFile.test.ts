@@ -323,6 +323,36 @@ describe("white/no-color cell in target column → translated via DeepL", () => 
     expect(JSON.parse(deeplFetch.mock.calls[0][1].body).target_lang).toBe("FR");
   });
 
+  test("rows with a blank column A or missing source text are ignored", async () => {
+    const buf = buildPhraseXlsx({
+      sourceCode: "en",
+      symbols: ["~Greeting", "", "~MissingSource"],
+      sourceCells: [{ value: "Hello" }, { value: "Do not translate" }],
+      targetColumns: [
+        {
+          code: "fr",
+          cells: [{ value: "" }, { value: "" }, { value: "" }]
+        }
+      ]
+    });
+
+    const deeplFetch = makeDeeplFetch([deeplOk(["Bonjour", "Ignore", "Ignore"])]);
+    const deps: Deps = {
+      deeplFetch: deeplFetch as unknown as Deps["deeplFetch"],
+      googleFetch: jest.fn() as unknown as Deps["googleFetch"],
+      deeplApiKey: "dkey",
+      sleep: noSleep
+    };
+
+    const out = await translatePhraseFile(buf, deps);
+    const body = JSON.parse(deeplFetch.mock.calls[0][1].body);
+
+    expect(body.text).toEqual(["Hello"]);
+    expect(readCell(out, "C2")).toBe("[Bonjour]");
+    expect(readCell(out, "C3")).toBe("");
+    expect(readCell(out, "C4")).toBe("");
+  });
+
   test("emoji are ignored XML and restored at DeepL's translated position", async () => {
     const buf = buildPhraseXlsx({
       sourceCode: "en",
