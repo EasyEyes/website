@@ -461,6 +461,55 @@ describe("missing LanguageCode row", () => {
 // ---------------------------------------------------------------------------
 
 describe("DeepL failure → throws", () => {
+  test("transient DeepL fetch failure is retried", async () => {
+    const buf = buildPhraseXlsx({
+      sourceCode: "en",
+      symbols: ["~Greeting"],
+      sourceCells: [{ value: "Hello" }],
+      targetColumns: [{ code: "fr", cells: [{ value: "" }] }]
+    });
+
+    const deeplFetch = jest
+      .fn()
+      .mockRejectedValueOnce(new Error("fetch failed"))
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve(deeplOk(["Bonjour"]).body)
+      });
+    const deps: Deps = {
+      deeplFetch: deeplFetch as unknown as Deps["deeplFetch"],
+      googleFetch: jest.fn() as unknown as Deps["googleFetch"],
+      deeplApiKey: "dkey",
+      sleep: noSleep
+    };
+
+    const out = await translatePhraseFile(buf, deps);
+
+    expect(readCell(out, "C2")).toBe("[Bonjour]");
+    expect(deeplFetch).toHaveBeenCalledTimes(2);
+  });
+
+  test("persistent DeepL fetch failure is thrown after three attempts", async () => {
+    const buf = buildPhraseXlsx({
+      sourceCode: "en",
+      symbols: ["~Greeting"],
+      sourceCells: [{ value: "Hello" }],
+      targetColumns: [{ code: "fr", cells: [{ value: "" }] }]
+    });
+
+    const deeplFetch = jest.fn().mockRejectedValue(new Error("fetch failed"));
+    const deps: Deps = {
+      deeplFetch: deeplFetch as unknown as Deps["deeplFetch"],
+      googleFetch: jest.fn() as unknown as Deps["googleFetch"],
+      deeplApiKey: "dkey",
+      sleep: noSleep
+    };
+
+    await expect(translatePhraseFile(buf, deps)).rejects.toThrow("fetch failed");
+    expect(deeplFetch).toHaveBeenCalledTimes(3);
+  });
+
   test("DeepL 500 → throws with status in message", async () => {
     const buf = buildPhraseXlsx({
       sourceCode: "en",

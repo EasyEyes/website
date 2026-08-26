@@ -270,14 +270,23 @@ async function callDeepL(
   console.log(`[DeepL] request to ${targetLang}:`, JSON.stringify(requestBody));
 
   for (let attempt = 0; attempt < 3; attempt++) {
-    const res = await deps.deeplFetch(`${baseUrl}/v2/translate`, {
-      method: "POST",
-      headers: {
-        Authorization: `DeepL-Auth-Key ${deps.deeplApiKey}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify(requestBody)
-    });
+    let res: Awaited<ReturnType<Deps["deeplFetch"]>>;
+    try {
+      res = await deps.deeplFetch(`${baseUrl}/v2/translate`, {
+        method: "POST",
+        headers: {
+          Authorization: `DeepL-Auth-Key ${deps.deeplApiKey}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(requestBody)
+      });
+    } catch (err) {
+      if (attempt < 2) {
+        await sleep(1000);
+        continue;
+      }
+      throw err;
+    }
 
     console.log(`[DeepL] response status for ${targetLang}: ${res.status}`);
 
