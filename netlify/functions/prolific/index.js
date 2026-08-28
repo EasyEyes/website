@@ -298,26 +298,6 @@ exports.handler = async (event, context) => {
     }
 
     return responseWrapper(statusCode, data);
-  } else if (/^projects\/[^/]+\/$/.test(task)) {
-    try {
-      const response = await fetch(`https://api.prolific.com/api/v1/${task}`, {
-        method: "GET",
-        headers: {
-          ...event.headers,
-          host: "api.prolific.com",
-          "Access-Control-Allow-Origin": "*",
-        },
-      });
-
-      data = await response.json();
-      statusCode = response.status;
-    } catch (error) {
-      console.error("ERROR", error);
-      data = { error: error.message };
-      statusCode = 500;
-    }
-
-    return responseWrapper(statusCode, data);
   } else if (task.includes("studies")) {
     // ! retrive study
     try {
