@@ -9,6 +9,17 @@ Suggested key names follow the existing `EE_` convention; feel free to rename.
 
 ---
 
+## Priority 1 — Fullscreen-exit pause overlay (components/fullscreenPause.js)
+
+Shown whenever the participant leaves fullscreen during a running study (e.g. by pressing Escape). Two buttons let them either return to fullscreen and continue, or end the study deliberately. Currently 100% English because these keys do not exist yet — English fallbacks live in `components/fullscreenPause.js`.
+
+| Suggested key       | English text                                                                                                          |
+| ------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| EE_ResumeStudy      | Resume study                                                                                                          |
+| EE_QuitStudy        | Quit study                                                                                                            |
+| EE_studyPausedTitle | Study paused                                                                                                          |
+| EE_studyPausedBody  | You have left fullscreen and the study is paused. Click Resume study to continue, or Quit study to end the study now. |
+
 ## Priority 1 — Fatal error dialog (PsychoJS GUI)
 
 Every uncaught runtime error shows this dialog. Currently 100% English.
