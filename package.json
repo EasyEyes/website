@@ -18,7 +18,9 @@
     "publish:compiler": "node scripts/publish-compiler-build.mjs",
     "i18n:local": "node scripts/fetch-i18n-local.mjs",
     "glossary:local": "node scripts/fetch-glossary-local.mjs",
-    "test:compiler-cache": "node --test netlify/tests/*.test.js"
+    "test:compiler-cache": "node --test netlify/tests/*.test.js",
+    "catalog-audit": "node scripts/catalog-audit/cli.mjs",
+    "test:catalog-audit": "node --test scripts/catalog-audit/*.test.mjs"
   },
   "repository": {
     "type": "git",
@@ -31,6 +33,8 @@
   },
   "homepage": "https://github.com/EasyEyes/website#readme",
   "devDependencies": {
+    "@babel/parser": "^7.28.4",
+    "@babel/parser": "^7.29.8",
     "debug": "^4.4.3",
     "eslint": "^8.53.0",
     "husky": "^8.0.3",

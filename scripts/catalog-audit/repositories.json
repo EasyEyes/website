@@ -1,0 +1,145 @@
+[
+  {
+    "name": "compatibility-check",
+    "url": "https://github.com/EasyEyes/compatibility-check",
+    "defaultBranch": "main",
+    "status": "excluded",
+    "reason": "Browser compatibility probe; no catalog reader found during the 2026-09 inventory."
+  },
+  {
+    "name": "cors-anywhere",
+    "url": "https://github.com/EasyEyes/cors-anywhere",
+    "defaultBranch": "master",
+    "status": "excluded",
+    "reason": "Upstream proxy fork; not first-party catalog-consuming application code."
+  },
+  {
+    "name": "Easyeyes-Analyzer",
+    "url": "https://github.com/EasyEyes/Easyeyes-Analyzer",
+    "defaultBranch": "main",
+    "status": "excluded",
+    "reason": "R analysis application; no International Phrases or Parameter Glossary reader found."
+  },
+  {
+    "name": "js.org",
+    "url": "https://github.com/EasyEyes/js.org",
+    "defaultBranch": "master",
+    "status": "excluded",
+    "reason": "Upstream domain registry fork; not an EasyEyes application."
+  },
+  {
+    "name": "nodejs-server",
+    "url": "https://github.com/EasyEyes/nodejs-server",
+    "defaultBranch": "main",
+    "status": "excluded",
+    "reason": "Legacy server; no active catalog reader found."
+  },
+  {
+    "name": "psychojs",
+    "url": "https://github.com/EasyEyes/psychojs",
+    "defaultBranch": "threshold-prod",
+    "status": "excluded",
+    "reason": "Excluded by the approved V2 scope unless direct catalog consumption is proven."
+  },
+  {
+    "name": "python-flask-server",
+    "url": "https://github.com/EasyEyes/python-flask-server",
+    "defaultBranch": "main",
+    "status": "excluded",
+    "reason": "Legacy server; no active catalog reader found."
+  },
+  {
+    "name": "remote-calibrator",
+    "url": "https://github.com/EasyEyes/remote-calibrator",
+    "defaultBranch": "main",
+    "status": "included",
+    "localPath": "../remote-calibrator",
+    "catalogKinds": ["phrases", "parameters"],
+    "sourceRoots": ["src", "homepage"],
+    "excludeRoots": [
+      "node_modules",
+      "dist",
+      "build",
+      "coverage",
+      "test",
+      "test-exec",
+      "lib"
+    ],
+    "readers": [],
+    "dynamicRegistrations": []
+  },
+  {
+    "name": "speaker-calibration",
+    "url": "https://github.com/EasyEyes/speaker-calibration",
+    "defaultBranch": "main",
+    "status": "included",
+    "localPath": "../speaker-calibration",
+    "catalogKinds": ["phrases", "parameters"],
+    "sourceRoots": ["src"],
+    "excludeRoots": ["node_modules", "dist", "build", "coverage", "__mocks__"],
+    "readers": [],
+    "dynamicRegistrations": []
+  },
+  {
+    "name": "threshold",
+    "url": "https://github.com/EasyEyes/threshold",
+    "defaultBranch": "main",
+    "status": "included",
+    "localPath": "docs/experiment/threshold",
+    "catalogKinds": ["phrases", "parameters"],
+    "sourceRoots": ["components", "preprocess", "examples", "parameters"],
+    "excludeRoots": ["node_modules", "dist", "build", "coverage", "psychojs"],
+    "readers": [],
+    "dynamicRegistrations": ["catalog-audit.dynamic.json"]
+  },
+  {
+    "name": "threshold-scientist",
+    "url": "https://github.com/EasyEyes/threshold-scientist",
+    "defaultBranch": "new-main",
+    "status": "included",
+    "localPath": "docs/experiment",
+    "catalogKinds": ["phrases", "parameters"],
+    "sourceRoots": ["source", "studio/src"],
+    "excludeRoots": [
+      "node_modules",
+      "dist",
+      "build",
+      "coverage",
+      "threshold",
+      "glossarySnapshot.js"
+    ],
+    "readers": [],
+    "dynamicRegistrations": []
+  },
+  {
+    "name": "virtual-keypad",
+    "url": "https://github.com/EasyEyes/virtual-keypad",
+    "defaultBranch": "main",
+    "status": "included",
+    "localPath": "../virtual-keypad",
+    "catalogKinds": ["phrases"],
+    "sourceRoots": ["src"],
+    "excludeRoots": ["node_modules", "dist", "build", "coverage", "__tests__"],
+    "readers": [],
+    "dynamicRegistrations": []
+  },
+  {
+    "name": "WebGazer4RC",
+    "url": "https://github.com/EasyEyes/WebGazer4RC",
+    "defaultBranch": "rc-prod",
+    "status": "excluded",
+    "reason": "Upstream gaze-tracking fork; no EasyEyes catalog ownership."
+  },
+  {
+    "name": "website",
+    "url": "https://github.com/EasyEyes/website",
+    "defaultBranch": "main",
+    "status": "included",
+    "localPath": ".",
+    "catalogKinds": ["phrases", "parameters"],
+    "sourceRoots": ["netlify/functions"],
+    "excludeRoots": ["node_modules", "dist", "build", "coverage", "docs"],
+    "readers": [],
+    "dynamicRegistrations": []
+  }
+]

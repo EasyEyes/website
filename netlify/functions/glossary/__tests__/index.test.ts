@@ -23,7 +23,7 @@ function makeRows(
     explanation?: string;
     example?: string;
     categories?: string;
-  }>
+  }>,
 ): string[][] {
   return [
     HEADERS,
@@ -64,7 +64,7 @@ function makeGetEvent(queryStringParameters: Record<string, string> = {}) {
 function mockFetch(responses: Array<{ url: RegExp | string; body: unknown }>) {
   (global as unknown as { fetch: jest.Mock }).fetch = jest.fn((url: string) => {
     const match = responses.find((r) =>
-      r.url instanceof RegExp ? r.url.test(url) : url.includes(r.url as string)
+      r.url instanceof RegExp ? r.url.test(url) : url.includes(r.url as string),
     );
     return Promise.resolve({
       ok: true,
@@ -102,7 +102,7 @@ describe("POST /glossary — authentication", () => {
 
   test("wrong secret → 401", async () => {
     const res = await handler(
-      makeEvent({ headers: { "x-glossary-secret": "wrong" } })
+      makeEvent({ headers: { "x-glossary-secret": "wrong" } }),
     );
     expect(res.statusCode).toBe(401);
   });
@@ -116,7 +116,7 @@ describe("POST /glossary — body validation", () => {
 
   test("rows is not an array → 400", async () => {
     const res = await handler(
-      makeEvent({ body: JSON.stringify({ rows: "bad" }) })
+      makeEvent({ body: JSON.stringify({ rows: "bad" }) }),
     );
     expect(res.statusCode).toBe(400);
   });
@@ -142,7 +142,7 @@ describe("POST /glossary — versioning", () => {
           url: expect.stringContaining("/versions/1_dot_0/publishedAt"),
           body: "2026-08-08T12:00:00.000Z",
         }),
-      ])
+      ]),
     );
   });
 
@@ -150,22 +150,17 @@ describe("POST /glossary — versioning", () => {
     mockFetch([{ url: /currentVersion/, body: null }]);
 
     const rows = makeRows([{ name: "_about" }]);
-    const res = await handler(
-      makeEvent({ body: JSON.stringify({ rows }) })
-    );
+    const res = await handler(makeEvent({ body: JSON.stringify({ rows }) }));
 
     expect(res.statusCode).toBe(200);
     expect(JSON.parse(res.body)).toEqual({ version: "1.0" });
 
     const puts = capturedPuts();
     expect(puts.some((p) => p.url.includes("/versions/1_dot_0/glossary"))).toBe(
-      true
+      true,
     );
     expect(
-      puts.some(
-        (p) =>
-          p.url.includes("/currentVersion") && p.body === "1.0"
-      )
+      puts.some((p) => p.url.includes("/currentVersion") && p.body === "1.0"),
     ).toBe(true);
   });
 
@@ -189,9 +184,7 @@ describe("POST /glossary — versioning", () => {
     const rows = makeRows([
       { name: "_about", explanation: "New explanation." },
     ]);
-    const res = await handler(
-      makeEvent({ body: JSON.stringify({ rows }) })
-    );
+    const res = await handler(makeEvent({ body: JSON.stringify({ rows }) }));
 
     expect(res.statusCode).toBe(200);
     expect(JSON.parse(res.body)).toEqual({ version: "1.1" });
@@ -215,9 +208,7 @@ describe("POST /glossary — versioning", () => {
     ]);
 
     const rows = makeRows([{ name: "_about" }, { name: "_newParam" }]);
-    const res = await handler(
-      makeEvent({ body: JSON.stringify({ rows }) })
-    );
+    const res = await handler(makeEvent({ body: JSON.stringify({ rows }) }));
 
     expect(res.statusCode).toBe(200);
     expect(JSON.parse(res.body)).toEqual({ version: "2.0" });
@@ -250,9 +241,7 @@ describe("POST /glossary — versioning", () => {
     ]);
 
     const rows = makeRows([{ name: "_about" }]);
-    const res = await handler(
-      makeEvent({ body: JSON.stringify({ rows }) })
-    );
+    const res = await handler(makeEvent({ body: JSON.stringify({ rows }) }));
 
     expect(res.statusCode).toBe(200);
     expect(JSON.parse(res.body)).toEqual({ version: "3.0" });
@@ -267,7 +256,7 @@ describe("GET /glossary?versionOnly=1", () => {
 
     const fetchMock = (global as unknown as { fetch: jest.Mock }).fetch;
     expect(fetchMock.mock.calls[0][0]).toMatch(
-      new RegExp(`^${FIREBASE_ROOT}/currentVersion\\.json`)
+      new RegExp(`^${FIREBASE_ROOT}/currentVersion\\.json`),
     );
   });
 
@@ -301,7 +290,7 @@ describe("GET /glossary?versionOnly=1", () => {
 describe("POST /glossary — boolean default coercion", () => {
   function glossaryPutBody(): Record<string, { default: unknown }> {
     const put = capturedPuts().find((p) =>
-      /\/versions\/[^/]+\/glossary\.json/.test(p.url)
+      /\/versions\/[^/]+\/glossary\.json/.test(p.url),
     );
     return (put?.body ?? {}) as Record<string, { default: unknown }>;
   }
@@ -311,7 +300,15 @@ describe("POST /glossary — boolean default coercion", () => {
 
     // Mimic AppScript sending raw JS booleans for Excel TRUE/FALSE cells.
     const rows: unknown[][] = [
-      ["INPUT PARAMETER", "NOW", "TYPE", "DEFAULT", "EXPLANATION", "EXAMPLE", "CATEGORIES"],
+      [
+        "INPUT PARAMETER",
+        "NOW",
+        "TYPE",
+        "DEFAULT",
+        "EXPLANATION",
+        "EXAMPLE",
+        "CATEGORIES",
+      ],
       ["needCookiesBool", "now", "boolean", true, "expl", "ex", ""],
     ];
 
@@ -324,7 +321,15 @@ describe("POST /glossary — boolean default coercion", () => {
     mockFetch([{ url: /currentVersion/, body: null }]);
 
     const rows: unknown[][] = [
-      ["INPUT PARAMETER", "NOW", "TYPE", "DEFAULT", "EXPLANATION", "EXAMPLE", "CATEGORIES"],
+      [
+        "INPUT PARAMETER",
+        "NOW",
+        "TYPE",
+        "DEFAULT",
+        "EXPLANATION",
+        "EXAMPLE",
+        "CATEGORIES",
+      ],
       ["simulateParticipantBool", "now", "boolean", false, "expl", "ex", ""],
     ];
 
@@ -337,7 +342,15 @@ describe("POST /glossary — boolean default coercion", () => {
     mockFetch([{ url: /currentVersion/, body: null }]);
 
     const rows: unknown[][] = [
-      ["INPUT PARAMETER", "NOW", "TYPE", "DEFAULT", "EXPLANATION", "EXAMPLE", "CATEGORIES"],
+      [
+        "INPUT PARAMETER",
+        "NOW",
+        "TYPE",
+        "DEFAULT",
+        "EXPLANATION",
+        "EXAMPLE",
+        "CATEGORIES",
+      ],
       ["aBool", "now", "boolean", "true", "expl", "ex", ""],
       ["bBool", "now", "boolean", " False ", "expl", "ex", ""],
     ];
@@ -353,7 +366,15 @@ describe("POST /glossary — boolean default coercion", () => {
     mockFetch([{ url: /currentVersion/, body: null }]);
 
     const rows: unknown[][] = [
-      ["INPUT PARAMETER", "NOW", "TYPE", "DEFAULT", "EXPLANATION", "EXAMPLE", "CATEGORIES"],
+      [
+        "INPUT PARAMETER",
+        "NOW",
+        "TYPE",
+        "DEFAULT",
+        "EXPLANATION",
+        "EXAMPLE",
+        "CATEGORIES",
+      ],
       ["aText", "now", "text", "Hello World", "expl", "ex", ""],
       ["aNumerical", "now", "numerical", "12.5", "expl", "ex", ""],
     ];
@@ -372,7 +393,15 @@ describe("POST /glossary — boolean default coercion", () => {
     mockFetch([{ url: /currentVersion/, body: null }]);
 
     const rows: unknown[][] = [
-      ["INPUT PARAMETER", "NOW", "TYPE", "DEFAULT", "EXPLANATION", "EXAMPLE", "CATEGORIES"],
+      [
+        "INPUT PARAMETER",
+        "NOW",
+        "TYPE",
+        "DEFAULT",
+        "EXPLANATION",
+        "EXAMPLE",
+        "CATEGORIES",
+      ],
       ["instructionFontSizePt", "now", "numerical", 17, "expl", "ex", ""],
       ["targetDurationSec", "now", "numerical", 0.15, "expl", "ex", ""],
       ["conditionTrials", "now", "integer", 35, "expl", "ex", ""],
@@ -436,11 +465,15 @@ describe("PUT /glossary — version pinning", () => {
     expect(res.statusCode).toBe(400);
   });
 
-  test("valid body writes current version to correct Firebase path and returns 200", async () => {
-    mockFetch([{ url: /currentVersion/, body: "1.5" }]);
+  test("valid body writes the requested existing version and returns 200", async () => {
+    mockFetch([{ url: /versions\/1_dot_5\/glossary/, body: SAMPLE_GLOSSARY }]);
 
     const res = await handler(
-      makePutEvent({ username: "alice", experimentName: "myExp" })
+      makePutEvent({
+        username: "alice",
+        experimentName: "myExp",
+        version: "1.5",
+      }),
     );
 
     expect(res.statusCode).toBe(200);
@@ -448,10 +481,11 @@ describe("PUT /glossary — version pinning", () => {
 
     const puts = capturedPuts();
     expect(
-      puts.some((p) =>
-        p.url.includes("/users/alice/myExp/glossaryVersion") &&
-        p.body === "1.5"
-      )
+      puts.some(
+        (p) =>
+          p.url.includes("/users/alice/myExp/glossaryVersion") &&
+          p.body === "1.5",
+      ),
     ).toBe(true);
   });
 });
@@ -459,22 +493,35 @@ describe("PUT /glossary — version pinning", () => {
 describe("PUT /glossary — round-trip with GET", () => {
   test("PUT pins version; subsequent GET ?username&experiment returns that version's GlossaryData", async () => {
     const pinnedGlossary = {
-      _about: { name: "_about", availability: "now", type: "text", default: "", explanation: "Pinned.", example: "", categories: [] },
+      _about: {
+        name: "_about",
+        availability: "now",
+        type: "text",
+        default: "",
+        explanation: "Pinned.",
+        example: "",
+        categories: [],
+      },
     };
 
     mockFetch([
-      { url: /currentVersion/, body: "1.5" },
+      { url: /versions\/1_dot_5\/glossary/, body: pinnedGlossary },
+      { url: /currentVersion/, body: "2.0" },
       { url: /users\/alice\/myExp\/glossaryVersion/, body: "1.5" },
       { url: /versions\/1_dot_5\/glossary/, body: pinnedGlossary },
     ]);
 
     const putRes = await handler(
-      makePutEvent({ username: "alice", experimentName: "myExp" })
+      makePutEvent({
+        username: "alice",
+        experimentName: "myExp",
+        version: "1.5",
+      }),
     );
     expect(putRes.statusCode).toBe(200);
 
     const getRes = await handler(
-      makeGetEvent({ username: "alice", experiment: "myExp" })
+      makeGetEvent({ username: "alice", experiment: "myExp" }),
     );
     expect(getRes.statusCode).toBe(200);
     const data = JSON.parse(getRes.body);
@@ -492,7 +539,9 @@ describe("GET /glossary — response headers", () => {
 
     const res = await handler(makeGetEvent());
     expect(res.statusCode).toBe(200);
-    expect((res as { headers?: Record<string, string> }).headers?.["Content-Type"]).toBe("application/json");
+    expect(
+      (res as { headers?: Record<string, string> }).headers?.["Content-Type"],
+    ).toBe("application/json");
   });
 });
 
@@ -522,20 +571,24 @@ describe("GET /glossary — cache directives", () => {
       { url: /versions\/1_dot_0\/glossary/, body: SAMPLE_GLOSSARY },
     ]);
     const res = await handler(makeGetEvent());
-    expect(cacheOf(res)).toBe("public, max-age=60, stale-while-revalidate=86400");
+    expect(cacheOf(res)).toBe(
+      "public, max-age=60, stale-while-revalidate=86400",
+    );
   });
 });
 
 describe("GET /glossary — failure handling", () => {
   test("a Firebase failure returns a controlled, uncached 503 (not an opaque 502)", async () => {
     (global as unknown as { fetch: jest.Mock }).fetch = jest.fn(() =>
-      Promise.reject(new Error("Firebase unreachable"))
+      Promise.reject(new Error("Firebase unreachable")),
     );
 
     const res = await handler(makeGetEvent());
 
     expect(res.statusCode).toBe(503);
-    expect((res as { headers?: Record<string, string> }).headers?.["Cache-Control"]).toBe("no-store");
+    expect(
+      (res as { headers?: Record<string, string> }).headers?.["Cache-Control"],
+    ).toBe("no-store");
     expect(JSON.parse(res.body).error).toMatch(/temporarily unavailable/i);
   });
 });
@@ -568,8 +621,24 @@ describe("GET /glossary — bare (no query params)", () => {
   test("superMatchingParams contains exactly the keys with '@'", async () => {
     const glossaryWithAt = {
       ...SAMPLE_GLOSSARY,
-      "@fontSize": { name: "@fontSize", availability: "now", type: "numerical", default: "12", explanation: "", example: "", categories: [] },
-      "@spacing": { name: "@spacing", availability: "now", type: "numerical", default: "1", explanation: "", example: "", categories: [] },
+      "@fontSize": {
+        name: "@fontSize",
+        availability: "now",
+        type: "numerical",
+        default: "12",
+        explanation: "",
+        example: "",
+        categories: [],
+      },
+      "@spacing": {
+        name: "@spacing",
+        availability: "now",
+        type: "numerical",
+        default: "1",
+        explanation: "",
+        example: "",
+        categories: [],
+      },
     };
     mockFetch([
       { url: /currentVersion/, body: "1.0" },
@@ -585,7 +654,15 @@ describe("GET /glossary — bare (no query params)", () => {
 describe("GET /glossary?username=&experiment= — per-experiment version lookup", () => {
   test("pinned version exists → returns that version's GlossaryData", async () => {
     const pinnedGlossary = {
-      _about: { name: "_about", availability: "now", type: "text", default: "", explanation: "Pinned.", example: "", categories: [] },
+      _about: {
+        name: "_about",
+        availability: "now",
+        type: "text",
+        default: "",
+        explanation: "Pinned.",
+        example: "",
+        categories: [],
+      },
     };
     mockFetch([
       { url: /currentVersion/, body: "2.0" },
@@ -593,7 +670,9 @@ describe("GET /glossary?username=&experiment= — per-experiment version lookup"
       { url: /versions\/1_dot_0\/glossary/, body: pinnedGlossary },
     ]);
 
-    const res = await handler(makeGetEvent({ username: "alice", experiment: "myExp" }));
+    const res = await handler(
+      makeGetEvent({ username: "alice", experiment: "myExp" }),
+    );
     expect(res.statusCode).toBe(200);
     const data = JSON.parse(res.body);
     expect(data.version).toBe("1.0");
@@ -607,7 +686,9 @@ describe("GET /glossary?username=&experiment= — per-experiment version lookup"
       { url: /versions\/2_dot_0\/glossary/, body: SAMPLE_GLOSSARY },
     ]);
 
-    const res = await handler(makeGetEvent({ username: "alice", experiment: "newExp" }));
+    const res = await handler(
+      makeGetEvent({ username: "alice", experiment: "newExp" }),
+    );
     expect(res.statusCode).toBe(200);
     const data = JSON.parse(res.body);
     expect(data.version).toBe("2.0");
@@ -627,9 +708,9 @@ describe("GET /glossary?versionOnly=1 — lightweight version check", () => {
       publishedAt: null,
     });
 
-    const fetchedUrls: string[] = (global as unknown as { fetch: jest.Mock }).fetch.mock.calls.map(
-      ([url]: [string]) => url
-    );
+    const fetchedUrls: string[] = (
+      global as unknown as { fetch: jest.Mock }
+    ).fetch.mock.calls.map(([url]: [string]) => url);
     expect(fetchedUrls.some((u) => u.includes("/glossary.json"))).toBe(false);
   });
 

@@ -1,0 +1,12 @@
+{
+  "phrases": [],
+  "parameters": [
+    {
+      "owner": "threshold/preprocess/parameter",
+      "sourceEvidence": "preprocess/parameter.ts",
+      "pattern": "questionAndAnswerNN",
+      "keys": [],
+      "rationale": "Numbered study parameters are accepted by the existing super-matching parameter validator."
+    }
+  ]
+}

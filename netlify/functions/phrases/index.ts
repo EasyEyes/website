@@ -557,18 +557,24 @@ async function handlePut(event: NetlifyEvent): Promise<NetlifyResponse> {
     typeof parsed !== "object" ||
     parsed === null ||
     typeof (parsed as Record<string, unknown>).username !== "string" ||
-    typeof (parsed as Record<string, unknown>).experimentName !== "string"
+    typeof (parsed as Record<string, unknown>).experimentName !== "string" ||
+    typeof (parsed as Record<string, unknown>).version !== "string"
   ) {
-    return jsonErr(400, "Missing or invalid username or experimentName");
+    return jsonErr(
+      400,
+      "Missing or invalid username, experimentName, or version",
+    );
   }
 
-  const { username, experimentName } = parsed as {
+  const { username, experimentName, version } = parsed as {
     username: string;
     experimentName: string;
+    version: string;
   };
-
-  const version = await getCurrentVersion();
-  if (!version) return jsonErr(500, "No current version");
+  if (!version.trim() || version.length > 128)
+    return jsonErr(400, "Invalid version");
+  if (!(await getVersionedPhrases(version)))
+    return jsonErr(404, `Phrase version does not exist: ${version}`);
 
   const encodedUser = encodeFirebaseSegment(username);
   const encodedExp = encodeFirebaseSegment(experimentName);

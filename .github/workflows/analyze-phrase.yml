@@ -1,48 +1,36 @@
-name: Analyze International Phrases
+name: Catalog usage audit
 
-on: workflow_dispatch
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 4 * * 1"
+  pull_request:
+    paths:
+      - "scripts/catalog-audit/**"
+      - "netlify/functions/glossary/**"
+      - "netlify/functions/phrases/**"
+      - "docs/experiment/**"
+
+permissions:
+  contents: read
 
 jobs:
-  check-undefined-phrases:
+  audit:
     runs-on: ubuntu-latest
-    name: Check for undefined phrases in use
     steps:
       - uses: actions/checkout@v6
+        with:
+          submodules: recursive
       - uses: actions/setup-node@v6
         with:
           node-version: 22
-      - name: Install dependencies
-        run: |
-          git submodule update --init --recursive 2>/dev/null
-          npm ci --silent --no-audit --no-fund 2>/dev/null
-        env:
-          NPM_CONFIG_LOGLEVEL: error
-      - name: Analyze phrases
-        run: |
-          cd docs/experiment/threshold
-          npm run analyze:phrases-undefined --silent 2>/dev/null
-        env:
-          NODE_OPTIONS: --experimental-specifier-resolution=node
-          NODE_NO_WARNINGS: 1
-
-  check-unused-phrases:
-    runs-on: ubuntu-latest
-    name: Check for unused phrases
-    steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-node@v6
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: npm run test:catalog-audit
+      - run: npm run catalog-audit -- --output=catalog-usage-index.json
+      - uses: actions/upload-artifact@v6
+        if: always()
         with:
-          node-version: 22
-      - name: Install dependencies
-        run: |
-          git submodule update --init --recursive 2>/dev/null
-          npm ci --silent --no-audit --no-fund 2>/dev/null
-        env:
-          NPM_CONFIG_LOGLEVEL: error
-      - name: Analyze phrases
-        run: |
-          cd docs/experiment/threshold
-          npm run analyze:phrases-unused --silent 2>/dev/null
-        env:
-          NODE_OPTIONS: --experimental-specifier-resolution=node
-          NODE_NO_WARNINGS: 1
+          name: catalog-usage-index
+          path: catalog-usage-index.json
+          if-no-files-found: error
