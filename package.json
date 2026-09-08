@@ -33,7 +33,6 @@
   },
   "homepage": "https://github.com/EasyEyes/website#readme",
   "devDependencies": {
-    "@babel/parser": "^7.28.4",
     "@babel/parser": "^7.29.8",
     "debug": "^4.4.3",
     "eslint": "^8.53.0",

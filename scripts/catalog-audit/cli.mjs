@@ -40,7 +40,32 @@ function mergeCollection(target, source) {
     target.referencedKeys[key] ??= [];
     target.referencedKeys[key].push(...evidence);
   }
+  for (const [key, evidence] of Object.entries(source.registeredDynamicKeys)) {
+    target.registeredDynamicKeys[key] ??= [];
+    target.registeredDynamicKeys[key].push(...evidence);
+  }
   target.uncertainReferences.push(...source.uncertainReferences);
+}
+
+async function applyRegistrations(report, repository, sha) {
+  for (const registrationPath of repository.dynamicRegistrations) {
+    const absolutePath = path.resolve(scriptDirectory, registrationPath);
+    const registrations = JSON.parse(await readFile(absolutePath, "utf8"));
+    for (const kind of ["phrases", "parameters"]) {
+      for (const registration of registrations[kind] ?? []) {
+        for (const key of registration.keys ?? []) {
+          report[kind].registeredDynamicKeys[key] ??= [];
+          report[kind].registeredDynamicKeys[key].push({
+            repository: repository.name,
+            commitSha: sha,
+            file: registration.sourceEvidence,
+            line: 1,
+            accessKind: "registered-dynamic",
+          });
+        }
+      }
+    }
+  }
 }
 
 function commitSha(repositoryPath) {
@@ -87,6 +112,7 @@ async function main() {
       commitSha: sha,
       catalogKinds: repository.catalogKinds,
     });
+    await applyRegistrations(report, repository, sha);
     const excluded = new Set(repository.excludeRoots);
     for (const sourceRoot of repository.sourceRoots) {
       const absoluteRoot = path.resolve(repositoryPath, sourceRoot);
@@ -94,11 +120,25 @@ async function main() {
         const source = await readFile(file, "utf8");
         let extracted;
         try {
-          extracted = extractReferences(source, {
-            repository: repository.name,
-            commitSha: sha,
-            file: path.relative(repositoryPath, file).split(path.sep).join("/"),
-          });
+          extracted = extractReferences(
+            source,
+            {
+              repository: repository.name,
+              commitSha: sha,
+              file: path
+                .relative(repositoryPath, file)
+                .split(path.sep)
+                .join("/"),
+            },
+            {
+              phraseReaders: repository.readers.filter(
+                ({ catalogKind }) => catalogKind === "phrases",
+              ),
+              parameterReaders: repository.readers.filter(
+                ({ catalogKind }) => catalogKind === "parameters",
+              ),
+            },
+          );
         } catch (error) {
           throw new Error(`Could not parse ${file}: ${error.message}`, {
             cause: error,
