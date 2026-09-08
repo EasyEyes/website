@@ -18,19 +18,36 @@ jobs:
   audit:
     runs-on: ubuntu-latest
     steps:
+      - name: Check out website and compiler repositories
+        uses: actions/checkout@v6
+        with:
+          path: website
+          submodules: recursive
       - uses: actions/checkout@v6
         with:
-          submodules: recursive
+          repository: EasyEyes/remote-calibrator
+          path: remote-calibrator
+      - uses: actions/checkout@v6
+        with:
+          repository: EasyEyes/speaker-calibration
+          path: speaker-calibration
+      - uses: actions/checkout@v6
+        with:
+          repository: EasyEyes/virtual-keypad
+          path: virtual-keypad
       - uses: actions/setup-node@v6
         with:
           node-version: 22
           cache: npm
       - run: npm ci --no-audit --no-fund
+        working-directory: website
       - run: npm run test:catalog-audit
+        working-directory: website
       - run: npm run catalog-audit -- --output=catalog-usage-index.json
+        working-directory: website
       - uses: actions/upload-artifact@v6
         if: always()
         with:
           name: catalog-usage-index
-          path: catalog-usage-index.json
+          path: website/catalog-usage-index.json
           if-no-files-found: error
