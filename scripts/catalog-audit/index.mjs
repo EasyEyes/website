@@ -259,6 +259,31 @@ export function validateRegistry(entries) {
   return entries;
 }
 
+export function compareRegistryInventory(entries, repositories) {
+  const registered = new Map(entries.map((entry) => [entry.name, entry]));
+  const discovered = new Map(repositories.map((entry) => [entry.name, entry]));
+  return {
+    unaccounted: [...discovered.keys()]
+      .filter((name) => !registered.has(name))
+      .sort(),
+    removed: [...registered.keys()]
+      .filter((name) => !discovered.has(name))
+      .sort(),
+    defaultBranchChanges: [...discovered.values()]
+      .filter(
+        (entry) =>
+          registered.has(entry.name) &&
+          registered.get(entry.name).defaultBranch !== entry.defaultBranch,
+      )
+      .map((entry) => ({
+        name: entry.name,
+        registered: registered.get(entry.name).defaultBranch,
+        discovered: entry.defaultBranch,
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name)),
+  };
+}
+
 export function applyDynamicRegistrations(
   result,
   registrations,

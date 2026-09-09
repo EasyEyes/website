@@ -5,6 +5,7 @@ import test from "node:test";
 import {
   applyDynamicRegistrations,
   compareCatalog,
+  compareRegistryInventory,
   emptyUsageCollection,
   filterCollectionsByKinds,
   extractReferences,
@@ -239,4 +240,25 @@ test("registry rejects duplicate and unsafe entries", () => {
     () => validateRegistry([{ ...entry, sourceRoots: ["."] }]),
     /broad/i,
   );
+});
+
+test("registry drift is reported without mutating the registry", () => {
+  const registry = [
+    { name: "threshold", defaultBranch: "main" },
+    { name: "retired", defaultBranch: "main" },
+  ];
+  const before = JSON.stringify(registry);
+  const drift = compareRegistryInventory(registry, [
+    { name: "threshold", defaultBranch: "next" },
+    { name: "new-consumer", defaultBranch: "main" },
+  ]);
+
+  assert.deepEqual(drift, {
+    unaccounted: ["new-consumer"],
+    removed: ["retired"],
+    defaultBranchChanges: [
+      { name: "threshold", registered: "main", discovered: "next" },
+    ],
+  });
+  assert.equal(JSON.stringify(registry), before);
 });
