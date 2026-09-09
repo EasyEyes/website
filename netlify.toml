@@ -76,6 +76,16 @@ to = "https://stats.uptimerobot.com/OmxgUj9YpY"
 status = 301
 force = true
 
+# EasyEyes Studio lives at /compiler/studio: serve the compiler page there
+# (its relative assets resolve against /compiler/, as on /compiler/ itself);
+# App.js opens the Studio panel when the path ends in /studio. Must precede
+# the generic /compiler/* rule below.
+[[redirects]]
+from = "/compiler/studio"
+to = "/experiment/index.html"
+status = 200
+force = true
+
 # Rewrite /compiler/* to /experiment/* (serves content, keeps URL as /compiler/)
 [[redirects]]
 from = "/compiler/*"
