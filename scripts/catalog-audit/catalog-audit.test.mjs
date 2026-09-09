@@ -2,7 +2,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  applyDynamicRegistrations,
   compareCatalog,
+  emptyUsageCollection,
+  filterCollectionsByKinds,
   extractReferences,
   serializeIndex,
   validateRegistry,
@@ -86,8 +89,86 @@ test("serialization is byte-stable and excludes generatedAt from identity", () =
   });
 
   assert.equal(first.identity, second.identity);
-  assert.notEqual(first.json, second.json);
+  assert.equal(first.json, second.json);
+  assert.doesNotMatch(first.json, /generatedAt/);
   assert.equal(first.json, serializeIndex(base).json);
+});
+
+test("only configured bindings are treated as catalog readers", () => {
+  const result = extractReferences(
+    `
+      import { readi18nPhrases } from "./i18n";
+      function unrelated(readi18nPhrases) {
+        readi18nPhrases("SHADOWED");
+      }
+      readi18nPhrases("REAL");
+    `,
+    {
+      repository: "threshold",
+      commitSha: "abc123",
+      file: "components/example.ts",
+    },
+    {
+      phraseReaders: [
+        { name: "readi18nPhrases", keyArgument: 0, module: "./i18n" },
+      ],
+    },
+  );
+
+  assert.deepEqual(Object.keys(result.phrases.referencedKeys), ["REAL"]);
+});
+
+test("expands bounded registrations and parameter aliases", () => {
+  const result = applyDynamicRegistrations(
+    { phrases: emptyUsageCollection(), parameters: emptyUsageCollection() },
+    {
+      phrases: [
+        {
+          sourceEvidence: "phrases.ts",
+          pattern: { prefix: "EE_Choice", range: { from: 1, to: 3 } },
+        },
+      ],
+      parameters: [
+        {
+          sourceEvidence: "parameter.ts",
+          keys: ["targetKind"],
+          aliases: { target: "targetKind" },
+        },
+      ],
+    },
+    { repository: "threshold", commitSha: "abc123" },
+  );
+
+  assert.deepEqual(Object.keys(result.phrases.registeredDynamicKeys), [
+    "EE_Choice1",
+    "EE_Choice2",
+    "EE_Choice3",
+  ]);
+  assert.deepEqual(Object.keys(result.parameters.registeredDynamicKeys), [
+    "target",
+    "targetKind",
+  ]);
+});
+
+test("drops findings for catalog kinds a repository does not own", () => {
+  const result = filterCollectionsByKinds(
+    {
+      phrases: {
+        referencedKeys: { EE_OK: [] },
+        registeredDynamicKeys: {},
+        uncertainReferences: [],
+      },
+      parameters: {
+        referencedKeys: { targetKind: [] },
+        registeredDynamicKeys: {},
+        uncertainReferences: [],
+      },
+    },
+    ["phrases"],
+  );
+
+  assert.deepEqual(Object.keys(result.phrases.referencedKeys), ["EE_OK"]);
+  assert.deepEqual(result.parameters, emptyUsageCollection());
 });
 
 test("registry rejects duplicate and unsafe entries", () => {

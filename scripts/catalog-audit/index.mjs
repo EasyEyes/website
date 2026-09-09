@@ -2,11 +2,13 @@ import { createHash } from "node:crypto";
 
 import { parse } from "@babel/parser";
 
-const EMPTY_COLLECTION = () => ({
+export const emptyUsageCollection = () => ({
   referencedKeys: {},
   registeredDynamicKeys: {},
   uncertainReferences: [],
 });
+
+const EMPTY_COLLECTION = emptyUsageCollection;
 
 const evidenceFor = (location, node, accessKind) => ({
   repository: location.repository,
@@ -29,13 +31,26 @@ function addReference(collection, key, evidence) {
   collection.referencedKeys[key].push(evidence);
 }
 
-function walk(node, visit) {
+function walk(node, visit, shadowed = new Set()) {
   if (!node || typeof node !== "object") return;
-  if (typeof node.type === "string") visit(node);
+  let localShadowed = shadowed;
+  if (
+    node.type === "FunctionDeclaration" ||
+    node.type === "FunctionExpression" ||
+    node.type === "ArrowFunctionExpression"
+  ) {
+    localShadowed = new Set(shadowed);
+    for (const parameter of node.params ?? []) {
+      if (parameter.type === "Identifier") localShadowed.add(parameter.name);
+    }
+  }
+  if (typeof node.type === "string") visit(node, localShadowed);
   for (const [key, value] of Object.entries(node)) {
     if (key === "loc" || key === "start" || key === "end") continue;
-    if (Array.isArray(value)) value.forEach((child) => walk(child, visit));
-    else if (value && typeof value === "object") walk(value, visit);
+    if (Array.isArray(value))
+      value.forEach((child) => walk(child, visit, localShadowed));
+    else if (value && typeof value === "object")
+      walk(value, visit, localShadowed);
   }
 }
 
@@ -70,7 +85,25 @@ export function extractReferences(source, location, configuration = {}) {
     errorRecovery: false,
   });
 
-  walk(ast, (node) => {
+  const moduleReaders = new Set();
+  for (const node of ast.program.body) {
+    if (node.type !== "ImportDeclaration") continue;
+    for (const reader of [
+      ...(configuration.phraseReaders ?? []),
+      ...(configuration.parameterReaders ?? []),
+    ]) {
+      if (
+        reader.module === node.source.value &&
+        node.specifiers.some(
+          (specifier) => specifier.local?.name === reader.name,
+        )
+      ) {
+        moduleReaders.add(reader.name);
+      }
+    }
+  }
+
+  walk(ast, (node, shadowed) => {
     if (node.type === "CallExpression") {
       let readerName = null;
       if (node.callee.type === "Identifier") readerName = node.callee.name;
@@ -81,6 +114,16 @@ export function extractReferences(source, location, configuration = {}) {
         node.callee.property.type === "Identifier"
       ) {
         readerName = `${node.callee.object.name}.${node.callee.property.name}`;
+      }
+      if (
+        node.callee.type === "Identifier" &&
+        (shadowed.has(readerName) ||
+          ((configuration.phraseReaders ?? []).some(
+            (reader) => reader.name === readerName && reader.module,
+          ) &&
+            !moduleReaders.has(readerName)))
+      ) {
+        readerName = null;
       }
       const collection = phraseReaders.has(readerName)
         ? result.phrases
@@ -179,6 +222,50 @@ export function validateRegistry(entries) {
   return entries;
 }
 
+export function applyDynamicRegistrations(result, registrations, location) {
+  for (const kind of ["phrases", "parameters"]) {
+    for (const registration of registrations[kind] ?? []) {
+      const keys = new Set(registration.keys ?? []);
+      for (const alias of Object.keys(registration.aliases ?? {}))
+        keys.add(alias);
+      for (const canonical of Object.values(registration.aliases ?? {}))
+        keys.add(canonical);
+      const range = registration.pattern?.range;
+      if (registration.pattern?.prefix && range) {
+        if (
+          !Number.isInteger(range.from) ||
+          !Number.isInteger(range.to) ||
+          range.to < range.from ||
+          range.to - range.from > 1000
+        )
+          throw new Error("Dynamic registration range must be bounded");
+        for (let value = range.from; value <= range.to; value += 1)
+          keys.add(`${registration.pattern.prefix}${value}`);
+      }
+      for (const key of [...keys].sort()) {
+        result[kind].registeredDynamicKeys[key] ??= [];
+        result[kind].registeredDynamicKeys[key].push({
+          ...location,
+          file: registration.sourceEvidence,
+          line: 1,
+          accessKind: "registered-dynamic",
+        });
+      }
+    }
+  }
+  return normalizeCollections(result);
+}
+
+export function filterCollectionsByKinds(result, catalogKinds) {
+  const allowed = new Set(catalogKinds);
+  return {
+    phrases: allowed.has("phrases") ? result.phrases : EMPTY_COLLECTION(),
+    parameters: allowed.has("parameters")
+      ? result.parameters
+      : EMPTY_COLLECTION(),
+  };
+}
+
 const compareJson = (a, b) =>
   JSON.stringify(a).localeCompare(JSON.stringify(b));
 
@@ -201,7 +288,7 @@ function normalizeCollections(result) {
 }
 
 export function serializeIndex(index) {
-  const normalized = sortObject(index);
+  const normalized = sortObject(index, true);
   const identityInput = JSON.stringify(sortObject(index, true));
   return {
     identity: createHash("sha256").update(identityInput).digest("hex"),

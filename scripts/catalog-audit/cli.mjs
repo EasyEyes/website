@@ -6,7 +6,9 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import {
+  applyDynamicRegistrations,
   extractReferences,
+  filterCollectionsByKinds,
   serializeIndex,
   validateRegistry,
 } from "./index.mjs";
@@ -51,20 +53,10 @@ async function applyRegistrations(report, repository, sha) {
   for (const registrationPath of repository.dynamicRegistrations) {
     const absolutePath = path.resolve(scriptDirectory, registrationPath);
     const registrations = JSON.parse(await readFile(absolutePath, "utf8"));
-    for (const kind of ["phrases", "parameters"]) {
-      for (const registration of registrations[kind] ?? []) {
-        for (const key of registration.keys ?? []) {
-          report[kind].registeredDynamicKeys[key] ??= [];
-          report[kind].registeredDynamicKeys[key].push({
-            repository: repository.name,
-            commitSha: sha,
-            file: registration.sourceEvidence,
-            line: 1,
-            accessKind: "registered-dynamic",
-          });
-        }
-      }
-    }
+    applyDynamicRegistrations(report, registrations, {
+      repository: repository.name,
+      commitSha: sha,
+    });
   }
 }
 
@@ -120,24 +112,27 @@ async function main() {
         const source = await readFile(file, "utf8");
         let extracted;
         try {
-          extracted = extractReferences(
-            source,
-            {
-              repository: repository.name,
-              commitSha: sha,
-              file: path
-                .relative(repositoryPath, file)
-                .split(path.sep)
-                .join("/"),
-            },
-            {
-              phraseReaders: repository.readers.filter(
-                ({ catalogKind }) => catalogKind === "phrases",
-              ),
-              parameterReaders: repository.readers.filter(
-                ({ catalogKind }) => catalogKind === "parameters",
-              ),
-            },
+          extracted = filterCollectionsByKinds(
+            extractReferences(
+              source,
+              {
+                repository: repository.name,
+                commitSha: sha,
+                file: path
+                  .relative(repositoryPath, file)
+                  .split(path.sep)
+                  .join("/"),
+              },
+              {
+                phraseReaders: repository.readers.filter(
+                  ({ catalogKind }) => catalogKind === "phrases",
+                ),
+                parameterReaders: repository.readers.filter(
+                  ({ catalogKind }) => catalogKind === "parameters",
+                ),
+              },
+            ),
+            repository.catalogKinds,
           );
         } catch (error) {
           throw new Error(`Could not parse ${file}: ${error.message}`, {
