@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import {
@@ -118,6 +119,29 @@ test("only configured bindings are treated as catalog readers", () => {
   assert.deepEqual(Object.keys(result.phrases.referencedKeys), ["REAL"]);
 });
 
+test("rejects locally declared readers and catalog-like objects", () => {
+  const result = extractReferences(
+    `
+      const readi18nPhrases = value => value;
+      const phrases = { NOT_A_CATALOG: true };
+      const glossary = { notAParameter: true };
+      readi18nPhrases("NOT_A_PHRASE");
+      phrases.NOT_A_CATALOG;
+      glossary.notAParameter;
+    `,
+    {
+      repository: "threshold",
+      commitSha: "abc123",
+      file: "components/example.ts",
+    },
+  );
+
+  assert.deepEqual(result, {
+    phrases: emptyUsageCollection(),
+    parameters: emptyUsageCollection(),
+  });
+});
+
 test("expands bounded registrations and parameter aliases", () => {
   const result = applyDynamicRegistrations(
     { phrases: emptyUsageCollection(), parameters: emptyUsageCollection() },
@@ -125,7 +149,13 @@ test("expands bounded registrations and parameter aliases", () => {
       phrases: [
         {
           sourceEvidence: "phrases.ts",
-          pattern: { prefix: "EE_Choice", range: { from: 1, to: 3 } },
+          patterns: [
+            {
+              prefix: "EE_Choice",
+              range: { from: 1, to: 3 },
+              width: 2,
+            },
+          ],
         },
       ],
       parameters: [
@@ -140,14 +170,34 @@ test("expands bounded registrations and parameter aliases", () => {
   );
 
   assert.deepEqual(Object.keys(result.phrases.registeredDynamicKeys), [
-    "EE_Choice1",
-    "EE_Choice2",
-    "EE_Choice3",
+    "EE_Choice01",
+    "EE_Choice02",
+    "EE_Choice03",
   ]);
   assert.deepEqual(Object.keys(result.parameters.registeredDynamicKeys), [
     "target",
     "targetKind",
   ]);
+});
+
+test("production question registrations match the current two-digit families", () => {
+  const registrations = JSON.parse(
+    readFileSync(new URL("./catalog-audit.dynamic.json", import.meta.url)),
+  );
+  const result = applyDynamicRegistrations(
+    { phrases: emptyUsageCollection(), parameters: emptyUsageCollection() },
+    registrations,
+    { repository: "threshold", commitSha: "abc123" },
+    ["parameters"],
+  );
+  const keys = Object.keys(result.parameters.registeredDynamicKeys);
+
+  assert.equal(keys.length, 198);
+  assert.ok(keys.includes("questionAndAnswer01"));
+  assert.ok(keys.includes("questionAndAnswer99"));
+  assert.ok(keys.includes("questionAnswer01"));
+  assert.ok(keys.includes("questionAnswer99"));
+  assert.ok(!keys.includes("questionAndAnswer1"));
 });
 
 test("drops findings for catalog kinds a repository does not own", () => {

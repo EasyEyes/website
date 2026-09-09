@@ -4,9 +4,19 @@
     {
       "owner": "threshold/preprocess/parameter",
       "sourceEvidence": "preprocess/parameter.ts",
-      "pattern": "questionAndAnswerNN",
-      "keys": [],
-      "rationale": "Numbered study parameters are accepted by the existing super-matching parameter validator."
+      "patterns": [
+        {
+          "prefix": "questionAndAnswer",
+          "range": { "from": 1, "to": 99 },
+          "width": 2
+        },
+        {
+          "prefix": "questionAnswer",
+          "range": { "from": 1, "to": 99 },
+          "width": 2
+        }
+      ],
+      "rationale": "The current Glossary registers questionAndAnswer@@ and questionAnswer@@. Study validation and runtime readers accept their numbered 01 through 99 forms."
     }
   ]
 }

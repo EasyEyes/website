@@ -31,9 +31,42 @@ function addReference(collection, key, evidence) {
   collection.referencedKeys[key].push(evidence);
 }
 
+function addPatternBindings(pattern, names) {
+  if (!pattern) return;
+  if (pattern.type === "Identifier") names.add(pattern.name);
+  if (pattern.type === "RestElement")
+    addPatternBindings(pattern.argument, names);
+  if (pattern.type === "AssignmentPattern")
+    addPatternBindings(pattern.left, names);
+  for (const property of pattern.properties ?? [])
+    addPatternBindings(property.value ?? property.argument, names);
+  for (const element of pattern.elements ?? [])
+    addPatternBindings(element, names);
+}
+
+function declarationsIn(statements) {
+  const names = new Set();
+  for (const statement of statements ?? []) {
+    if (statement.type === "VariableDeclaration")
+      for (const declaration of statement.declarations)
+        addPatternBindings(declaration.id, names);
+    if (
+      (statement.type === "FunctionDeclaration" ||
+        statement.type === "ClassDeclaration") &&
+      statement.id
+    )
+      names.add(statement.id.name);
+  }
+  return names;
+}
+
 function walk(node, visit, shadowed = new Set()) {
   if (!node || typeof node !== "object") return;
   let localShadowed = shadowed;
+  if (node.type === "Program" || node.type === "BlockStatement") {
+    localShadowed = new Set(shadowed);
+    for (const name of declarationsIn(node.body)) localShadowed.add(name);
+  }
   if (
     node.type === "FunctionDeclaration" ||
     node.type === "FunctionExpression" ||
@@ -149,7 +182,11 @@ export function extractReferences(source, location, configuration = {}) {
       }
     }
 
-    if (node.type !== "MemberExpression" || node.object.type !== "Identifier")
+    if (
+      node.type !== "MemberExpression" ||
+      node.object.type !== "Identifier" ||
+      shadowed.has(node.object.name)
+    )
       return;
     const collection =
       node.object.name === "phrases"
@@ -222,16 +259,23 @@ export function validateRegistry(entries) {
   return entries;
 }
 
-export function applyDynamicRegistrations(result, registrations, location) {
+export function applyDynamicRegistrations(
+  result,
+  registrations,
+  location,
+  catalogKinds = ["phrases", "parameters"],
+) {
+  const allowed = new Set(catalogKinds);
   for (const kind of ["phrases", "parameters"]) {
+    if (!allowed.has(kind)) continue;
     for (const registration of registrations[kind] ?? []) {
       const keys = new Set(registration.keys ?? []);
       for (const alias of Object.keys(registration.aliases ?? {}))
         keys.add(alias);
       for (const canonical of Object.values(registration.aliases ?? {}))
         keys.add(canonical);
-      const range = registration.pattern?.range;
-      if (registration.pattern?.prefix && range) {
+      for (const pattern of registration.patterns ?? []) {
+        const range = pattern.range;
         if (
           !Number.isInteger(range.from) ||
           !Number.isInteger(range.to) ||
@@ -239,8 +283,10 @@ export function applyDynamicRegistrations(result, registrations, location) {
           range.to - range.from > 1000
         )
           throw new Error("Dynamic registration range must be bounded");
-        for (let value = range.from; value <= range.to; value += 1)
-          keys.add(`${registration.pattern.prefix}${value}`);
+        for (let value = range.from; value <= range.to; value += 1) {
+          const suffix = String(value).padStart(pattern.width ?? 0, "0");
+          keys.add(`${pattern.prefix}${suffix}`);
+        }
       }
       for (const key of [...keys].sort()) {
         result[kind].registeredDynamicKeys[key] ??= [];

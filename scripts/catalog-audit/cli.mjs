@@ -53,10 +53,15 @@ async function applyRegistrations(report, repository, sha) {
   for (const registrationPath of repository.dynamicRegistrations) {
     const absolutePath = path.resolve(scriptDirectory, registrationPath);
     const registrations = JSON.parse(await readFile(absolutePath, "utf8"));
-    applyDynamicRegistrations(report, registrations, {
-      repository: repository.name,
-      commitSha: sha,
-    });
+    applyDynamicRegistrations(
+      report,
+      registrations,
+      {
+        repository: repository.name,
+        commitSha: sha,
+      },
+      repository.catalogKinds,
+    );
   }
 }
 
