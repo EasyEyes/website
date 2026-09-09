@@ -22,7 +22,8 @@
     "catalog-audit": "node scripts/catalog-audit/cli.mjs",
     "catalog-audit:publish": "node scripts/catalog-audit/publish.mjs",
     "test:catalog-audit": "node --test scripts/catalog-audit/*.test.mjs",
-    "test:catalog-report": "node --test netlify/functions/catalog-usage-report/__tests__/*.test.mjs"
+    "test:catalog-report": "node --test netlify/functions/catalog-usage-report/__tests__/*.test.mjs",
+    "test:release-manifest": "node --test netlify/functions/release-manifest/__tests__/*.test.mjs"
   },
   "repository": {
     "type": "git",
