@@ -13,6 +13,20 @@ const auth = (request, secret) => {
   const expected = Buffer.from(secret);
   return given.length === expected.length && timingSafeEqual(given, expected);
 };
+const canonical = (value) => {
+  if (Array.isArray(value)) return value.map(canonical);
+  if (!value || typeof value !== "object") return value;
+  return Object.fromEntries(
+    Object.keys(value)
+      .sort()
+      .map((key) => [key, canonical(value[key])]),
+  );
+};
+const manifestDigest = (manifest) =>
+  `sha256-${createHash("sha256")
+    .update(JSON.stringify(canonical(manifest)))
+    .digest("base64")}`;
+const safeSegment = /^[A-Za-z0-9_-]{1,128}$/;
 
 export function createReleaseManifestHandler({
   storage,
@@ -45,6 +59,38 @@ export function createReleaseManifestHandler({
         { releaseId: manifest.releaseId },
         result === "created" ? 201 : 200,
       );
+    }
+    if (request.method === "PUT") {
+      if (!auth(request, secret)) return respond({ code: "UNAUTHORIZED" }, 403);
+      let payload;
+      try {
+        payload = await request.json();
+      } catch {
+        return respond({ code: "RELEASE_PIN_MISMATCH" }, 400);
+      }
+      if (
+        !safeSegment.test(payload?.username ?? "") ||
+        !safeSegment.test(payload?.experiment ?? "") ||
+        !safeSegment.test(payload?.artifactRevision ?? "") ||
+        typeof payload?.releaseId !== "string"
+      )
+        return respond({ code: "RELEASE_PIN_MISMATCH" }, 400);
+      const manifest = await storage.get(payload.releaseId);
+      if (!manifest) return respond({ code: "RELEASE_NOT_FOUND" }, 404);
+      const pin = {
+        releaseId: payload.releaseId,
+        manifestDigest: manifestDigest(manifest),
+        artifactRevision: payload.artifactRevision,
+        pinnedAt: new Date().toISOString(),
+      };
+      const result = await storage.pin(
+        payload.username,
+        payload.experiment,
+        pin,
+      );
+      if (!result.ok || JSON.stringify(result.value) !== JSON.stringify(pin))
+        return respond({ code: "RELEASE_PIN_MISMATCH" }, 409);
+      return respond(pin);
     }
     if (request.method !== "GET")
       return respond({ code: "METHOD_NOT_ALLOWED" }, 405);
@@ -116,6 +162,22 @@ function firebaseStorage(root, credential) {
       });
       if (!response.ok)
         throw new Error(`Firebase latest write failed: ${response.status}`);
+    },
+    async pin(username, experiment, value) {
+      const path = `users/${username}/${experiment}/releasePin`;
+      const currentResponse = await read(path, true);
+      const previous = await currentResponse.json();
+      const response = await fetch(endpoint(path), {
+        method: "PUT",
+        headers: {
+          "content-type": "application/json",
+          "if-match": currentResponse.headers.get("etag") ?? "null_etag",
+        },
+        body: JSON.stringify(value),
+      });
+      if (!response.ok) return { ok: false, value: previous };
+      const stored = await response.json().catch(() => value);
+      return { ok: true, value: stored };
     },
   };
 }
