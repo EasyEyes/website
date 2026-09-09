@@ -32,6 +32,7 @@ export function createReleaseManifestHandler({
   storage,
   secret,
   verifyRelease,
+  authorizePin = async () => false,
 }) {
   return async (request) => {
     const url = new URL(request.url);
@@ -61,7 +62,6 @@ export function createReleaseManifestHandler({
       );
     }
     if (request.method === "PUT") {
-      if (!auth(request, secret)) return respond({ code: "UNAUTHORIZED" }, 403);
       let payload;
       try {
         payload = await request.json();
@@ -75,6 +75,11 @@ export function createReleaseManifestHandler({
         typeof payload?.releaseId !== "string"
       )
         return respond({ code: "RELEASE_PIN_MISMATCH" }, 400);
+      if (
+        !auth(request, secret) &&
+        !(await authorizePin(request, payload.username))
+      )
+        return respond({ code: "UNAUTHORIZED" }, 403);
       const manifest = await storage.get(payload.releaseId);
       if (!manifest) return respond({ code: "RELEASE_NOT_FOUND" }, 404);
       const pin = {
@@ -88,12 +93,32 @@ export function createReleaseManifestHandler({
         payload.experiment,
         pin,
       );
-      if (!result.ok || JSON.stringify(result.value) !== JSON.stringify(pin))
+      if (
+        !result.ok ||
+        result.value?.releaseId !== pin.releaseId ||
+        result.value?.manifestDigest !== pin.manifestDigest ||
+        result.value?.artifactRevision !== pin.artifactRevision
+      )
         return respond({ code: "RELEASE_PIN_MISMATCH" }, 409);
-      return respond(pin);
+      return respond(result.value);
     }
     if (request.method !== "GET")
       return respond({ code: "METHOD_NOT_ALLOWED" }, 405);
+    const username = url.searchParams.get("username");
+    const experiment = url.searchParams.get("experiment");
+    if (username !== null || experiment !== null) {
+      if (
+        !safeSegment.test(username ?? "") ||
+        !safeSegment.test(experiment ?? "")
+      )
+        return respond({ code: "RELEASE_PIN_MISMATCH" }, 400);
+      if (!auth(request, secret) && !(await authorizePin(request, username)))
+        return respond({ code: "UNAUTHORIZED" }, 403);
+      const pin = await storage.getPin(username, experiment);
+      return pin
+        ? respond(pin)
+        : respond({ code: "RELEASE_PIN_NOT_FOUND" }, 404);
+    }
     if (url.searchParams.has("latest")) {
       const releaseId = await storage.latest();
       if (!releaseId) return respond({ code: "RELEASE_NOT_FOUND" }, 404);
@@ -167,6 +192,11 @@ function firebaseStorage(root, credential) {
       const path = `users/${username}/${experiment}/releasePin`;
       const currentResponse = await read(path, true);
       const previous = await currentResponse.json();
+      if (
+        previous?.releaseId === value.releaseId &&
+        previous?.artifactRevision === value.artifactRevision
+      )
+        return { ok: true, value: previous };
       const response = await fetch(endpoint(path), {
         method: "PUT",
         headers: {
@@ -179,7 +209,27 @@ function firebaseStorage(root, credential) {
       const stored = await response.json().catch(() => value);
       return { ok: true, value: stored };
     },
+    async getPin(username, experiment) {
+      return read(`users/${username}/${experiment}/releasePin`).then(
+        (response) => response.json(),
+      );
+    },
   };
+}
+
+async function authorizePin(request, username) {
+  const authorization = request.headers.get("authorization") ?? "";
+  if (!/^Bearer\s+\S+/i.test(authorization)) return false;
+  try {
+    const response = await fetch("https://gitlab.pavlovia.org/api/v4/user", {
+      headers: { authorization },
+      cache: "no-store",
+    });
+    if (!response.ok) return false;
+    return (await response.json())?.username === username;
+  } catch {
+    return false;
+  }
 }
 
 const canonicalDigest = (value) =>
@@ -249,5 +299,6 @@ export default async function handler(request) {
     storage: firebaseStorage(root, credential),
     secret,
     verifyRelease,
+    authorizePin,
   })(request);
 }
