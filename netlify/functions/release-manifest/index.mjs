@@ -26,6 +26,10 @@ const manifestDigest = (manifest) =>
   `sha256-${createHash("sha256")
     .update(JSON.stringify(canonical(manifest)))
     .digest("base64")}`;
+const manifestResponse = (manifest) => ({
+  ...manifest,
+  manifestDigest: manifestDigest(manifest),
+});
 const safeSegment = /^[A-Za-z0-9_-]{1,128}$/;
 
 export function createReleaseManifestHandler({
@@ -124,14 +128,29 @@ export function createReleaseManifestHandler({
       if (!releaseId) return respond({ code: "RELEASE_NOT_FOUND" }, 404);
       const manifest = await storage.get(releaseId);
       return manifest
-        ? respond(manifest, 200)
+        ? respond(manifestResponse(manifest), 200)
         : respond({ code: "RELEASE_INCOMPLETE" }, 503);
+    }
+    if (url.searchParams.has("list")) {
+      const releases = await storage.list();
+      return respond(
+        releases
+          .map((manifest) => ({
+            release: manifest.releaseId,
+            changelog: `Published ${manifest.publishedAt}`,
+          }))
+          .sort((a, b) => b.release.localeCompare(a.release)),
+      );
     }
     const releaseId = url.searchParams.get("release");
     if (!releaseId) return respond({ code: "RELEASE_MANIFEST_INVALID" }, 400);
     const manifest = await storage.get(releaseId);
     return manifest
-      ? respond(manifest, 200, "public, max-age=31536000, immutable")
+      ? respond(
+          manifestResponse(manifest),
+          200,
+          "public, max-age=31536000, immutable",
+        )
       : respond({ code: "RELEASE_NOT_FOUND" }, 404);
   };
 }
@@ -178,6 +197,12 @@ function firebaseStorage(root, credential) {
     },
     async latest() {
       return read("easyEyesReleaseLatest").then((response) => response.json());
+    },
+    async list() {
+      const releases = await read("easyEyesReleases").then((response) =>
+        response.json(),
+      );
+      return Object.values(releases ?? {});
     },
     async setLatest(id) {
       const response = await fetch(endpoint("easyEyesReleaseLatest"), {

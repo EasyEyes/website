@@ -1,0 +1,46 @@
+name: Unified release contracts
+
+on:
+  pull_request:
+    paths:
+      - "netlify/functions/**"
+      - "scripts/catalog-audit/**"
+      - "scripts/publish-easyeyes-release.mjs"
+      - "docs/experiment/**"
+      - ".github/workflows/unified-release-ci.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          submodules: recursive
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: npm run test:catalog-audit
+      - run: npm run test:catalog-report
+      - run: npm run test:release-manifest
+      - run: npm ci --no-audit --no-fund
+        working-directory: docs/experiment
+      - run: npm test -- --runInBand source/__tests__/releaseManifestClient.test.js source/__tests__/resolveEngine.test.js source/__tests__/engineCompile.test.js source/__tests__/Table.test.js
+        working-directory: docs/experiment
+      - run: npm run check:ts
+        working-directory: docs/experiment
+      - run: npm ci --no-audit --no-fund
+        working-directory: docs/experiment/threshold
+      - run: npm test -- --runInBand tests/studyCatalogRequirements.test.ts tests/releasePin.test.ts tests/releaseProvenance.test.ts
+        working-directory: docs/experiment/threshold
+      - run: npm run check:ts
+        working-directory: docs/experiment/threshold
+      - run: npm ci --no-audit --no-fund
+        working-directory: docs/experiment/threshold/threshold-engine
+      - run: npm run build && npm run build:runtime && npm run parity && npm run parity:resources && npm run parity:entry && npm run parity:browser && npm run parity:participant
+        working-directory: docs/experiment/threshold/threshold-engine

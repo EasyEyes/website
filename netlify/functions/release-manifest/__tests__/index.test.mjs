@@ -45,6 +45,9 @@ function store() {
     async latest() {
       return latest;
     },
+    async list() {
+      return [...releases.values()];
+    },
     async setLatest(id) {
       latest = id;
     },
@@ -257,4 +260,11 @@ test("serves immutable releases and an uncached latest pointer", async () => {
   const latest = await handler(request("?latest"));
   assert.equal(latest.headers.get("cache-control"), "no-store");
   assert.equal((await latest.json()).releaseId, manifest.releaseId);
+  const list = await handler(request("?list"));
+  assert.deepEqual(await list.json(), [
+    {
+      release: manifest.releaseId,
+      changelog: `Published ${manifest.publishedAt}`,
+    },
+  ]);
 });
