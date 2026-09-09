@@ -20,6 +20,7 @@
     "glossary:local": "node scripts/fetch-glossary-local.mjs",
     "test:compiler-cache": "node --test netlify/tests/*.test.js",
     "catalog-audit": "node scripts/catalog-audit/cli.mjs",
+    "catalog-audit:publish": "node scripts/catalog-audit/publish.mjs",
     "test:catalog-audit": "node --test scripts/catalog-audit/*.test.mjs",
     "test:catalog-report": "node --test netlify/functions/catalog-usage-report/__tests__/*.test.mjs"
   },

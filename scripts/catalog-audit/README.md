@@ -12,6 +12,11 @@ checked out for every included repository in `repositories.json`. The command
 writes `catalog-usage-index.json`; pass `--output=path.json` to choose another
 location.
 
+Scheduled and manually dispatched CI runs publish the generated report through
+the authenticated catalog usage report function. Pull-request runs only test,
+scan, and upload a debugging artifact. Publication metadata supplies the
+generation time separately, so it does not affect report identity.
+
 The registry is reviewed source data. Repository discovery may report drift,
 but must not edit it automatically. Missing definitions are blocking. Unused
 candidates are review hints only and never authorize deletion. Unresolved

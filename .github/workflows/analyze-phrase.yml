@@ -43,6 +43,8 @@ jobs:
         working-directory: website
       - run: npm run test:catalog-audit
         working-directory: website
+      - run: npm run test:catalog-report
+        working-directory: website
       - run: npm run catalog-audit -- --output=catalog-usage-index.json
         working-directory: website
       - uses: actions/upload-artifact@v6
@@ -51,3 +53,10 @@ jobs:
           name: catalog-usage-index
           path: website/catalog-usage-index.json
           if-no-files-found: error
+      - name: Publish immutable catalog usage report
+        if: github.event_name != 'pull_request'
+        run: npm run catalog-audit:publish -- catalog-usage-index.json
+        working-directory: website
+        env:
+          CATALOG_USAGE_REPORT_URL: ${{ secrets.CATALOG_USAGE_REPORT_URL }}
+          CATALOG_USAGE_REPORT_SECRET: ${{ secrets.CATALOG_USAGE_REPORT_SECRET }}
