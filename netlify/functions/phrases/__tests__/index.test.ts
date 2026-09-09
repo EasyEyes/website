@@ -114,6 +114,18 @@ describe("GET /phrases — bare (no query params)", () => {
     mockFetch([
       { url: /phrases\/currentVersion/, body: "1.0" },
       { url: /phrasesVersions\/1_dot_0\/phrases/, body: SAMPLE_PHRASES },
+      {
+        url: "catalog-usage-report?latest",
+        body: {
+          report: {
+            phrases: {
+              referencedKeys: { hello: [] },
+              registeredDynamicKeys: {},
+            },
+          },
+          freshness: { status: "current" },
+        },
+      },
     ]);
 
     const res = await handler(makeGetEvent());
@@ -736,6 +748,18 @@ describe("POST /phrases { action: 'translate' } — happy path", () => {
     mockFetch([
       { url: /phrases\/currentVersion/, body: "1.0" },
       { url: /phrasesVersions\/1_dot_0\/phrases/, body: SAMPLE_PHRASES },
+      {
+        url: "catalog-usage-report?latest",
+        body: {
+          report: {
+            phrases: {
+              referencedKeys: { hello: [] },
+              registeredDynamicKeys: {},
+            },
+          },
+          freshness: { status: "current" },
+        },
+      },
     ]);
 
     const res = await handler(

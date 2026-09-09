@@ -4,6 +4,7 @@ import {
 } from "./encodeFirebaseSegment";
 import { isAllowedOrigin, corsHeaders } from "../shared/cors";
 import { getFirebaseDatabaseUrl } from "../shared/firebaseConfig";
+import { checkCatalogPublication } from "../shared/catalogPublicationGate";
 
 type NetlifyEvent = {
   httpMethod: string;
@@ -405,15 +406,33 @@ async function handlePost(event: NetlifyEvent): Promise<NetlifyResponse> {
   const currentVersion = (await firebaseGet("currentVersion")) as string | null;
 
   let newVersion: string;
+  let existingKeys = new Set<string>();
 
   if (!currentVersion) {
     newVersion = "1.0";
   } else {
-    const existingKeys = await firebaseGetKeys(
+    existingKeys = await firebaseGetKeys(
       `versions/${encodeFirebaseSegment(currentVersion)}/glossary`,
     );
     const incomingKeys = new Set(Object.keys(incoming));
     newVersion = bumpVersion(currentVersion, incomingKeys, existingKeys);
+  }
+
+  const publicationGate = await checkCatalogPublication(
+    "parameters",
+    existingKeys,
+    Object.keys(incoming),
+  );
+  if (!publicationGate.allowed) {
+    return {
+      statusCode: 409,
+      headers: JSON_HEADERS,
+      body: JSON.stringify({
+        error: "Catalog usage governance blocked Glossary publication.",
+        code: publicationGate.code,
+        missing: publicationGate.missing,
+      }),
+    };
   }
 
   const encodedVersion = encodeFirebaseSegment(newVersion);

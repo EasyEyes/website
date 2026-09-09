@@ -12,6 +12,7 @@ import { buildNewVersion } from "./buildNewVersion";
 import { getFirebaseDatabaseUrl } from "../shared/firebaseConfig";
 import { encodeFirebaseSegment } from "../glossary/encodeFirebaseSegment";
 import { corsHeaders } from "../shared/cors";
+import { checkCatalogPublication } from "../shared/catalogPublicationGate";
 import type {
   VersionedPhrases,
   PhraseMap,
@@ -907,6 +908,23 @@ async function handleTranslate(
     console.warn(
       "[phrases/translate] dropping invalid Firebase keys:",
       dropped,
+    );
+  }
+
+  const publicationGate = await checkCatalogPublication(
+    "phrases",
+    Object.keys(prevPhrases),
+    Object.keys(sanitizedPhrases),
+  );
+  if (!publicationGate.allowed) {
+    return jsonErr(
+      409,
+      "Catalog usage governance blocked Phrase publication.",
+      {
+        code: publicationGate.code,
+        fatal: true,
+        missing: publicationGate.missing,
+      },
     );
   }
 

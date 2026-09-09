@@ -238,6 +238,18 @@ describe("POST /glossary — versioning", () => {
     mockFetch([
       { url: /currentVersion/, body: "2.1" },
       { url: /versions\/2_dot_1\/glossary/, body: existingGlossary },
+      {
+        url: "catalog-usage-report?latest",
+        body: {
+          report: {
+            parameters: {
+              referencedKeys: { _about: [] },
+              registeredDynamicKeys: {},
+            },
+          },
+          freshness: { status: "current" },
+        },
+      },
     ]);
 
     const rows = makeRows([{ name: "_about" }]);
