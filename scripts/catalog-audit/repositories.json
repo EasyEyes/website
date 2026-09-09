@@ -1,5 +1,19 @@
 [
   {
+    "name": "ConnectAPeer",
+    "url": "https://github.com/EasyEyes/ConnectAPeer",
+    "defaultBranch": "main",
+    "status": "deferred",
+    "reason": "Deferred from the initial enforcement scope; catalog usage has not been classified."
+  },
+  {
+    "name": "EasyPsych",
+    "url": "https://github.com/EasyEyes/EasyPsych",
+    "defaultBranch": "main",
+    "status": "deferred",
+    "reason": "Deferred from the initial enforcement scope; catalog usage has not been classified."
+  },
+  {
     "name": "compatibility-check",
     "url": "https://github.com/EasyEyes/compatibility-check",
     "defaultBranch": "main",
@@ -19,6 +33,27 @@
     "defaultBranch": "main",
     "status": "excluded",
     "reason": "R analysis application; no International Phrases or Parameter Glossary reader found."
+  },
+  {
+    "name": "TestCompatibilityPeer",
+    "url": "https://github.com/EasyEyes/TestCompatibilityPeer",
+    "defaultBranch": "main",
+    "status": "deferred",
+    "reason": "Deferred from the initial enforcement scope; catalog usage has not been classified."
+  },
+  {
+    "name": "TestListenerPage",
+    "url": "https://github.com/EasyEyes/TestListenerPage",
+    "defaultBranch": "main",
+    "status": "deferred",
+    "reason": "Deferred from the initial enforcement scope; catalog usage has not been classified."
+  },
+  {
+    "name": "hdr10-video-gazer-test",
+    "url": "https://github.com/EasyEyes/hdr10-video-gazer-test",
+    "defaultBranch": "main",
+    "status": "deferred",
+    "reason": "Deferred from the initial enforcement scope; catalog usage has not been classified."
   },
   {
     "name": "js.org",
@@ -47,6 +82,27 @@
     "defaultBranch": "main",
     "status": "excluded",
     "reason": "Legacy server; no active catalog reader found."
+  },
+  {
+    "name": "python-server",
+    "url": "https://github.com/EasyEyes/python-server",
+    "defaultBranch": "main",
+    "status": "deferred",
+    "reason": "Deferred from the initial enforcement scope; catalog usage has not been classified."
+  },
+  {
+    "name": "remote-calibrator-examples",
+    "url": "https://github.com/EasyEyes/remote-calibrator-examples",
+    "defaultBranch": "main",
+    "status": "deferred",
+    "reason": "Deferred from the initial enforcement scope; catalog usage has not been classified."
+  },
+  {
+    "name": "remote-calibrator-phrases",
+    "url": "https://github.com/EasyEyes/remote-calibrator-phrases",
+    "defaultBranch": "main",
+    "status": "deferred",
+    "reason": "Archived repository deferred from the initial enforcement scope; catalog usage has not been classified."
   },
   {
     "name": "remote-calibrator",
@@ -81,6 +137,27 @@
     "dynamicRegistrations": []
   },
   {
+    "name": "sound-check",
+    "url": "https://github.com/EasyEyes/sound-check",
+    "defaultBranch": "main",
+    "status": "deferred",
+    "reason": "Archived repository deferred from the initial enforcement scope; catalog usage has not been classified."
+  },
+  {
+    "name": "sound-dsp-py",
+    "url": "https://github.com/EasyEyes/sound-dsp-py",
+    "defaultBranch": "main",
+    "status": "deferred",
+    "reason": "Archived repository deferred from the initial enforcement scope; catalog usage has not been classified."
+  },
+  {
+    "name": "test-viewing-distance-tests",
+    "url": "https://github.com/EasyEyes/test-viewing-distance-tests",
+    "defaultBranch": "main",
+    "status": "deferred",
+    "reason": "Deferred from the initial enforcement scope; catalog usage has not been classified."
+  },
+  {
     "name": "threshold",
     "url": "https://github.com/EasyEyes/threshold",
     "defaultBranch": "main",
@@ -110,6 +187,13 @@
     ],
     "readers": [],
     "dynamicRegistrations": []
+  },
+  {
+    "name": "threshold-prescreen",
+    "url": "https://github.com/EasyEyes/threshold-prescreen",
+    "defaultBranch": "main",
+    "status": "deferred",
+    "reason": "Deferred from the initial enforcement scope; catalog usage has not been classified."
   },
   {
     "name": "virtual-keypad",
