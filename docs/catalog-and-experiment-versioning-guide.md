@@ -93,21 +93,25 @@ are publication metadata, so they do not change the report's content identity.
 ```mermaid
 sequenceDiagram
     actor Scientist
-    participant Compiler as Latest compiler
-    participant Phrase as Phrase currentVersion
-    participant Glossary as Glossary currentVersion
-    participant Repo as Pavlovia experiment repo
-    participant Participant
+    participant Compiler as "Latest compiler"
+    participant Phrase as "Phrase currentVersion"
+    participant Glossary as "Glossary currentVersion"
+    participant Repo as "Pavlovia experiment repo"
+    participant Subject as "Participant"
 
     Scientist->>Compiler: Upload experiment table
     Compiler->>Phrase: Fetch current Phrase data
+    Phrase-->>Compiler: Return current Phrase data
     Compiler->>Glossary: Fetch current Glossary data
+    Glossary-->>Compiler: Return current Glossary data
     Compiler->>Compiler: Compile with bundled current code
     Compiler->>Repo: Copy runtime and generated files
-    Participant->>Repo: Run copied bundle
+    Subject->>Repo: Run copied bundle
+    Repo-->>Subject: Serve experiment
 
     Note over Compiler,Glossary: Mutable pointers can change independently
-    Note over Repo,Participant: Results do not contain one complete release tuple
+    Note over Repo,Subject: Results do not contain one complete release tuple
+
 ```
 
 The old flow had separate `phrasesVersion` and `glossaryVersion` records. They
