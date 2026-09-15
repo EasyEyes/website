@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { createReleaseManifestHandler } from "../index.mjs";
+import { createReleaseManifestHandler, firebaseStorage } from "../index.mjs";
 
 const manifest = {
   schemaVersion: 1,
@@ -28,9 +28,13 @@ function store() {
   const releases = new Map();
   const pins = new Map();
   let latest = null;
+  let sequence = 0;
   return {
     releases,
     pins,
+    async allocate(date) {
+      return `${date}.${++sequence}`;
+    },
     async create(id, value) {
       if (releases.has(id))
         return JSON.stringify(releases.get(id)) === JSON.stringify(value)
@@ -76,17 +80,25 @@ const post = (value = manifest) =>
     body: JSON.stringify(value),
   });
 
-test("publishes a verified immutable manifest and latest pointer", async () => {
+test("allocates date sequences for both engine and catalog releases", async () => {
   const storage = store();
   const handler = createReleaseManifestHandler({
     storage,
     secret: "secret",
     verifyRelease: async () => ({ ok: true }),
   });
-  assert.equal((await handler(post())).status, 201);
-  assert.equal(await storage.latest(), manifest.releaseId);
-  assert.deepEqual(await storage.get(manifest.releaseId), manifest);
-  assert.equal((await handler(post())).status, 200);
+  const payload = { ...manifest };
+  delete payload.releaseId;
+  const first = await handler(post(payload));
+  const second = await handler(
+    post({ ...payload, source: { catalogOnly: true } }),
+  );
+  assert.equal(first.status, 201);
+  assert.equal(second.status, 201);
+  const date = new Date().toISOString().slice(0, 10);
+  assert.equal((await first.json()).releaseId, `${date}.1`);
+  assert.equal((await second.json()).releaseId, `${date}.2`);
+  assert.equal(await storage.latest(), `${date}.2`);
 });
 
 test("atomically pins an existing release to an artifact revision", async () => {
@@ -145,7 +157,10 @@ test("authorizes experiment pins for only the matching GitLab user", async () =>
     releaseId: manifest.releaseId,
     artifactRevision: "revision-123",
   });
-  assert.equal((await handler(request("", { method: "PUT", body }))).status, 403);
+  assert.equal(
+    (await handler(request("", { method: "PUT", body }))).status,
+    403,
+  );
   assert.equal(
     (
       await handler(
@@ -236,14 +251,18 @@ test("rejects unauthorized, invalid, stale, and conflicting publication", async 
     secret: "secret",
     verifyRelease: async () => ({ ok: false, code: "CATALOG_AUDIT_STALE" }),
   });
-  assert.equal((await handler(post())).status, 409);
+  const stale = { ...manifest };
+  delete stale.releaseId;
+  assert.equal((await handler(post(stale))).status, 409);
   storage.create = async () => "conflict";
   handler = createReleaseManifestHandler({
     storage,
     secret: "secret",
     verifyRelease: async () => ({ ok: true }),
   });
-  assert.equal((await handler(post())).status, 409);
+  const payload = { ...manifest };
+  delete payload.releaseId;
+  assert.equal((await handler(post(payload))).status, 409);
 });
 
 test("serves immutable releases and an uncached latest pointer", async () => {
@@ -267,4 +286,56 @@ test("serves immutable releases and an uncached latest pointer", async () => {
       changelog: `Published ${manifest.publishedAt}`,
     },
   ]);
+});
+
+test("Firebase ETag allocation retries competing writers", async () => {
+  const original = globalThis.fetch;
+  let value = null;
+  let revision = 0;
+  let contested = false;
+  globalThis.fetch = async (_url, options = {}) => {
+    if (options.method === "PUT") {
+      if (!contested) {
+        contested = true;
+        value = 1;
+        revision++;
+      }
+      if (options.headers["if-match"] !== `etag-${revision}`)
+        return new Response(null, { status: 412 });
+      value = JSON.parse(options.body);
+      revision++;
+      return Response.json(value);
+    }
+    return new Response(JSON.stringify(value), {
+      headers: { etag: `etag-${revision}` },
+    });
+  };
+  try {
+    const storage = firebaseStorage("https://example.firebaseio.com", "test");
+    assert.equal(await storage.allocate("2026-09-15"), "2026-09-15.2");
+    assert.equal(value, 2);
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+test("Firebase latest pointer cannot move to an older release", async () => {
+  const original = globalThis.fetch;
+  let value = "2026-09-15.10";
+  globalThis.fetch = async (_url, options = {}) => {
+    if (options.method === "PUT") {
+      value = JSON.parse(options.body);
+      return Response.json(value);
+    }
+    return new Response(JSON.stringify(value), { headers: { etag: "etag-1" } });
+  };
+  try {
+    const storage = firebaseStorage("https://example.firebaseio.com", "test");
+    await storage.setLatest("2026-09-15.9");
+    assert.equal(value, "2026-09-15.10");
+    await storage.setLatest("2026-09-15.11");
+    assert.equal(value, "2026-09-15.11");
+  } finally {
+    globalThis.fetch = original;
+  }
 });

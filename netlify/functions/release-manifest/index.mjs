@@ -48,7 +48,10 @@ export function createReleaseManifestHandler({
       } catch {
         return respond({ code: "RELEASE_MANIFEST_INVALID" }, 400);
       }
-      if (!validateReleaseManifest(manifest))
+      if (
+        manifest?.releaseId != null ||
+        !validateReleaseManifest({ ...manifest, releaseId: "2000-01-01.1" })
+      )
         return respond({ code: "RELEASE_MANIFEST_INVALID" }, 400);
       const verification = await verifyRelease(manifest);
       if (!verification.ok)
@@ -56,14 +59,18 @@ export function createReleaseManifestHandler({
           { code: verification.code ?? "RELEASE_COMPONENT_MISMATCH" },
           409,
         );
-      const result = await storage.create(manifest.releaseId, manifest);
+      const date = new Date().toISOString().slice(0, 10);
+      const releaseId = await storage.allocate(date);
+      manifest = {
+        ...manifest,
+        releaseId,
+        publishedAt: new Date().toISOString(),
+      };
+      const result = await storage.create(releaseId, manifest);
       if (result === "conflict")
         return respond({ code: "IMMUTABLE_RELEASE_CONFLICT" }, 409);
-      await storage.setLatest(manifest.releaseId);
-      return respond(
-        { releaseId: manifest.releaseId },
-        result === "created" ? 201 : 200,
-      );
+      await storage.setLatest(releaseId);
+      return respond({ releaseId }, result === "created" ? 201 : 200);
     }
     if (request.method === "PUT") {
       let payload;
@@ -137,10 +144,32 @@ export function createReleaseManifestHandler({
         releases
           .map((manifest) => ({
             release: manifest.releaseId,
-            changelog: `Published ${manifest.publishedAt}`,
+            changelog: `${
+              manifest.source?.websiteBranch
+                ? `${manifest.source.websiteBranch} — `
+                : ""
+            }Published ${manifest.publishedAt}`,
           }))
-          .sort((a, b) => b.release.localeCompare(a.release)),
+          .sort((a, b) => {
+            const [aDate, aNumber] = a.release.split(".");
+            const [bDate, bNumber] = b.release.split(".");
+            return (
+              bDate.localeCompare(aDate) || Number(bNumber) - Number(aNumber)
+            );
+          }),
       );
+    }
+    if (url.searchParams.has("deploymentId")) {
+      const deploymentId = url.searchParams.get("deploymentId");
+      if (!/^[a-f0-9]{24}$/.test(deploymentId ?? ""))
+        return respond({ code: "RELEASE_MANIFEST_INVALID" }, 400);
+      const releases = await storage.list();
+      const existing = releases.find(
+        (manifest) => manifest.source?.deploymentId === deploymentId,
+      );
+      return existing
+        ? respond(manifestResponse(existing))
+        : respond({ code: "RELEASE_NOT_FOUND" }, 404);
     }
     const releaseId = url.searchParams.get("release");
     if (!releaseId) return respond({ code: "RELEASE_MANIFEST_INVALID" }, 400);
@@ -156,7 +185,7 @@ export function createReleaseManifestHandler({
 }
 
 const encode = (value) => value.replace(/\./g, "_dot_");
-function firebaseStorage(root, credential) {
+export function firebaseStorage(root, credential) {
   const endpoint = (path) =>
     `${root}/${path}.json?auth=${encodeURIComponent(credential)}`;
   const read = async (path, etag = false) => {
@@ -168,6 +197,28 @@ function firebaseStorage(root, credential) {
     return response;
   };
   return {
+    async allocate(date) {
+      const path = `easyEyesReleaseSequences/${encode(date)}`;
+      for (let attempt = 0; attempt < 30; attempt++) {
+        const response = await read(path, true);
+        const current = await response.json();
+        if (current !== null && (!Number.isSafeInteger(current) || current < 0))
+          throw new Error("Invalid Firebase release sequence");
+        const next = (current ?? 0) + 1;
+        const write = await fetch(endpoint(path), {
+          method: "PUT",
+          headers: {
+            "content-type": "application/json",
+            "if-match": response.headers.get("etag") ?? "null_etag",
+          },
+          body: JSON.stringify(next),
+        });
+        if (write.ok) return `${date}.${next}`;
+        if (write.status !== 412)
+          throw new Error(`Firebase sequence write failed: ${write.status}`);
+      }
+      throw new Error("Firebase release sequence contention");
+    },
     async create(id, value) {
       const path = `easyEyesReleases/${encode(id)}`;
       const response = await read(path, true);
@@ -205,13 +256,33 @@ function firebaseStorage(root, credential) {
       return Object.values(releases ?? {});
     },
     async setLatest(id) {
-      const response = await fetch(endpoint("easyEyesReleaseLatest"), {
-        method: "PUT",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(id),
-      });
-      if (!response.ok)
-        throw new Error(`Firebase latest write failed: ${response.status}`);
+      const path = "easyEyesReleaseLatest";
+      for (let attempt = 0; attempt < 30; attempt++) {
+        const currentResponse = await read(path, true);
+        const current = await currentResponse.json();
+        if (current) {
+          const [currentDate, currentNumber] = current.split(".");
+          const [newDate, newNumber] = id.split(".");
+          if (
+            currentDate > newDate ||
+            (currentDate === newDate &&
+              Number(currentNumber) >= Number(newNumber))
+          )
+            return;
+        }
+        const response = await fetch(endpoint(path), {
+          method: "PUT",
+          headers: {
+            "content-type": "application/json",
+            "if-match": currentResponse.headers.get("etag") ?? "null_etag",
+          },
+          body: JSON.stringify(id),
+        });
+        if (response.ok) return;
+        if (response.status !== 412)
+          throw new Error(`Firebase latest write failed: ${response.status}`);
+      }
+      throw new Error("Firebase latest pointer contention");
     },
     async pin(username, experiment, value) {
       const path = `users/${username}/${experiment}/releasePin`;
@@ -261,11 +332,11 @@ const canonicalDigest = (value) =>
   `sha256-${createHash("sha256")
     .update(JSON.stringify(value))
     .digest("base64")}`;
-async function verifyRelease(manifest) {
+async function verifyRelease(manifest, base) {
   const reportResponse = await fetch(
     `${
       process.env.CATALOG_USAGE_REPORT_URL ??
-      "https://easyeyes.app/.netlify/functions/catalog-usage-report"
+      `${base}/.netlify/functions/catalog-usage-report`
     }?latest`,
     { cache: "no-store" },
   );
@@ -280,14 +351,14 @@ async function verifyRelease(manifest) {
     [
       "phrases",
       manifest.phrases,
-      `https://easyeyes.app/.netlify/functions/phrases?v=${encodeURIComponent(
+      `${base}/.netlify/functions/phrases?v=${encodeURIComponent(
         manifest.phrases.version,
       )}`,
     ],
     [
       "glossary",
       manifest.glossary,
-      `https://easyeyes.app/.netlify/functions/glossary?v=${encodeURIComponent(
+      `${base}/.netlify/functions/glossary?v=${encodeURIComponent(
         manifest.glossary.version,
       )}`,
     ],
@@ -323,7 +394,8 @@ export default async function handler(request) {
   return createReleaseManifestHandler({
     storage: firebaseStorage(root, credential),
     secret,
-    verifyRelease,
+    verifyRelease: (manifest) =>
+      verifyRelease(manifest, new URL(request.url).origin),
     authorizePin,
   })(request);
 }

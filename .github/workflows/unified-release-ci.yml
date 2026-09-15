@@ -27,6 +27,7 @@ jobs:
       - run: npm ci --no-audit --no-fund
       - run: npm run test:catalog-audit
       - run: npm run test:catalog-report
+      - run: npm run test:engine-release-webhook
       - run: npm run test:release-manifest
       - run: npm ci --no-audit --no-fund
         working-directory: docs/experiment
