@@ -114,18 +114,6 @@ describe("GET /phrases — bare (no query params)", () => {
     mockFetch([
       { url: /phrases\/currentVersion/, body: "1.0" },
       { url: /phrasesVersions\/1_dot_0\/phrases/, body: SAMPLE_PHRASES },
-      {
-        url: "catalog-usage-report?latest",
-        body: {
-          report: {
-            phrases: {
-              referencedKeys: { hello: [] },
-              registeredDynamicKeys: {},
-            },
-          },
-          freshness: { status: "current" },
-        },
-      },
     ]);
 
     const res = await handler(makeGetEvent());
@@ -357,17 +345,11 @@ describe("GET /phrases — failure handling", () => {
 // ── PUT /phrases ───────────────────────────────────────────────────────────────
 
 describe("PUT /phrases — version pinning", () => {
-  test("writes the requested existing version and returns { version }", async () => {
-    mockFetch([
-      { url: /phrasesVersions\/1_dot_7\/phrases/, body: SAMPLE_PHRASES },
-    ]);
+  test("writes currentVersion to users/<u>/<e>/phrasesVersion and returns { version }", async () => {
+    mockFetch([{ url: /phrases\/currentVersion/, body: "1.7" }]);
 
     const res = await handler(
-      makePutEvent({
-        username: "alice",
-        experimentName: "myExp",
-        version: "1.7",
-      }),
+      makePutEvent({ username: "alice", experimentName: "myExp" }),
     );
 
     expect(res.statusCode).toBe(200);
@@ -748,18 +730,6 @@ describe("POST /phrases { action: 'translate' } — happy path", () => {
     mockFetch([
       { url: /phrases\/currentVersion/, body: "1.0" },
       { url: /phrasesVersions\/1_dot_0\/phrases/, body: SAMPLE_PHRASES },
-      {
-        url: "catalog-usage-report?latest",
-        body: {
-          report: {
-            phrases: {
-              referencedKeys: { hello: [] },
-              registeredDynamicKeys: {},
-            },
-          },
-          freshness: { status: "current" },
-        },
-      },
     ]);
 
     const res = await handler(
