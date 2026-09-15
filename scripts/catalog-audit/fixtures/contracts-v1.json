@@ -1,0 +1,44 @@
+{
+  "validManifest": {
+    "schemaVersion": 1,
+    "releaseId": "2026-09-09.1",
+    "contractVersion": 1,
+    "engine": {
+      "package": "@easyeyes/threshold-engine",
+      "version": "1.0.0",
+      "integrity": "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+    },
+    "phrases": {
+      "version": "3.2",
+      "digest": "sha256-BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB="
+    },
+    "glossary": {
+      "version": "31.2",
+      "digest": "sha256-CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC="
+    },
+    "catalogUsageReportId": "report-4f89a29c",
+    "publishedAt": "2026-09-09T12:00:00.000Z"
+  },
+  "validRequirements": {
+    "schemaVersion": 1,
+    "phraseKeys": ["EE_Cancel", "EE_OK"],
+    "phraseFamilies": ["EE_languageName"],
+    "parameterNames": ["questionAnswer01", "targetKind"],
+    "languages": ["en-US", "fr-FR"],
+    "customPhraseKeys": ["CUSTOM_WELCOME"]
+  },
+  "validPin": {
+    "releaseId": "2026-09-09.1",
+    "manifestDigest": "sha256-DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD=",
+    "artifactRevision": "gitlab-abc123",
+    "pinnedAt": "2026-09-09T12:01:00.000Z"
+  },
+  "legacyRecord": {
+    "phrasesVersion": "2.9",
+    "glossaryVersion": "30.1"
+  },
+  "partialPin": {
+    "releaseId": "2026-09-09.1",
+    "artifactRevision": "gitlab-abc123"
+  }
+}

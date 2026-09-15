@@ -4,6 +4,7 @@ import {
 } from "./encodeFirebaseSegment";
 import { isAllowedOrigin, corsHeaders } from "../shared/cors";
 import { getFirebaseDatabaseUrl } from "../shared/firebaseConfig";
+import { checkCatalogPublication } from "../shared/catalogPublicationGate";
 
 type NetlifyEvent = {
   httpMethod: string;
@@ -86,7 +87,9 @@ function transformRawRows(rows: string[][]): Record<string, GlossaryEntry> {
   return result;
 }
 function firebaseUrl(path: string): string {
-  return `${getFirebaseDatabaseUrl()}/${path}.json?auth=${process.env.FIREBASE_DB}`;
+  return `${getFirebaseDatabaseUrl()}/${path}.json?auth=${
+    process.env.FIREBASE_DB
+  }`;
 }
 
 // Firebase is a live dependency in the request path. A slow or degraded
@@ -131,7 +134,8 @@ async function firebaseGet(path: string): Promise<unknown> {
 async function firebaseGetKeys(path: string): Promise<Set<string>> {
   const url = `${firebaseUrl(path)}&shallow=true`;
   const res = await fetchWithTimeout(url);
-  if (!res.ok) throw new Error(`Firebase GET (shallow) ${path} → ${res.status}`);
+  if (!res.ok)
+    throw new Error(`Firebase GET (shallow) ${path} → ${res.status}`);
   const data = (await res.json()) as Record<string, true> | null;
   return new Set(Object.keys(data ?? {}));
 }
@@ -235,7 +239,10 @@ function withCors(
 ): NetlifyResponse {
   return {
     ...response,
-    headers: { ...(response.headers ?? {}), ...corsHeaders(origin, GLOSSARY_ALLOWED_HEADERS) },
+    headers: {
+      ...(response.headers ?? {}),
+      ...corsHeaders(origin, GLOSSARY_ALLOWED_HEADERS),
+    },
   };
 }
 
@@ -341,25 +348,32 @@ async function handlePut(event: NetlifyEvent): Promise<NetlifyResponse> {
     typeof parsed !== "object" ||
     parsed === null ||
     typeof (parsed as Record<string, unknown>).username !== "string" ||
-    typeof (parsed as Record<string, unknown>).experimentName !== "string"
+    typeof (parsed as Record<string, unknown>).experimentName !== "string" ||
+    typeof (parsed as Record<string, unknown>).version !== "string"
   ) {
-    return jsonErr(400, "Missing or invalid username or experimentName");
+    return jsonErr(
+      400,
+      "Missing or invalid username, experimentName, or version",
+    );
   }
 
-  const { username, experimentName } = parsed as {
+  const { username, experimentName, version } = parsed as {
     username: string;
     experimentName: string;
+    version: string;
   };
-
-  const currentVersion = (await firebaseGet("currentVersion")) as string;
+  if (!version.trim() || version.length > 128)
+    return jsonErr(400, "Invalid version");
+  if (!(await getGlossaryData(version)))
+    return jsonErr(404, `Glossary version does not exist: ${version}`);
   const encodedUser = encodeFirebaseSegment(username);
   const encodedExp = encodeFirebaseSegment(experimentName);
   await firebasePut(
     `users/${encodedUser}/${encodedExp}/glossaryVersion`,
-    currentVersion,
+    version,
   );
 
-  return jsonOk({ version: currentVersion });
+  return jsonOk({ version });
 }
 
 async function handlePost(event: NetlifyEvent): Promise<NetlifyResponse> {
@@ -392,15 +406,33 @@ async function handlePost(event: NetlifyEvent): Promise<NetlifyResponse> {
   const currentVersion = (await firebaseGet("currentVersion")) as string | null;
 
   let newVersion: string;
+  let existingKeys = new Set<string>();
 
   if (!currentVersion) {
     newVersion = "1.0";
   } else {
-    const existingKeys = await firebaseGetKeys(
+    existingKeys = await firebaseGetKeys(
       `versions/${encodeFirebaseSegment(currentVersion)}/glossary`,
     );
     const incomingKeys = new Set(Object.keys(incoming));
     newVersion = bumpVersion(currentVersion, incomingKeys, existingKeys);
+  }
+
+  const publicationGate = await checkCatalogPublication(
+    "parameters",
+    existingKeys,
+    Object.keys(incoming),
+  );
+  if (!publicationGate.allowed) {
+    return {
+      statusCode: 409,
+      headers: JSON_HEADERS,
+      body: JSON.stringify({
+        error: "Catalog usage governance blocked Glossary publication.",
+        code: publicationGate.code,
+        missing: publicationGate.missing,
+      }),
+    };
   }
 
   const encodedVersion = encodeFirebaseSegment(newVersion);
@@ -467,7 +499,11 @@ export async function handler(event: NetlifyEvent): Promise<NetlifyResponse> {
   );
 
   if (event.httpMethod === "OPTIONS") {
-    return { statusCode: 204, headers: corsHeaders(origin, GLOSSARY_ALLOWED_HEADERS), body: "" };
+    return {
+      statusCode: 204,
+      headers: corsHeaders(origin, GLOSSARY_ALLOWED_HEADERS),
+      body: "",
+    };
   }
 
   try {
