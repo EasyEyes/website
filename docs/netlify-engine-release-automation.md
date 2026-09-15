@@ -63,52 +63,6 @@ Credentials and secrets need Functions scope; `FIREBASE_DATABASE_URL` also needs
 Builds scope for the compiler. Check for obsolete individual branch overrides.
 Database isolation comes from these values, not from the hostname.
 
-### Keep the Lambda environment below 4 KB
-
-The site still contains legacy Lambda-compatible functions. AWS limits the
-combined size of the environment passed to each such function to 4 KB. Scope
-variables in **Project configuration → Environment variables** so that only
-values read at function runtime include **Functions**. Values used only while
-building the site or compiling the function bundles should use **Builds** only.
-
-The following values are build-only for this repository and should not include
-the Functions scope:
-
-```
-ANTHROPIC_API_KEY
-EASYEYES_RUNTIME_NPM_TOKEN
-EASYEYES_RUNTIME_PACKAGE
-FIREBASE_API_KEY
-FIREBASE_API_KEY_SOUND
-FIREBASE_MEDIA_CLIENT_EMAIL
-NODE_OPTIONS
-SECRETS_SCAN_OMIT_PATHS
-SECRETS_SCAN_SMART_DETECTION_OMIT_VALUES
-SENTRY_AUTH_TOKEN
-SENTRY_ENVIRONMENT
-STATIC_MODE
-```
-
-Keep `BOX_CONFIG` in Functions scope because `box-api` reads it at runtime,
-but do not add other build credentials to that scope. The runtime values are
-the Firebase URL and credential, catalog/function secrets, mail and translation
-credentials, `MEDIA_ROLES`, the Phrase Sentry DSN, and the four
-`ENGINE_RELEASE_*` receiver values in the production context. The release
-receiver values remain production-only; they must not be copied to previews.
-
-After changing scopes, trigger a new deploy (environment changes apply only to
-new deploys) and verify the effective set without printing secret values:
-
-```bash
-netlify env:list --json --context production --scope functions \
-  | jq -r 'keys[]' | sort
-```
-
-If the deploy still reports the 4 KB error, inspect the Functions-scoped list
-for a large build credential such as `BOX_CONFIG` being duplicated under a
-second key. Netlify documents both the scope behavior and the Lambda limit in
-[environment variables for Functions](https://docs.netlify.com/build/functions/environment-variables/).
-
 The release verifier derives catalog and report URLs from the request origin.
 `EASYEYES_BASE_URL` is no longer needed for this function. Leave
 `CATALOG_USAGE_REPORT_URL` unset unless an explicit matching report service is
