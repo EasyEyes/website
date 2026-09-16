@@ -1,3 +1,4 @@
+import { withLambda } from "@netlify/aws-lambda-compat";
 import fetch from "node-fetch";
 
 const responseWrapper = (statusCode, body) => {
@@ -12,7 +13,7 @@ const responseWrapper = (statusCode, body) => {
   };
 };
 
-exports.handler = async (event, context) => {
+export const handler = async (event, context) => {
   let statusCode, data;
 
   // 'users/me/' or 'studies/' or 'projects/id/studies'
@@ -324,3 +325,5 @@ exports.handler = async (event, context) => {
     return responseWrapper(statusCode, data);
   }
 };
+
+export default withLambda(handler);

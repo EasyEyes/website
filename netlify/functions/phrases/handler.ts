@@ -58,6 +58,7 @@ function firebaseUrl(path: string): string {
     process.env.FIREBASE_DB
   }`;
 }
+
 // Firebase is a live dependency in the request path. A slow or degraded
 // Firebase must fail fast (well under Netlify's 60s synchronous timeout) and
 // recover from transient blips, rather than hanging until Netlify kills the
@@ -1170,7 +1171,10 @@ export async function handler(event: NetlifyEvent): Promise<NetlifyResponse> {
   const startedAt = Date.now();
 
   if (event.httpMethod === "OPTIONS") {
-    return { statusCode: 204, headers: corsHeaders(origin), body: "" };
+    return {
+      statusCode: 204,
+      headers: corsHeaders(origin),
+    } as unknown as NetlifyResponse;
   }
 
   if (event.httpMethod === "POST") {

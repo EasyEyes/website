@@ -1,4 +1,4 @@
-import { handler } from "../index";
+import { handler } from "../handler";
 
 const VALID_SECRET = "test-secret-123";
 const FIREBASE_DB = "firebase-db-secret";

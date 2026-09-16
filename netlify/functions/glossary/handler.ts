@@ -85,8 +85,11 @@ function transformRawRows(rows: string[][]): Record<string, GlossaryEntry> {
 
   return result;
 }
+
 function firebaseUrl(path: string): string {
-  return `${getFirebaseDatabaseUrl()}/${path}.json?auth=${process.env.FIREBASE_DB}`;
+  return `${getFirebaseDatabaseUrl()}/${path}.json?auth=${
+    process.env.FIREBASE_DB
+  }`;
 }
 
 // Firebase is a live dependency in the request path. A slow or degraded
@@ -131,7 +134,8 @@ async function firebaseGet(path: string): Promise<unknown> {
 async function firebaseGetKeys(path: string): Promise<Set<string>> {
   const url = `${firebaseUrl(path)}&shallow=true`;
   const res = await fetchWithTimeout(url);
-  if (!res.ok) throw new Error(`Firebase GET (shallow) ${path} → ${res.status}`);
+  if (!res.ok)
+    throw new Error(`Firebase GET (shallow) ${path} → ${res.status}`);
   const data = (await res.json()) as Record<string, true> | null;
   return new Set(Object.keys(data ?? {}));
 }
@@ -235,7 +239,10 @@ function withCors(
 ): NetlifyResponse {
   return {
     ...response,
-    headers: { ...(response.headers ?? {}), ...corsHeaders(origin, GLOSSARY_ALLOWED_HEADERS) },
+    headers: {
+      ...(response.headers ?? {}),
+      ...corsHeaders(origin, GLOSSARY_ALLOWED_HEADERS),
+    },
   };
 }
 
@@ -467,7 +474,10 @@ export async function handler(event: NetlifyEvent): Promise<NetlifyResponse> {
   );
 
   if (event.httpMethod === "OPTIONS") {
-    return { statusCode: 204, headers: corsHeaders(origin, GLOSSARY_ALLOWED_HEADERS), body: "" };
+    return {
+      statusCode: 204,
+      headers: corsHeaders(origin, GLOSSARY_ALLOWED_HEADERS),
+    } as unknown as NetlifyResponse;
   }
 
   try {

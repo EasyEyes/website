@@ -40,5 +40,8 @@
   },
   "lint-staged": {
     "*.{js,json,md,html,css}": "prettier --write"
+  },
+  "dependencies": {
+    "@netlify/aws-lambda-compat": "^2.0.0"
   }
 }
