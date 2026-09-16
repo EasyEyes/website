@@ -16,6 +16,10 @@ const responseWrapper = (statusCode, body) => {
 export const handler = async (event, context) => {
   let statusCode, data;
 
+  if (event.httpMethod === "OPTIONS") {
+    return responseWrapper(200, {});
+  }
+
   // 'users/me/' or 'studies/' or 'projects/id/studies'
   const task = event.path.replace("/.netlify/functions/prolific/", "");
 

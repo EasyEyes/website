@@ -1,5 +1,5 @@
 import { withLambda } from "@netlify/aws-lambda-compat";
-const { MailtrapClient } = require("mailtrap");
+import { MailtrapClient } from "mailtrap";
 
 const headers = {
   "Access-Control-Allow-Origin": "*",

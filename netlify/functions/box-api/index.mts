@@ -1,6 +1,6 @@
 import { withLambda } from "@netlify/aws-lambda-compat";
-const BoxSDK = require("box-node-sdk");
-const stream = require("stream");
+import BoxSDK from "box-node-sdk";
+import stream from "node:stream";
 
 const headers = {
   "Access-Control-Allow-Origin": "*",
