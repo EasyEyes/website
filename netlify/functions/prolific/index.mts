@@ -328,6 +328,8 @@ export const handler = async (event, context) => {
 
     return responseWrapper(statusCode, data);
   }
+
+  return responseWrapper(404, { error: "Endpoint not found" });
 };
 
 export default withLambda(handler);
