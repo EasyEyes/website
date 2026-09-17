@@ -1,5 +1,5 @@
-import { withLambda } from "@netlify/aws-lambda-compat";
 import fetch from "node-fetch";
+import { nativeHandler } from "../shared/nativeHandler";
 
 const responseWrapper = (statusCode, body) => {
   return {
@@ -332,4 +332,4 @@ export const handler = async (event, context) => {
   return responseWrapper(404, { error: "Endpoint not found" });
 };
 
-export default withLambda(handler);
+export default nativeHandler(handler);

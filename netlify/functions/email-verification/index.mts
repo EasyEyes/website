@@ -1,5 +1,5 @@
-import { withLambda } from "@netlify/aws-lambda-compat";
 import { MailtrapClient } from "mailtrap";
+import { nativeHandler } from "../shared/nativeHandler";
 
 const headers = {
   "Access-Control-Allow-Origin": "*",
@@ -207,4 +207,4 @@ async function handleVerifyCode(event) {
   };
 }
 
-export default withLambda(handler);
+export default nativeHandler(handler);
