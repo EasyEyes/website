@@ -1,6 +1,6 @@
-import { withLambda } from "@netlify/aws-lambda-compat";
 import BoxSDK from "box-node-sdk";
 import stream from "node:stream";
+import { nativeHandler } from "../shared/nativeHandler";
 
 const headers = {
   "Access-Control-Allow-Origin": "*",
@@ -181,4 +181,4 @@ export const handler = async (event) => {
   }
 };
 
-export default withLambda(handler);
+export default nativeHandler(handler);

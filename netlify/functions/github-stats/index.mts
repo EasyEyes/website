@@ -1,4 +1,4 @@
-import { withLambda } from "@netlify/aws-lambda-compat";
+import { nativeHandler } from "../shared/nativeHandler";
 // Uses Node's built-in global fetch, so no node-fetch
 // dependency is required.
 
@@ -89,4 +89,4 @@ export const handler = async (event) => {
   }
 };
 
-export default withLambda(handler);
+export default nativeHandler(handler);

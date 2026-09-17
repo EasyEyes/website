@@ -18,7 +18,7 @@ const preflight = (name: string) =>
     headers: { Origin: "https://easyeyes.app" },
   });
 
-test("compatibility wrappers return web-standard preflight responses", async () => {
+test("native handlers return web-standard preflight responses", async () => {
   const cases = [
     ["box-api", boxApi, 200],
     ["email-verification/send", emailVerification, 200],
@@ -45,7 +45,7 @@ test("native modern handler returns a Response", async () => {
   assert.ok(response instanceof Response);
 });
 
-test("compatibility wrappers preserve representative request and response behavior", async () => {
+test("native handlers preserve representative request and response behavior", async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = (async (input: string | URL | Request) => {
     const url = String(input);
