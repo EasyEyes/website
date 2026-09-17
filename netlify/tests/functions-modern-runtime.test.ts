@@ -8,7 +8,6 @@ import githubStats from "../functions/github-stats/index.mts";
 import glossary from "../functions/glossary/index.mts";
 import phrases from "../functions/phrases/index.mts";
 import prolific from "../functions/prolific/index.mts";
-import studioAssistant from "../functions/studio-assistant/index.mts";
 import translatePhraseFile from "../functions/translate-phrase-file/index.mts";
 
 const context = {} as never;
@@ -27,7 +26,6 @@ test("compatibility wrappers return web-standard preflight responses", async () 
     ["glossary", glossary, 204],
     ["phrases", phrases, 204],
     ["prolific", prolific, 200],
-    ["studio-assistant", studioAssistant, 204],
     ["translate-phrase-file", translatePhraseFile, 204],
   ] as const;
 
@@ -112,13 +110,6 @@ test("compatibility wrappers preserve representative request and response behavi
         prolific,
         new Request("https://easyeyes.app/.netlify/functions/prolific/unknown"),
         404,
-      ],
-      [
-        studioAssistant,
-        new Request("https://easyeyes.app/.netlify/functions/studio-assistant", {
-          headers: { Origin: "https://easyeyes.app" },
-        }),
-        405,
       ],
       [
         translatePhraseFile,

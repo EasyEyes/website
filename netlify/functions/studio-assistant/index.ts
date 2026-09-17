@@ -343,7 +343,8 @@ export const createAssistantHandler = (
           "Cache-Control": NO_STORE,
           "Netlify-CDN-Cache-Control": NO_STORE,
         },
-      } as unknown as NetlifyResponse;
+        body: "",
+      };
     if (event.httpMethod !== "POST")
       return jsonResponse(405, { error: "Method not allowed" }, origin, {
         Allow: "POST, OPTIONS",

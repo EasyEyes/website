@@ -6,7 +6,7 @@ import {
   effortSetting,
   MAX_MAX_TOKENS,
   parseRequest,
-} from "../handler";
+} from "../index";
 
 const ORIGIN = "https://easyeyes.app";
 const API_KEY = "server-only-anthropic-key";
@@ -226,9 +226,7 @@ describe("studio-assistant Netlify function", () => {
         .statusCode,
     ).toBe(403);
     expect((await handler(event({}, "GET"))).statusCode).toBe(405);
-    const preflight = await handler(event({}, "OPTIONS"));
-    expect(preflight.statusCode).toBe(204);
-    expect(preflight).not.toHaveProperty("body");
+    expect((await handler(event({}, "OPTIONS"))).statusCode).toBe(204);
   });
 
   it("rejects malformed requests", async () => {

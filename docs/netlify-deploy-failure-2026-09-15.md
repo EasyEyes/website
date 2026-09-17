@@ -191,7 +191,6 @@ github-stats
 glossary
 phrases
 prolific
-studio-assistant
 translate-phrase-file
 ```
 
@@ -202,9 +201,10 @@ project decision:
 formspree-quota
 media-auth
 speech-token
+studio-assistant
 ```
 
-Because those three functions remain on the legacy runtime, their combined
+Because those four functions remain on the legacy runtime, their combined
 Functions-scoped environment must still fit within AWS Lambda's 4 KB serialized
 environment limit. The migration reduces the number of affected functions, but
 environment-variable cleanup is still required before production deployment.
@@ -273,7 +273,6 @@ curl -i -X OPTIONS http://localhost:9999/.netlify/functions/github-stats
 curl -i -X OPTIONS http://localhost:9999/.netlify/functions/glossary
 curl -i -X OPTIONS http://localhost:9999/.netlify/functions/phrases
 curl -i -X OPTIONS http://localhost:9999/.netlify/functions/prolific
-curl -i -X OPTIONS http://localhost:9999/.netlify/functions/studio-assistant
 curl -i -X OPTIONS http://localhost:9999/.netlify/functions/translate-phrase-file
 ```
 
@@ -305,8 +304,8 @@ Do not add `--prod` until the draft deploy succeeds. In the deploy log, confirm:
 4. The migrated functions appear in the deploy's Functions list.
 5. The deploy-preview URL returns the expected status and CORS headers for the
    requests above.
-6. A normal application flow that uses `glossary`, `phrases`, and
-   `studio-assistant` succeeds with preview-safe credentials.
+6. A normal application flow that uses `glossary` and `phrases` succeeds with
+   preview-safe credentials.
 
 ## Environment-variable remediation runbook
 
@@ -355,7 +354,7 @@ The source currently reads these variables in deployed functions:
 
 | Variable                             | Consumer                                             | Action                                                  |
 | ------------------------------------ | ---------------------------------------------------- | ------------------------------------------------------- |
-| `ANTHROPIC_API_KEY`                  | `studio-assistant`                                   | Functions; required when the assistant is enabled       |
+| `ANTHROPIC_API_KEY`                  | excluded `studio-assistant`                          | Functions; required when the assistant is enabled       |
 | `BOX_CONFIG`                         | `box-api`                                            | Functions; required unless the Box setup is redesigned  |
 | `BOX_DEVELOPER_TOKEN`                | `box-api`                                            | Functions; optional alternative authentication          |
 | `BOX_USER_ID`                        | `box-api`                                            | Functions; optional user-scoped Box authentication      |
@@ -375,9 +374,9 @@ The source currently reads these variables in deployed functions:
 | `MAILTRAP_TOKEN`                     | `email-verification`                                 | Functions; required to send verification email          |
 | `PHRASES_SECRET`                     | `phrases`                                            | Functions; required for protected writes                |
 | `SENTRY_DSN`                         | `phrases`                                            | Functions; optional telemetry                           |
-| `STUDIO_ASSISTANT_EFFORT`            | `studio-assistant`                                   | Functions; optional model setting                       |
-| `STUDIO_ASSISTANT_MODEL`             | `studio-assistant`                                   | Functions; optional model setting                       |
-| `STUDIO_ASSISTANT_THINKING`          | `studio-assistant`                                   | Functions; optional thinking setting                    |
+| `STUDIO_ASSISTANT_EFFORT`            | excluded `studio-assistant`                          | Functions; optional model setting                       |
+| `STUDIO_ASSISTANT_MODEL`             | excluded `studio-assistant`                          | Functions; optional model setting                       |
+| `STUDIO_ASSISTANT_THINKING`          | excluded `studio-assistant`                          | Functions; optional thinking setting                    |
 
 `PORT` and `UPSTREAM` are used only by the local `studio-assistant` development
 server and do not need to be stored in the production Netlify project.

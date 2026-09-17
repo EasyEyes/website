@@ -18,7 +18,7 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "http";
 import { readFileSync } from "fs";
 import { resolve } from "path";
-import { handler, config } from "./handler";
+import { handler, config } from "./index";
 
 const PORT = Number(process.env.PORT) || 8888;
 const UPSTREAM = process.env.UPSTREAM || "https://easyeyes.app";
