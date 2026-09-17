@@ -67,7 +67,8 @@ export const handler = async (event, context) => {
       });
 
       data = await response.json();
-      statusCode = 200;
+      // Preserve Prolific's validation/authentication status as well as its body.
+      statusCode = response.status;
     } catch (error) {
       console.error("ERROR", error);
 
