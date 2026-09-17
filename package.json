@@ -18,7 +18,8 @@
     "publish:compiler": "node scripts/publish-compiler-build.mjs",
     "i18n:local": "node scripts/fetch-i18n-local.mjs",
     "glossary:local": "node scripts/fetch-glossary-local.mjs",
-    "test:compiler-cache": "node --test netlify/tests/*.test.js"
+    "test:compiler-cache": "node --test netlify/tests/*.test.js",
+    "test:functions-runtime": "tsx --test netlify/tests/functions-modern-runtime.test.ts"
   },
   "repository": {
     "type": "git",
@@ -36,9 +37,13 @@
     "husky": "^8.0.3",
     "lint-staged": "^15.0.2",
     "netlify-cli": "^23.13.0",
-    "prettier": "^3.0.3"
+    "prettier": "^3.0.3",
+    "tsx": "^4.23.13"
   },
   "lint-staged": {
     "*.{js,json,md,html,css}": "prettier --write"
+  },
+  "dependencies": {
+    "@netlify/aws-lambda-compat": "^2.0.0"
   }
 }

@@ -1,5 +1,5 @@
 import { gunzipSync } from "zlib";
-import { handler } from "../index";
+import { handler } from "../handler";
 import type { PhraseMap } from "../types";
 
 const FIREBASE_DB = "firebase-db-secret";
@@ -1340,6 +1340,7 @@ describe("CORS — OPTIONS preflight", () => {
     });
 
     expect(res.statusCode).toBe(204);
+    expect(res).not.toHaveProperty("body");
     expect(res.headers?.["Access-Control-Allow-Origin"]).toBe(
       "https://easyeyes.app",
     );

@@ -33,7 +33,7 @@ function jsonErr(statusCode: number, message: string): NetlifyResponse {
 
 function withCors(
   response: NetlifyResponse,
-  origin: string | undefined
+  origin: string | undefined,
 ): NetlifyResponse {
   return {
     ...response,
@@ -45,7 +45,10 @@ export async function handler(event: NetlifyEvent): Promise<NetlifyResponse> {
   const origin = event.headers["origin"] ?? event.headers["Origin"];
 
   if (event.httpMethod === "OPTIONS") {
-    return { statusCode: 204, headers: corsHeaders(origin), body: "" };
+    return {
+      statusCode: 204,
+      headers: corsHeaders(origin),
+    } as unknown as NetlifyResponse;
   }
 
   if (event.httpMethod !== "POST") {
@@ -77,7 +80,9 @@ export async function handler(event: NetlifyEvent): Promise<NetlifyResponse> {
   }
 
   const httpFetch: Deps["deeplFetch"] = (url, init) =>
-    fetch(url, init as RequestInit) as unknown as ReturnType<Deps["deeplFetch"]>;
+    fetch(url, init as RequestInit) as unknown as ReturnType<
+      Deps["deeplFetch"]
+    >;
 
   const deps: Deps = {
     deeplFetch: httpFetch,
@@ -90,11 +95,10 @@ export async function handler(event: NetlifyEvent): Promise<NetlifyResponse> {
     const outBuffer = await translatePhraseFile(xlsxBuffer, deps);
     return withCors(
       jsonOk({ fileBase64: outBuffer.toString("base64") }),
-      origin
+      origin,
     );
   } catch (err) {
-    const message =
-      err instanceof Error ? err.message : "Translation failed";
+    const message = err instanceof Error ? err.message : "Translation failed";
     return withCors(jsonErr(500, message), origin);
   }
 }

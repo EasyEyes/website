@@ -1,5 +1,6 @@
-const BoxSDK = require("box-node-sdk");
-const stream = require("stream");
+import { withLambda } from "@netlify/aws-lambda-compat";
+import BoxSDK from "box-node-sdk";
+import stream from "node:stream";
 
 const headers = {
   "Access-Control-Allow-Origin": "*",
@@ -7,7 +8,7 @@ const headers = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-exports.handler = async (event) => {
+export const handler = async (event) => {
   if (event.httpMethod === "OPTIONS") {
     return { statusCode: 200, headers, body: "" };
   }
@@ -179,3 +180,5 @@ exports.handler = async (event) => {
     };
   }
 };
+
+export default withLambda(handler);

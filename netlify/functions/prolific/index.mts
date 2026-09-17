@@ -1,3 +1,4 @@
+import { withLambda } from "@netlify/aws-lambda-compat";
 import fetch from "node-fetch";
 
 const responseWrapper = (statusCode, body) => {
@@ -12,8 +13,12 @@ const responseWrapper = (statusCode, body) => {
   };
 };
 
-exports.handler = async (event, context) => {
+export const handler = async (event, context) => {
   let statusCode, data;
+
+  if (event.httpMethod === "OPTIONS") {
+    return responseWrapper(200, {});
+  }
 
   // 'users/me/' or 'studies/' or 'projects/id/studies'
   const task = event.path.replace("/.netlify/functions/prolific/", "");
@@ -323,4 +328,8 @@ exports.handler = async (event, context) => {
 
     return responseWrapper(statusCode, data);
   }
+
+  return responseWrapper(404, { error: "Endpoint not found" });
 };
+
+export default withLambda(handler);

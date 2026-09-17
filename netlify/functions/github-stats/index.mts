@@ -1,4 +1,5 @@
-// Uses Node 18's built-in global fetch (NODE_VERSION=18.17.0), so no node-fetch
+import { withLambda } from "@netlify/aws-lambda-compat";
+// Uses Node's built-in global fetch, so no node-fetch
 // dependency is required.
 
 // Reports slow-changing GitHub values shown in the EasyEyes compiler footer:
@@ -53,7 +54,7 @@ const ghJson = async (endpoint, headers) => {
   return response.json();
 };
 
-exports.handler = async (event) => {
+export const handler = async (event) => {
   if (event.httpMethod === "OPTIONS") {
     return responseWrapper(200, {}, NO_CACHE);
   }
@@ -87,3 +88,5 @@ exports.handler = async (event) => {
     );
   }
 };
+
+export default withLambda(handler);

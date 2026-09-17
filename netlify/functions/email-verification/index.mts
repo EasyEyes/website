@@ -1,4 +1,5 @@
-const { MailtrapClient } = require("mailtrap");
+import { withLambda } from "@netlify/aws-lambda-compat";
+import { MailtrapClient } from "mailtrap";
 
 const headers = {
   "Access-Control-Allow-Origin": "*",
@@ -6,7 +7,7 @@ const headers = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-exports.handler = async (event) => {
+export const handler = async (event) => {
   // Handle preflight requests
   if (event.httpMethod === "OPTIONS") {
     return {
@@ -205,3 +206,5 @@ async function handleVerifyCode(event) {
     }),
   };
 }
+
+export default withLambda(handler);
