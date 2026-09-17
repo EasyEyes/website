@@ -20,6 +20,34 @@ function makeResponse(status, body) {
 }
 
 describe("Glossary Apps Script client", () => {
+  test("adds the read-only parameter usage audit menu command", () => {
+    const menu = { addItem: jest.fn(), addToUi: jest.fn() };
+    menu.addItem.mockReturnValue(menu);
+    const { onOpen } = loadAppsScript({
+      SpreadsheetApp: { getUi: () => ({ createMenu: () => menu }) },
+    });
+    onOpen();
+    expect(menu.addItem).toHaveBeenCalledWith(
+      "Audit parameter usage in EasyEyes sources",
+      "auditParameterUsage",
+    );
+  });
+
+  test("compares Parameter definitions using shared set semantics", () => {
+    const { compareCatalogUsage } = loadAppsScript();
+    expect(
+      compareCatalogUsage(["targetKind", "unused"], {
+        referencedKeys: { targetKind: [], missing: [] },
+        registeredDynamicKeys: { questionAnswer01: [] },
+        uncertainReferences: [{ file: "reader.ts", line: 2 }],
+      }),
+    ).toEqual({
+      missing: ["missing", "questionAnswer01"],
+      unused: ["unused"],
+      uncertain: [{ file: "reader.ts", line: 2 }],
+    });
+  });
+
   test("builds the raw-row payload expected by the glossary function", () => {
     const { buildPayload } = loadAppsScript();
     const rows = [
