@@ -31,7 +31,26 @@ describe("International Phrases Firebase audit", () => {
       "Compare latest EasyEyes copy with this spreadsheet",
       "compareLatestEasyEyesCopy",
     );
+    expect(menu.addItem).toHaveBeenCalledWith(
+      "Audit phrase usage in EasyEyes sources",
+      "auditPhraseUsage",
+    );
     expect(menu.addToUi).toHaveBeenCalledTimes(1);
+  });
+
+  test("compares Phrase definitions using shared set semantics", () => {
+    const { compareCatalogUsage } = loadAppsScript();
+    expect(
+      compareCatalogUsage(["EE_Used", "EE_Unused"], {
+        referencedKeys: { EE_Used: [], EE_Missing: [] },
+        registeredDynamicKeys: { EE_Dynamic: [] },
+        uncertainReferences: [{ file: "dynamic.ts", line: 4 }],
+      }),
+    ).toEqual({
+      missing: ["EE_Dynamic", "EE_Missing"],
+      unused: ["EE_Unused"],
+      uncertain: [{ file: "dynamic.ts", line: 4 }],
+    });
   });
 
   test("returns coordinates and both exact values for differing cells", () => {

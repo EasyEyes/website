@@ -19,7 +19,14 @@
     "i18n:local": "node scripts/fetch-i18n-local.mjs",
     "glossary:local": "node scripts/fetch-glossary-local.mjs",
     "test:compiler-cache": "node --test netlify/tests/*.test.js",
-    "test:functions-runtime": "tsx --test netlify/tests/functions-modern-runtime.test.ts"
+    "test:functions-runtime": "tsx --test netlify/tests/functions-modern-runtime.test.ts",
+    "catalog-audit": "node scripts/catalog-audit/cli.mjs",
+    "catalog-audit:publish": "node scripts/catalog-audit/publish.mjs",
+    "test:catalog-audit": "node --test scripts/catalog-audit/*.test.mjs",
+    "test:catalog-report": "node --test netlify/functions/catalog-usage-report/__tests__/*.test.mjs",
+    "test:release-manifest": "node --test netlify/functions/release-manifest/__tests__/*.test.mjs",
+    "release:publish": "node scripts/publish-easyeyes-release.mjs",
+    "test:engine-release-webhook": "node --test netlify/functions/engine-release-webhook/__tests__/*.test.mjs"
   },
   "repository": {
     "type": "git",
@@ -32,6 +39,7 @@
   },
   "homepage": "https://github.com/EasyEyes/website#readme",
   "devDependencies": {
+    "@babel/parser": "^7.29.8",
     "debug": "^4.4.3",
     "eslint": "^8.53.0",
     "husky": "^8.0.3",
