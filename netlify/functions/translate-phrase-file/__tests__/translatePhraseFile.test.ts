@@ -120,11 +120,12 @@ type ColumnSpec = { code?: string; cells: CellSpec[] };
  */
 function buildPhraseXlsx(opts: {
   sourceCode: string;
+  headerSymbol?: string;
   symbols: string[];
   sourceCells?: CellSpec[]; // indexed by symbol
   targetColumns: ColumnSpec[];
 }): Buffer {
-  const { sourceCode, symbols, sourceCells = [], targetColumns } = opts;
+  const { sourceCode, headerSymbol = "~LanguageCode", symbols, sourceCells = [], targetColumns } = opts;
 
   // sharedStrings: collect all distinct string values
   const strings: string[] = [];
@@ -136,7 +137,7 @@ function buildPhraseXlsx(opts: {
   }
 
   // Pre-populate shared strings in order
-  si("~LanguageCode");
+  si(headerSymbol);
   si(sourceCode);
   for (const col of targetColumns) if (col.code !== undefined) si(col.code);
   for (const sym of symbols) si(sym);
@@ -151,7 +152,7 @@ function buildPhraseXlsx(opts: {
 
   // Header row (~LanguageCode + lang codes)
   const headerCells = [
-    `<c r="${colLetters[0]}1" t="s"><v>${si("~LanguageCode")}</v></c>`,
+    `<c r="${colLetters[0]}1" t="s"><v>${si(headerSymbol)}</v></c>`,
     `<c r="${colLetters[1]}1" t="s"><v>${si(sourceCode)}</v></c>`,
     ...targetColumns.map((col, ci) =>
       col.code === undefined
@@ -272,6 +273,24 @@ function readCell(buf: Buffer, cellAddr: string): string {
 // ---------------------------------------------------------------------------
 
 describe("white/no-color cell in target column → translated via DeepL", () => {
+  test("accepts the ⓁLanguageCode header", async () => {
+    const buf = buildPhraseXlsx({
+      sourceCode: "en",
+      headerSymbol: "ⓁLanguageCode",
+      symbols: ["ⓁGreeting"],
+      sourceCells: [{ value: "Hello" }],
+      targetColumns: [{ code: "fr", cells: [{ value: "" }] }]
+    });
+    const deps: Deps = {
+      deeplFetch: makeDeeplFetch([deeplOk(["Bonjour"])]) as unknown as Deps["deeplFetch"],
+      googleFetch: jest.fn() as unknown as Deps["googleFetch"],
+      deeplApiKey: "dkey",
+      sleep: noSleep
+    };
+    const out = await translatePhraseFile(buf, deps);
+    expect(readCell(out, "C2")).toBe("[Bonjour]");
+  });
+
   test("output xlsx has DeepL result in the white French cell", async () => {
     const buf = buildPhraseXlsx({
       sourceCode: "en",
