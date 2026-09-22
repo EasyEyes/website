@@ -372,7 +372,7 @@ export async function translatePhraseFile(xlsxBuffer: Buffer, deps: Deps): Promi
   let langCodeRow = -1;
   for (let r = range.s.r; r <= range.e.r; r++) {
     const cell = ws[XLSX.utils.encode_cell({ r, c: 0 })];
-    if (cell && String(cell.v).replace(/^~/, "").toLowerCase() === "languagecode") {
+    if (cell && String(cell.v).replace(/^[~Ⓛ]/u, "").toLowerCase() === "languagecode") {
       langCodeRow = r;
       break;
     }
