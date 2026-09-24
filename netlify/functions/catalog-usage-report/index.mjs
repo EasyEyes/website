@@ -214,9 +214,10 @@ function firebaseStore(root, credential) {
       const existing = await get(`catalogUsageReports/${id}`, {
         "X-Firebase-ETag": "true",
       });
-      const current = await existing.json();
+      const current = decodeStoredReport(await existing.json());
       if (current !== null)
-        return JSON.stringify(current) === JSON.stringify(value)
+        return JSON.stringify(stable(firebaseComparable(current))) ===
+          JSON.stringify(stable(firebaseComparable(value)))
           ? "same"
           : "conflict";
       const response = await fetch(url(`catalogUsageReports/${id}`), {
@@ -225,7 +226,7 @@ function firebaseStore(root, credential) {
           "content-type": "application/json",
           "if-match": existing.headers.get("etag") ?? "null_etag",
         },
-        body: JSON.stringify(value),
+        body: JSON.stringify(encodeStoredReport(value)),
       });
       return response.ok
         ? "created"
@@ -234,9 +235,9 @@ function firebaseStore(root, credential) {
         : Promise.reject(new Error(`Firebase PUT failed: ${response.status}`));
     },
     async get(id) {
-      return get(`catalogUsageReports/${id}`).then((response) =>
-        response.json(),
-      );
+      return get(`catalogUsageReports/${id}`)
+        .then((response) => response.json())
+        .then(decodeStoredReport);
     },
     async getLatest() {
       return get("catalogUsageReportsLatest").then((response) =>
@@ -254,6 +255,37 @@ function firebaseStore(root, credential) {
     },
   };
 }
+
+const encodeStoredReport = (value) => JSON.stringify(value);
+
+function firebaseComparable(value) {
+  if (Array.isArray(value)) {
+    if (value.length === 0) return undefined;
+    return value.map(firebaseComparable);
+  }
+  if (!value || typeof value !== "object") return value;
+  const entries = Object.entries(value)
+    .map(([key, child]) => [key, firebaseComparable(child)])
+    .filter(([, child]) => child !== undefined);
+  return entries.length === 0 ? undefined : Object.fromEntries(entries);
+}
+
+function decodeStoredReport(value) {
+  if (typeof value === "string") return JSON.parse(value);
+  if (!value || value.schemaVersion !== 1) return value;
+  return {
+    ...value,
+    phrases: restoreCollection(value.phrases),
+    parameters: restoreCollection(value.parameters),
+  };
+}
+
+const restoreCollection = (collection = {}) => ({
+  referencedKeys: {},
+  registeredDynamicKeys: {},
+  uncertainReferences: [],
+  ...collection,
+});
 
 async function githubHeads(repositories) {
   const entries = await Promise.all(
