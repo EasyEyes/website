@@ -51,57 +51,109 @@ export function createCatalogUsageReportHandler({
   store,
   secret,
   getCurrentHeads = async () => null,
+  logger = console,
 }) {
   return async (request) => {
     const url = new URL(request.url);
+    const mode =
+      request.method === "POST"
+        ? "publish"
+        : url.searchParams.has("latest")
+        ? "latest"
+        : url.searchParams.has("id")
+        ? "id"
+        : "unknown";
+    logger.info(
+      `[catalog-usage-report] request method=${request.method} mode=${mode}`,
+    );
     if (request.method === "POST") {
-      if (!authorized(request, secret))
+      if (!authorized(request, secret)) {
+        logger.warn(
+          "[catalog-usage-report] publication rejected: unauthorized",
+        );
         return json({ code: "UNAUTHORIZED" }, 403);
+      }
       const declaredLength = Number(request.headers.get("content-length") ?? 0);
-      if (declaredLength > MAXIMUM_BODY_BYTES)
+      if (declaredLength > MAXIMUM_BODY_BYTES) {
+        logger.warn(
+          `[catalog-usage-report] publication rejected: declared payload bytes=${declaredLength} limit=${MAXIMUM_BODY_BYTES}`,
+        );
         return json({ code: "PAYLOAD_TOO_LARGE" }, 413);
+      }
       const raw = await request.text();
-      if (Buffer.byteLength(raw) > MAXIMUM_BODY_BYTES)
+      if (Buffer.byteLength(raw) > MAXIMUM_BODY_BYTES) {
+        logger.warn(
+          `[catalog-usage-report] publication rejected: actual payload bytes=${Buffer.byteLength(
+            raw,
+          )} limit=${MAXIMUM_BODY_BYTES}`,
+        );
         return json({ code: "PAYLOAD_TOO_LARGE" }, 413);
+      }
       let payload;
       try {
         payload = JSON.parse(raw);
       } catch {
+        logger.warn(
+          "[catalog-usage-report] publication rejected: request body is not valid JSON",
+        );
         return json({ code: "INVALID_REPORT" }, 400);
       }
       if (
         !validReport(payload.report) ||
         typeof payload.generatedAt !== "string" ||
         Number.isNaN(Date.parse(payload.generatedAt))
-      )
+      ) {
+        logger.warn(
+          "[catalog-usage-report] publication rejected: report schema or generatedAt is invalid",
+        );
         return json({ code: "INVALID_REPORT" }, 400);
+      }
       const report = stable(payload.report);
       const reportId = createHash("sha256")
         .update(JSON.stringify(report))
         .digest("hex");
       const outcome = await store.create(reportId, report);
-      if (outcome === "conflict")
+      if (outcome === "conflict") {
+        logger.error(
+          `[catalog-usage-report] immutable report conflict reportId=${reportId}`,
+        );
         return json({ code: "IMMUTABLE_REPORT_CONFLICT" }, 409);
+      }
       await store.setLatest({ reportId, generatedAt: payload.generatedAt });
+      logger.info(
+        `[catalog-usage-report] publication stored reportId=${reportId} outcome=${outcome} repositories=${report.repositories.length}`,
+      );
       return json({ reportId }, outcome === "created" ? 201 : 200);
     }
     if (request.method !== "GET")
       return json({ code: "METHOD_NOT_ALLOWED" }, 405);
     if (url.searchParams.has("latest")) {
       const pointer = await store.getLatest();
-      if (!pointer)
+      if (!pointer) {
+        logger.warn(
+          "[catalog-usage-report] latest lookup failed: catalogUsageReportsLatest is missing",
+        );
         return json({ code: "REPORT_NOT_FOUND" }, 404, {
           "cache-control": "no-store",
         });
+      }
       const report = await store.get(pointer.reportId);
-      if (!report)
+      if (!report) {
+        logger.error(
+          `[catalog-usage-report] latest lookup incomplete: reportId=${pointer.reportId} is missing`,
+        );
         return json({ code: "REPORT_INCOMPLETE" }, 503, {
           "cache-control": "no-store",
         });
+      }
       let heads = null;
       try {
         heads = await getCurrentHeads(report.repositories);
-      } catch {
+      } catch (error) {
+        logger.error(
+          `[catalog-usage-report] GitHub freshness lookup failed reportId=${pointer.reportId}`,
+          error,
+        );
         heads = null;
       }
       const mismatches = heads
@@ -116,6 +168,13 @@ export function createCatalogUsageReportHandler({
         : mismatches.length
         ? "stale"
         : "current";
+      logger.info(
+        `[catalog-usage-report] latest lookup reportId=${
+          pointer.reportId
+        } freshness=${status} repositories=${
+          report.repositories.length
+        } mismatches=${mismatches.length ? mismatches.join(",") : "none"}`,
+      );
       return json(
         { report, publication: pointer, freshness: { status, mismatches } },
         200,
@@ -123,9 +182,16 @@ export function createCatalogUsageReportHandler({
       );
     }
     const reportId = url.searchParams.get("id");
-    if (!/^[a-f0-9]{64}$/.test(reportId ?? ""))
+    if (!/^[a-f0-9]{64}$/.test(reportId ?? "")) {
+      logger.warn("[catalog-usage-report] report lookup rejected: invalid id");
       return json({ code: "INVALID_REPORT_ID" }, 400);
+    }
     const report = await store.get(reportId);
+    logger.info(
+      `[catalog-usage-report] report lookup reportId=${reportId} found=${Boolean(
+        report,
+      )}`,
+    );
     return report
       ? json(report, 200, {
           "cache-control": "public, max-age=31536000, immutable",
@@ -214,11 +280,24 @@ export default async function handler(request) {
   const root = process.env.FIREBASE_DATABASE_URL?.replace(/\/+$/, "");
   const credential = process.env.FIREBASE_DB;
   const secret = process.env.CATALOG_USAGE_REPORT_SECRET;
-  if (!root || !credential || !secret)
+  if (!root || !credential || !secret) {
+    console.error(
+      `[catalog-usage-report] service not configured firebaseUrl=${Boolean(
+        root,
+      )} firebaseCredential=${Boolean(credential)} publicationSecret=${Boolean(
+        secret,
+      )}`,
+    );
     return json({ code: "SERVICE_NOT_CONFIGURED" }, 500);
-  return createCatalogUsageReportHandler({
-    store: firebaseStore(root, credential),
-    secret,
-    getCurrentHeads: githubHeads,
-  })(request);
+  }
+  try {
+    return await createCatalogUsageReportHandler({
+      store: firebaseStore(root, credential),
+      secret,
+      getCurrentHeads: githubHeads,
+    })(request);
+  } catch (error) {
+    console.error("[catalog-usage-report] unhandled request failure", error);
+    throw error;
+  }
 }

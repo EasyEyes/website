@@ -26,6 +26,16 @@ test("blocks destructive publication when the report is stale", async () => {
   ).toEqual({ allowed: false, code: "CATALOG_AUDIT_STALE", missing: [] });
 });
 
+test("reports a controlled audit failure when the report response is not JSON", async () => {
+  const fetchImpl = jest.fn(() =>
+    Promise.resolve(new Response("not-json", { status: 200 })),
+  ) as unknown as typeof fetch;
+
+  expect(
+    await checkCatalogPublication("parameters", ["A", "B"], ["A"], fetchImpl),
+  ).toEqual({ allowed: false, code: "CATALOG_AUDIT_FAILED", missing: [] });
+});
+
 test("blocks destructive publication that omits a used definition", async () => {
   const fetchImpl = jest.fn(() =>
     reply({
