@@ -176,7 +176,7 @@
     "status": "included",
     "localPath": "docs/experiment",
     "catalogKinds": ["phrases", "parameters"],
-    "sourceRoots": ["source", "studio/src"],
+    "sourceRoots": ["source"],
     "excludeRoots": [
       "node_modules",
       "dist",
