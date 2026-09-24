@@ -39,7 +39,7 @@ jobs:
         working-directory: docs/experiment/threshold
       - run: npm test -- --runInBand tests/studyCatalogRequirements.test.ts tests/releasePin.test.ts tests/releaseProvenance.test.ts
         working-directory: docs/experiment/threshold
-      - run: npm run check:ts
+      - run: npm run build
         working-directory: docs/experiment/threshold
       - run: npm ci --no-audit --no-fund
         working-directory: docs/experiment/threshold/threshold-engine

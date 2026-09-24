@@ -1,4 +1,4 @@
-import { createWebhookSignatureVerifier } from "../compiler-deployment-webhook/index";
+import { createWebhookSignatureVerifier } from "../compiler-deployment-webhook/index.mts";
 import { createEngineReleaseWebhook } from "./dispatch.mjs";
 
 export default async function handler(request: Request): Promise<Response> {

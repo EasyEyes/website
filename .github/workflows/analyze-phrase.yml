@@ -39,6 +39,7 @@ jobs:
         with:
           node-version: 22
           cache: npm
+          cache-dependency-path: website/package-lock.json
       - run: npm ci --no-audit --no-fund
         working-directory: website
       - run: npm run test:catalog-audit
