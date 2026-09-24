@@ -181,7 +181,7 @@ test("expands bounded registrations and parameter aliases", () => {
   ]);
 });
 
-test("production question registrations match the current two-digit families", () => {
+test("production question registrations protect the super-matching Glossary definitions", () => {
   const registrations = JSON.parse(
     readFileSync(new URL("./catalog-audit.dynamic.json", import.meta.url)),
   );
@@ -193,12 +193,7 @@ test("production question registrations match the current two-digit families", (
   );
   const keys = Object.keys(result.parameters.registeredDynamicKeys);
 
-  assert.equal(keys.length, 198);
-  assert.ok(keys.includes("questionAndAnswer01"));
-  assert.ok(keys.includes("questionAndAnswer99"));
-  assert.ok(keys.includes("questionAnswer01"));
-  assert.ok(keys.includes("questionAnswer99"));
-  assert.ok(!keys.includes("questionAndAnswer1"));
+  assert.deepEqual(keys, ["questionAndAnswer@@", "questionAnswer@@"]);
 });
 
 test("drops findings for catalog kinds a repository does not own", () => {
