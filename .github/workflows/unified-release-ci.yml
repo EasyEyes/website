@@ -41,6 +41,13 @@ jobs:
         working-directory: docs/experiment/threshold
       - run: npm run build
         working-directory: docs/experiment/threshold
+      - name: Prepare engine parity catalogs
+        run: >-
+          npx tsx -e 'Promise.all([
+          import("./tests/helpers/glossary.ts").then((m) => m.loadGlossaryForTests()),
+          import("./tests/helpers/phrases.ts").then((m) => m.loadPhrasesForTests())
+          ]).then(() => console.log("engine parity catalogs prepared"))'
+        working-directory: docs/experiment/threshold
       - run: npm ci --no-audit --no-fund
         working-directory: docs/experiment/threshold/threshold-engine
       - run: npm run build && npm run build:runtime && npm run parity && npm run parity:resources && npm run parity:entry && npm run parity:browser && npm run parity:participant
