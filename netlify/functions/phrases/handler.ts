@@ -12,6 +12,7 @@ import { buildNewVersion } from "./buildNewVersion";
 import { getFirebaseDatabaseUrl } from "../shared/firebaseConfig";
 import { encodeFirebaseSegment } from "../glossary/encodeFirebaseSegment";
 import { corsHeaders } from "../shared/cors";
+import { checkCatalogPublication } from "../shared/catalogPublicationGate";
 import type {
   VersionedPhrases,
   PhraseMap,
@@ -558,18 +559,24 @@ async function handlePut(event: NetlifyEvent): Promise<NetlifyResponse> {
     typeof parsed !== "object" ||
     parsed === null ||
     typeof (parsed as Record<string, unknown>).username !== "string" ||
-    typeof (parsed as Record<string, unknown>).experimentName !== "string"
+    typeof (parsed as Record<string, unknown>).experimentName !== "string" ||
+    typeof (parsed as Record<string, unknown>).version !== "string"
   ) {
-    return jsonErr(400, "Missing or invalid username or experimentName");
+    return jsonErr(
+      400,
+      "Missing or invalid username, experimentName, or version",
+    );
   }
 
-  const { username, experimentName } = parsed as {
+  const { username, experimentName, version } = parsed as {
     username: string;
     experimentName: string;
+    version: string;
   };
-
-  const version = await getCurrentVersion();
-  if (!version) return jsonErr(500, "No current version");
+  if (!version.trim() || version.length > 128)
+    return jsonErr(400, "Invalid version");
+  if (!(await getVersionedPhrases(version)))
+    return jsonErr(404, `Phrase version does not exist: ${version}`);
 
   const encodedUser = encodeFirebaseSegment(username);
   const encodedExp = encodeFirebaseSegment(experimentName);
@@ -902,6 +909,23 @@ async function handleTranslate(
     console.warn(
       "[phrases/translate] dropping invalid Firebase keys:",
       dropped,
+    );
+  }
+
+  const publicationGate = await checkCatalogPublication(
+    "phrases",
+    Object.keys(prevPhrases),
+    Object.keys(sanitizedPhrases),
+  );
+  if (!publicationGate.allowed) {
+    return jsonErr(
+      409,
+      "Catalog usage governance blocked Phrase publication.",
+      {
+        code: publicationGate.code,
+        fatal: true,
+        missing: publicationGate.missing,
+      },
     );
   }
 
