@@ -42,11 +42,15 @@ jobs:
       - run: npm run build
         working-directory: docs/experiment/threshold
       - name: Prepare engine parity catalogs
-        run: >-
-          npx tsx -e 'Promise.all([
-          import("./tests/helpers/glossary.ts").then((m) => m.loadGlossaryForTests()),
-          import("./tests/helpers/phrases.ts").then((m) => m.loadPhrasesForTests())
-          ]).then(() => console.log("engine parity catalogs prepared"))'
+        run: |
+          mkdir -p tests/__cache__
+          curl --fail --silent --show-error --retry 3 --compressed \
+            https://easyeyes.netlify.app/.netlify/functions/glossary \
+            --output tests/__cache__/glossary.json
+          curl --fail --silent --show-error --retry 3 --compressed \
+            https://easyeyes.netlify.app/.netlify/functions/phrases \
+            --output tests/__cache__/phrases.json
+          node -e 'for (const [name, key] of [["glossary", "glossary"], ["phrases", "phrases"]]) { const value = require(`./tests/__cache__/${name}.json`); if (!value.version || !value[key]) throw new Error(`Invalid ${name} fixture`); }'
         working-directory: docs/experiment/threshold
       - run: npm ci --no-audit --no-fund
         working-directory: docs/experiment/threshold/threshold-engine
