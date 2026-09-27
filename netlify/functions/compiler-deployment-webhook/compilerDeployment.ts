@@ -43,18 +43,16 @@ export function createFirebaseNotificationWriter({
       logDetails,
     );
 
+    const notificationUrl = `${firebaseRoot}/${notificationPath}.json?auth=${encodeURIComponent(
+      credential,
+    )}`;
     let response: Response;
     try {
-      response = await fetchImpl(
-        `${firebaseRoot}/${notificationPath}.json?auth=${encodeURIComponent(
-          credential,
-        )}`,
-        {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(notification),
-        },
-      );
+      response = await fetchImpl(notificationUrl, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(notification),
+      });
     } catch {
       const message = "Firebase notification write failed";
       logger.error(`[compiler-deployment] ${message}`);
@@ -63,6 +61,34 @@ export function createFirebaseNotificationWriter({
 
     if (!response.ok) {
       const message = `Firebase notification write failed with status ${response.status}`;
+      logger.error(`[compiler-deployment] ${message}`);
+      throw new Error(message);
+    }
+
+    let persistedNotification: unknown;
+    try {
+      const verificationResponse = await fetchImpl(notificationUrl, {
+        headers: { Accept: "application/json" },
+      });
+      if (!verificationResponse.ok) {
+        throw new Error(`status ${verificationResponse.status}`);
+      }
+      persistedNotification = await verificationResponse.json();
+    } catch {
+      const message = "Firebase notification verification failed";
+      logger.error(`[compiler-deployment] ${message}`);
+      throw new Error(message);
+    }
+
+    if (
+      typeof persistedNotification !== "object" ||
+      persistedNotification === null ||
+      (persistedNotification as Partial<DeploymentNotification>)
+        .deploymentId !== notification.deploymentId ||
+      (persistedNotification as Partial<DeploymentNotification>).publishedAt !==
+        notification.publishedAt
+    ) {
+      const message = "Firebase notification verification mismatch";
       logger.error(`[compiler-deployment] ${message}`);
       throw new Error(message);
     }

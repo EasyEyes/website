@@ -14,7 +14,14 @@ describe("Firebase deployment notification writer", () => {
   beforeEach(() => jest.clearAllMocks());
 
   it("writes the deployment notification using the server credential", async () => {
-    const fetchImpl = jest.fn().mockResolvedValue({ ok: true, status: 200 });
+    const fetchImpl = jest
+      .fn()
+      .mockResolvedValueOnce({ ok: true, status: 200 })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => notification,
+      });
     const writeNotification = createFirebaseNotificationWriter({
       fetchImpl: fetchImpl as never,
       getCredential: () => "firebase-secret",
@@ -26,12 +33,20 @@ describe("Firebase deployment notification writer", () => {
       firebaseRoot: "https://firebase.example",
     });
 
-    expect(fetchImpl).toHaveBeenCalledWith(
+    expect(fetchImpl).toHaveBeenNthCalledWith(
+      1,
       "https://firebase.example/deployments/compiler/production.json?auth=firebase-secret",
       {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(notification),
+      },
+    );
+    expect(fetchImpl).toHaveBeenNthCalledWith(
+      2,
+      "https://firebase.example/deployments/compiler/production.json?auth=firebase-secret",
+      {
+        headers: { Accept: "application/json" },
       },
     );
   });
@@ -71,5 +86,31 @@ describe("Firebase deployment notification writer", () => {
     expect(JSON.stringify(logger.error.mock.calls)).not.toContain(
       "sensitive-secret",
     );
+  });
+
+  it("fails when Firebase does not preserve the written notification", async () => {
+    const fetchImpl = jest
+      .fn()
+      .mockResolvedValueOnce({ ok: true, status: 200 })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          deploymentId: "different-deploy",
+          publishedAt: notification.publishedAt,
+        }),
+      });
+    const writeNotification = createFirebaseNotificationWriter({
+      fetchImpl: fetchImpl as never,
+      getCredential: () => "firebase-secret",
+      logger,
+    });
+
+    await expect(
+      writeNotification({
+        notification,
+        firebaseRoot: "https://firebase.example",
+      }),
+    ).rejects.toThrow("Firebase notification verification mismatch");
   });
 });
