@@ -10,6 +10,7 @@ describe("Firebase deployment notification writer", () => {
     warn: jest.fn(),
     error: jest.fn(),
   };
+  const reportVerificationFailure = jest.fn().mockResolvedValue(undefined);
 
   beforeEach(() => jest.clearAllMocks());
 
@@ -26,6 +27,7 @@ describe("Firebase deployment notification writer", () => {
       fetchImpl: fetchImpl as never,
       getCredential: () => "firebase-secret",
       logger,
+      reportVerificationFailure,
     });
 
     await writeNotification({
@@ -57,6 +59,7 @@ describe("Firebase deployment notification writer", () => {
       fetchImpl: fetchImpl as never,
       getCredential: () => undefined,
       logger,
+      reportVerificationFailure,
     });
 
     await expect(
@@ -75,6 +78,7 @@ describe("Firebase deployment notification writer", () => {
         .mockResolvedValue({ ok: false, status: 503 }) as never,
       getCredential: () => "sensitive-secret",
       logger,
+      reportVerificationFailure,
     });
 
     await expect(
@@ -83,12 +87,14 @@ describe("Firebase deployment notification writer", () => {
         firebaseRoot: "https://firebase.example",
       }),
     ).rejects.toThrow("Firebase notification write failed with status 503");
+    expect(reportVerificationFailure).not.toHaveBeenCalled();
     expect(JSON.stringify(logger.error.mock.calls)).not.toContain(
       "sensitive-secret",
     );
   });
 
   it("fails when Firebase does not preserve the written notification", async () => {
+    const reportVerificationFailure = jest.fn().mockResolvedValue(undefined);
     const fetchImpl = jest
       .fn()
       .mockResolvedValueOnce({ ok: true, status: 200 })
@@ -104,6 +110,7 @@ describe("Firebase deployment notification writer", () => {
       fetchImpl: fetchImpl as never,
       getCredential: () => "firebase-secret",
       logger,
+      reportVerificationFailure,
     });
 
     await expect(
@@ -112,5 +119,37 @@ describe("Firebase deployment notification writer", () => {
         firebaseRoot: "https://firebase.example",
       }),
     ).rejects.toThrow("Firebase notification verification mismatch");
+    expect(reportVerificationFailure).toHaveBeenCalledWith(expect.any(Error), {
+      deploymentId: notification.deploymentId,
+      publishedAt: notification.publishedAt,
+      reason: "mismatch",
+    });
+  });
+
+  it("reports a failed verification read to Sentry before rejecting", async () => {
+    const verificationError = new Error("network unavailable");
+    const reportVerificationFailure = jest.fn().mockResolvedValue(undefined);
+    const fetchImpl = jest
+      .fn()
+      .mockResolvedValueOnce({ ok: true, status: 200 })
+      .mockRejectedValueOnce(verificationError);
+    const writeNotification = createFirebaseNotificationWriter({
+      fetchImpl: fetchImpl as never,
+      getCredential: () => "firebase-secret",
+      logger,
+      reportVerificationFailure,
+    });
+
+    await expect(
+      writeNotification({
+        notification,
+        firebaseRoot: "https://firebase.example",
+      }),
+    ).rejects.toThrow("Firebase notification verification failed");
+    expect(reportVerificationFailure).toHaveBeenCalledWith(verificationError, {
+      deploymentId: notification.deploymentId,
+      publishedAt: notification.publishedAt,
+      reason: "read-failed",
+    });
   });
 });

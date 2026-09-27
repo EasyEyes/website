@@ -10,10 +10,18 @@ type NotificationWrite = {
 
 type DeploymentLogger = Pick<Console, "info" | "warn" | "error">;
 
+export type VerificationFailureContext = DeploymentNotification & {
+  reason: "read-failed" | "mismatch";
+};
+
 type FirebaseWriterDependencies = {
   fetchImpl: typeof fetch;
   getCredential: () => string | undefined;
   logger: DeploymentLogger;
+  reportVerificationFailure: (
+    error: unknown,
+    context: VerificationFailureContext,
+  ) => Promise<void>;
 };
 
 const notificationPath = "deployments/compiler/production";
@@ -21,6 +29,7 @@ export function createFirebaseNotificationWriter({
   fetchImpl,
   getCredential,
   logger,
+  reportVerificationFailure,
 }: FirebaseWriterDependencies) {
   return async function writeNotification({
     notification,
@@ -74,9 +83,13 @@ export function createFirebaseNotificationWriter({
         throw new Error(`status ${verificationResponse.status}`);
       }
       persistedNotification = await verificationResponse.json();
-    } catch {
+    } catch (error) {
       const message = "Firebase notification verification failed";
       logger.error(`[compiler-deployment] ${message}`);
+      await reportVerificationFailure(error, {
+        ...notification,
+        reason: "read-failed",
+      });
       throw new Error(message);
     }
 
@@ -90,7 +103,12 @@ export function createFirebaseNotificationWriter({
     ) {
       const message = "Firebase notification verification mismatch";
       logger.error(`[compiler-deployment] ${message}`);
-      throw new Error(message);
+      const error = new Error(message);
+      await reportVerificationFailure(error, {
+        ...notification,
+        reason: "mismatch",
+      });
+      throw error;
     }
 
     logger.info("[compiler-deployment] Firebase notification write succeeded", {

@@ -2,6 +2,7 @@ import { createHash, timingSafeEqual } from "node:crypto";
 import jwt from "jsonwebtoken";
 
 import { createFirebaseNotificationWriter } from "./compilerDeployment";
+import { reportVerificationFailure } from "./telemetry";
 import { getFirebaseDatabaseUrl } from "../shared/firebaseConfig";
 
 type DeploymentNotification = {
@@ -184,6 +185,7 @@ export default async function compilerDeploymentWebhook(request: Request) {
       fetchImpl: fetch,
       getCredential: () => process.env.FIREBASE_DB,
       logger: console,
+      reportVerificationFailure,
     }),
     logger: console,
     firebaseRoot: getFirebaseDatabaseUrl(),
