@@ -108,6 +108,34 @@ describe("POST /glossary — authentication", () => {
   });
 });
 
+describe("/glossary — CORS", () => {
+  test("allows the HTTPS localhost origin used by Office add-ins", async () => {
+    const res = await handler(
+      makeEvent({
+        httpMethod: "OPTIONS",
+        headers: { origin: "https://localhost:3000" },
+      })
+    );
+
+    expect(res.statusCode).toBe(204);
+    expect(res.headers?.["Access-Control-Allow-Origin"]).toBe(
+      "https://localhost:3000"
+    );
+  });
+
+  test("does not allow an unrelated origin", async () => {
+    const res = await handler(
+      makeEvent({
+        httpMethod: "OPTIONS",
+        headers: { origin: "https://malicious.example" },
+      })
+    );
+
+    expect(res.statusCode).toBe(204);
+    expect(res.headers?.["Access-Control-Allow-Origin"]).toBeUndefined();
+  });
+});
+
 describe("POST /glossary — body validation", () => {
   test("missing rows field → 400", async () => {
     const res = await handler(makeEvent({ body: JSON.stringify({}) }));
