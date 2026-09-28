@@ -109,19 +109,20 @@ describe("POST /glossary — authentication", () => {
 });
 
 describe("/glossary — CORS", () => {
-  test("allows the HTTPS localhost origin used by Office add-ins", async () => {
-    const res = await handler(
-      makeEvent({
-        httpMethod: "OPTIONS",
-        headers: { origin: "https://localhost:3000" },
-      })
-    );
+  test.each(["http://localhost:3000", "https://localhost:3000"])(
+    "allows the localhost origin %s",
+    async (origin) => {
+      const res = await handler(
+        makeEvent({
+          httpMethod: "OPTIONS",
+          headers: { origin },
+        })
+      );
 
-    expect(res.statusCode).toBe(204);
-    expect(res.headers?.["Access-Control-Allow-Origin"]).toBe(
-      "https://localhost:3000"
-    );
-  });
+      expect(res.statusCode).toBe(204);
+      expect(res.headers?.["Access-Control-Allow-Origin"]).toBe(origin);
+    }
+  );
 
   test("does not allow an unrelated origin", async () => {
     const res = await handler(
