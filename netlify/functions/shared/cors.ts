@@ -1,5 +1,5 @@
 const NETLIFY_PREVIEW_RE = /^https:\/\/[a-z0-9-]+--easyeyes\.netlify\.app$/;
-const LOCALHOST_RE = /^http:\/\/localhost:\d+$/;
+const LOCALHOST_RE = /^https?:\/\/localhost:\d+$/;
 const STATIC_ALLOWED_ORIGINS = new Set([
   "https://run.pavlovia.org",
   "https://pavlovia.org",
@@ -16,7 +16,7 @@ export function isAllowedOrigin(origin: string | undefined): origin is string {
 
 export function corsHeaders(
   origin: string | undefined,
-  allowedHeaders = "Content-Type"
+  allowedHeaders = "Content-Type",
 ): Record<string, string> {
   if (!isAllowedOrigin(origin)) return {};
   return {
