@@ -1,5 +1,5 @@
 const NETLIFY_PREVIEW_RE = /^https:\/\/[a-z0-9-]+--easyeyes\.netlify\.app$/;
-const LOCALHOST_RE = /^http:\/\/localhost:\d+$/;
+const LOCALHOST_RE = /^https?:\/\/localhost:\d+$/;
 const STATIC_ALLOWED_ORIGINS = new Set([
   "https://run.pavlovia.org",
   "https://pavlovia.org",
