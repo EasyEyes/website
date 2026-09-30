@@ -25,30 +25,28 @@ fi
 
 # Functions
 
-check_upstream() {
-  # https://stackoverflow.com/a/3278427
-  local LOCAL=$(git rev-parse @)
-  local REMOTE=$(git rev-parse "$1")
-  local BASE=$(git merge-base @ "$1")
-  if [ $LOCAL = $REMOTE ]; then
-    echo "${GREEN} Local clone up-to-date${DEFAULT}"
-  elif [ $LOCAL = $BASE ]; then
-    echo "${RED} Need to pull before commit${DEFAULT}"
-    exit 1
-  elif [ $REMOTE = $BASE ]; then
-    echo "${YELLOW} Local clone has unpushed commits${DEFAULT}"
+check() {
+  if local branch=$(git symbolic-ref --short -q HEAD); then
+    echo "${RED} >>> On branch $branch <<<${DEFAULT}"
   else
-    echo "${RED} Diverged${DEFAULT}"
+    printf "${RED}\n>>>\nNOT ON ANY BRANCH\n>>>\n\n${DEFAULT}"
     exit 1
   fi
 }
 
-check() {
-  if local branch=$(git symbolic-ref --short -q HEAD); then
-    echo "${RED} >>> On branch $branch <<<${DEFAULT}"
-    check_upstream "$branch"
-  else
-    printf "${RED}\n>>>\nNOT ON ANY BRANCH\n>>>\n\n${DEFAULT}"
+# Commit first, then rebase onto origin, then push: with the tree clean
+# post-commit the rebase needs no autostash (forbidden anyway), so the
+# common "I have changes and origin moved" case just works. A genuine
+# conflict stops the script with the repo mid-rebase and recovery steps.
+sync_with_origin() {
+  if ! git rev-parse "@{u}" >/dev/null 2>&1; then
+    echo "${RED}>>> No upstream configured for this branch${DEFAULT}"
+    exit 1
+  fi
+  if ! git -c rebase.autoStash=false pull --rebase --quiet; then
+    echo "${RED}>>> Rebase onto origin failed in $(pwd) — likely a conflict."
+    echo "    Resolve: fix the files, git add, git rebase --continue"
+    echo "    Or bail: git rebase --abort (your commit is safe), then re-run npm run git${DEFAULT}"
     exit 1
   fi
 }
@@ -69,6 +67,7 @@ update_threshold() {
   check
 
   commit_if_changes "$1" "$2"
+  sync_with_origin
   git push
   cd ../../..
 }
@@ -80,6 +79,7 @@ update_threshold_scientist() {
   check
 
   commit_if_changes "$1" "$2"
+  sync_with_origin
   git push
   cd ../..
 }
@@ -88,7 +88,47 @@ update_website() {
   printf "${GREEN}\n>>> UPDATING WEBSITE\n\n${DEFAULT}"
   check
   commit_if_changes "$1" "$2"
+  sync_with_origin
   git push
+}
+
+# Repos involved in every deploy path; checked no matter the depth.
+HYGIENE_REPOS="docs/experiment/threshold/psychojs docs/experiment/threshold docs/experiment ."
+
+preflight_hygiene() {
+  printf "${GREEN}\n>>> PRE-FLIGHT HYGIENE\n${DEFAULT}"
+  # jj insurance: snapshot jj-colocated working copies into the op log
+  # before committing, so a git accident stays recoverable. No-op elsewhere.
+  if command -v jj >/dev/null 2>&1; then
+    for repo in $HYGIENE_REPOS; do
+      [ -d "$repo/.jj" ] && (cd "$repo" && jj st >/dev/null 2>&1) || true
+    done
+  fi
+  for repo in $HYGIENE_REPOS; do
+    # A repo left mid-rebase (e.g. an earlier conflict) must be finished
+    # or aborted before anything else happens in it.
+    git_dir=$(git -C "$repo" rev-parse --absolute-git-dir)
+    if [ -d "$git_dir/rebase-merge" ] || [ -d "$git_dir/rebase-apply" ]; then
+      echo "${RED}>>> $repo is mid-rebase — finish (git rebase --continue) or abort (git rebase --abort) first${DEFAULT}"
+      exit 1
+    fi
+    # Leftover conflict markers must never reach a commit.
+    if git -C "$repo" grep -q -e '^<<<<<<< ' -e '^>>>>>>> ' -- . ':!node_modules' 2>/dev/null; then
+      echo "${RED}>>> Conflict markers in $repo:${DEFAULT}"
+      git -C "$repo" grep -l -e '^<<<<<<< ' -- . ':!node_modules'
+      exit 1
+    fi
+  done
+  # Submodule coherence: after `git add -A`, threshold's psychojs pointer
+  # becomes the submodule's HEAD — refuse to pin a commit nobody can fetch.
+  if [ "$UPDATE_DEPTH" = "2" ]; then
+    sub_head=$(git -C docs/experiment/threshold/psychojs rev-parse HEAD)
+    if ! git -C docs/experiment/threshold/psychojs branch -r --contains "$sub_head" 2>/dev/null | grep -q threshold-prod; then
+      echo "${RED}>>> psychojs HEAD $sub_head is not on origin/threshold-prod — merge+push psychojs first${DEFAULT}"
+      exit 1
+    fi
+  fi
+  printf "${GREEN} >>> hygiene OK${DEFAULT}\n"
 }
 
 preflight_typecheck() {
@@ -108,16 +148,19 @@ preflight_typecheck() {
 
 if [ $UPDATE_DEPTH = "1" ]; then
   echo "${YELLOW}>>> Update threshold-scientist AND website"
+  preflight_hygiene
   preflight_typecheck
   update_threshold_scientist "$1" "for threshold-scientist"
   update_website "$1" "for threshold-scientist"
 
 elif [ $UPDATE_DEPTH = "0" ]; then
   echo "${YELLOW}>>> Update ONLY website"
+  preflight_hygiene
   update_website "$1" "for website"
 
 elif [ $UPDATE_DEPTH = "2" ]; then
   echo "${YELLOW}>>> Update threshold AND threshold-scientist AND website"
+  preflight_hygiene
   preflight_typecheck
   update_threshold "$1" "for threshold"
   update_threshold_scientist "$1" "for threshold"
