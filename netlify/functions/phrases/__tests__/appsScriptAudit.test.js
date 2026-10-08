@@ -161,6 +161,32 @@ describe("International Phrases Firebase audit", () => {
     );
   });
 
+  test("tells the Sheet user to wait when an audit is already running", () => {
+    const fetch = jest.fn().mockReturnValue({
+      getResponseCode: () => 409,
+      getContentText: () =>
+        JSON.stringify({ code: "audit_in_progress", id: "existing-run" }),
+    });
+    const context = loadAppsScript({
+      PropertiesService: {
+        getScriptProperties: () => ({ getProperty: () => "secret" }),
+      },
+      UrlFetchApp: { fetch },
+    });
+    context.notify = jest.fn();
+
+    context.requestPhrasesAudit();
+
+    expect(context.notify).toHaveBeenCalledWith(
+      expect.stringContaining("Please wait for it to finish"),
+      "warning",
+    );
+    expect(context.notify).toHaveBeenCalledWith(
+      expect.stringContaining("existing-run"),
+      "warning",
+    );
+  });
+
   test("returns coordinates and both exact values for differing cells", () => {
     const { comparePhraseCells } = loadAppsScript();
     const rows = [

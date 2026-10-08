@@ -11,6 +11,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: international-phrases-audit
+  queue: max
+
 jobs:
   audit:
     runs-on: ubuntu-latest

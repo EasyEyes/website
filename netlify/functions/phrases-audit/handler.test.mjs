@@ -5,11 +5,19 @@ import { createPhrasesAuditHandler } from "./handler.mjs";
 
 const id = "123e4567-e89b-42d3-a456-426614174000";
 
-function setup(dispatch = async () => {}) {
+function setup(dispatch = async () => {}, newId = () => id) {
   const runs = new Map();
+  let activeRunId = null;
   let historyState = null;
   const store = {
-    create: async (key, data) => runs.set(key, data),
+    createQueued: async (key, requestedAt) => {
+      const active = runs.get(activeRunId);
+      if (active && ["queued", "running"].includes(active.status))
+        return { id: activeRunId, status: active.status };
+      runs.set(key, { status: "queued", requestedAt });
+      activeRunId = key;
+      return null;
+    },
     update: async (key, data) => runs.set(key, { ...runs.get(key), ...data }),
     get: async (key) => runs.get(key),
     listRecent: async (limit) =>
@@ -32,7 +40,7 @@ function setup(dispatch = async () => {}) {
     dispatch,
     phrasesSecret: "sheet-secret",
     reportSecret: "report-secret",
-    newId: () => id,
+    newId,
     now: () => new Date("2026-10-03T12:00:00Z"),
   });
   return { handler, runs, getHistoryState: () => historyState };
@@ -63,6 +71,31 @@ test("the Sheet request is authenticated, queued, and dispatched", async () => {
   assert.deepEqual(await response.json(), { id, status: "queued" });
   assert.equal(dispatched, id);
   assert.equal(runs.get(id).status, "queued");
+});
+
+test("a second click does not create or dispatch another active audit", async () => {
+  const secondId = "123e4567-e89b-42d3-a456-426614174002";
+  let nextId = 0;
+  const dispatched = [];
+  const { handler, runs } = setup(
+    async (runId) => dispatched.push(runId),
+    () => [id, "123e4567-e89b-42d3-a456-426614174001", secondId][nextId++],
+  );
+  const start = () => handler(request("start", undefined, "sheet-secret"));
+  const [first, duplicate] = await Promise.all([start(), start()]);
+  assert.equal(first.status, 202);
+  assert.equal(duplicate.status, 409);
+  assert.deepEqual(await duplicate.json(), {
+    error: "An audit is still running. Wait for it to finish.",
+    code: "audit_in_progress",
+    id,
+    status: "queued",
+  });
+  assert.deepEqual(dispatched, [id]);
+  assert.equal(runs.size, 1);
+  runs.set(id, { ...runs.get(id), status: "completed" });
+  assert.equal((await start()).status, 202);
+  assert.deepEqual(dispatched, [id, secondId]);
 });
 
 test("dispatch failure is recorded and reported to the Sheet", async () => {
