@@ -17,6 +17,9 @@ function firestoreStore() {
       "phrases-audit",
     );
   const collection = getFirestore(app).collection(collectionName);
+  const historyState = getFirestore(app)
+    .collection("internationalPhraseAuditHistory")
+    .doc("current");
   return {
     create: (id: string, data: object) => collection.doc(id).create(data),
     update: (id: string, data: object) => collection.doc(id).update(data),
@@ -30,6 +33,15 @@ function firestoreStore() {
           .set({ gzipBase64: chunks[index] });
       }
     },
+    getHistoryState: async () => (await historyState.get()).data() ?? null,
+    saveHistoryState: (state: object, baseRevision: string | null) =>
+      getFirestore(app).runTransaction(async (transaction) => {
+        const current = await transaction.get(historyState);
+        if ((current.data()?.revision ?? null) !== baseRevision) return null;
+        const revision = randomUUID();
+        transaction.set(historyState, { ...state, revision });
+        return revision;
+      }),
   };
 }
 

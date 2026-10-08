@@ -19,6 +19,19 @@ The Google Sheet's **Run International Phrases audit** menu item sends an authen
 
 The workflow file must be on the GitHub default branch before the menu can dispatch it. The Apps Script source must also be deployed to the sheet, and the Netlify function must be deployed.
 
+## Reuse historical scan results
+
+The history stage stores a checkpoint in Firestore at `internationalPhraseAuditHistory/current`. It contains the checked unused keys, verified removal evidence, source commits, and a logic version. When a source head is unchanged, the stage reuses that repository's result without cloning its history. When the head advances, it scans only new commits for previously checked keys. A newly unused key still needs one complete history scan. A rewritten branch or changed audit logic causes a full scan for that repository. The checkpoint is separate from the per-run report.
+
+The production checkpoint was seeded from the successful October 8 [workflow run 37824874658](https://github.com/EasyEyes/website/actions/runs/37824874658) and verified by reading the Firestore document back. It covers all 251 unused keys across six repositories. If the checkpoint is ever removed, deploy the updated Netlify function, download that run's artifact while it is available, and seed it again:
+
+```sh
+gh run download 37824874658 -n international-phrases-report-1d0d576a-24e3-4e7a-8561-08572fcb95f0 -D /tmp/easyeyes-phrase-history-seed
+python3 website/scripts/phrases-audit/history_state.py seed /tmp/easyeyes-phrase-history-seed/all-reports.json
+```
+
+Set `CATALOG_USAGE_REPORT_URL` and `CATALOG_USAGE_REPORT_SECRET` in the local environment before the seed command. Use the same values configured for GitHub Actions. The seed command checks that the history report and source report used matching phrase versions and repository commits. It refuses to overwrite an existing checkpoint.
+
 ## Report contents
 
 `phraseUsage` lists published keys seen in source and keys with no detected use. `history` records verified removal evidence for some unused keys. `missingFromSheet` lists source references absent from the live sheet. `mismatches` flags scan stages that used different commits or phrase versions. The scan includes broader literal matches and supplemental derived-key checks, so review a finding's source evidence before changing a phrase.

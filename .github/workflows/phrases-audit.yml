@@ -34,7 +34,7 @@ jobs:
         id: codeql
         uses: github/codeql-action/setup-codeql@v4
       - name: Check audit report logic
-        run: python3 -m unittest discover -s website/scripts/phrases-audit -p test_audit.py
+        run: python3 -m unittest discover -s website/scripts/phrases-audit -p 'test_*.py'
       - name: Check missing-sheet CodeQL query
         run: |
           PYTHONPATH=website/scripts/phrases-audit python3 -c 'from missing_sheet import write_sheet_keys; write_sheet_keys(["EE_LanguageCode"])'
@@ -67,6 +67,8 @@ jobs:
         run: python3 website/scripts/phrases-audit/audit.py
         env:
           CODEQL_BIN: ${{ steps.codeql.outputs.codeql-path }}
+          CATALOG_USAGE_REPORT_URL: ${{ secrets.CATALOG_USAGE_REPORT_URL }}
+          CATALOG_USAGE_REPORT_SECRET: ${{ secrets.CATALOG_USAGE_REPORT_SECRET }}
       - name: Upload report for workflow debugging
         if: always() && steps.checkout.outcome == 'success'
         uses: actions/upload-artifact@v6

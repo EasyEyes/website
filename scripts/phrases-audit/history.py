@@ -11,6 +11,7 @@ from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
 
+import history_state
 from run import EXCLUDED_NAMES, EXCLUDED_PARTS, HERE, REPOSITORIES, ROOT, SUFFIXES, reader_calls
 
 
@@ -82,10 +83,12 @@ def history_repository(name, local_path, branch, head, cache):
     return repository, environment
 
 
-def removal_candidates(repository, environment, head, roots, keys):
+def removal_candidates(repository, environment, revision, roots, keys):
+    if not keys:
+        return {}
     pattern = "(" + "|".join(re.escape(key) for key in sorted(keys, key=len, reverse=True)) + ")"
     args = [
-        "git", "-C", str(repository), "log", head, "--first-parent",
+        "git", "-C", str(repository), "log", revision, "--first-parent",
         "--diff-merges=first-parent", "--no-renames", "-p", "--unified=0",
         "-G" + pattern, "--format=@@COMMIT@@%H%x09%cI", "--", *roots,
         *(f":(exclude){path}" for path in HISTORICAL_CATALOGS),
@@ -97,6 +100,34 @@ def removal_candidates(repository, environment, head, roots, keys):
     if process.wait():
         raise RuntimeError(f"Git history search failed: {stderr.decode(errors='replace')[:500]}")
     return events
+
+
+def reusable_history(state, name, repository, head, keys):
+    if (not state or state.get("schemaVersion") != history_state.SCHEMA_VERSION
+            or state.get("logicVersion") != history_state.LOGIC_VERSION):
+        return set(), {}, None
+    prior = state.get("report", {})
+    old_repository = prior.get("repositories", {}).get(name, {})
+    if old_repository.get("completeHistory") is not True:
+        return set(), {}, None
+    old_head = old_repository.get("head")
+    if not isinstance(old_head, str) or not re.fullmatch(r"[0-9a-f]{40}", old_head):
+        return set(), {}, None
+    checked = set(state.get("checkedKeys", [])) & set(keys)
+    if repository is None and old_head != head:
+        return set(), {}, None
+    if not checked:
+        return set(), {}, None
+    if old_head != head and command(
+            ["git", "-C", str(repository), "merge-base", "--is-ancestor", old_head, head],
+            allow_missing=True) is None:
+        return set(), {}, None
+    removals = {
+        key: entry["removalsByRepository"][name]
+        for key, entry in prior.get("keys", {}).items()
+        if key in checked and name in entry.get("removalsByRepository", {})
+    }
+    return checked, removals, old_head
 
 
 def parse_history_lines(lines, keys):
@@ -195,6 +226,13 @@ def main():
         raise RuntimeError("Current report has inconsistent unused keys")
     write_key_predicate(keys, "historicalCandidates.qll", "historicalCandidateKey", "report.json's unused keys")
     codeql = os.environ.get("CODEQL_BIN", "codeql")
+    url = os.environ.get("CATALOG_USAGE_REPORT_URL")
+    secret = os.environ.get("CATALOG_USAGE_REPORT_SECRET")
+    if bool(url) != bool(secret):
+        raise RuntimeError("Both history checkpoint URL and secret must be configured")
+    persistent = bool(url)
+    state = history_state.load() if persistent else None
+    base_revision = state.get("revision") if state else None
     removals = defaultdict(dict)
     repository_metadata = {}
     with tempfile.TemporaryDirectory(prefix="easyeyes-phrase-history-") as temporary:
@@ -203,9 +241,27 @@ def main():
         cache.mkdir(parents=True, exist_ok=True)
         for name, local, branch, roots in REPOSITORIES:
             head = current["repositories"][name]["commit"]
+            checked, old_removals, old_head = reusable_history(state, name, None, head, keys)
+            if old_head == head and checked == set(keys):
+                for key, removal in old_removals.items():
+                    removals[key][name] = removal
+                repository_metadata[name] = {
+                    "branch": branch, "head": head, "candidateEvents": 0,
+                    "completeHistory": True, "reusedKeys": len(checked),
+                }
+                print(f"{name}: reused history for {len(checked)} keys", flush=True)
+                continue
             repository, environment = history_repository(name, local, branch, head, cache)
-            events = removal_candidates(repository, environment, head, roots, keys)
-            repository_metadata[name] = {"branch": branch, "head": head, "candidateEvents": len(events), "completeHistory": True}
+            checked, old_removals, old_head = reusable_history(state, name, repository, head, keys)
+            for key, removal in old_removals.items():
+                removals[key][name] = removal
+            events = removal_candidates(repository, environment, head, roots, set(keys) - checked)
+            if checked and old_head != head:
+                events.update(removal_candidates(repository, environment, f"{old_head}..{head}", roots, checked))
+            repository_metadata[name] = {
+                "branch": branch, "head": head, "candidateEvents": len(events),
+                "completeHistory": True, "reusedKeys": len(checked),
+            }
             if not events:
                 print(f"{name}: no candidate removals", flush=True)
                 continue
@@ -215,7 +271,9 @@ def main():
             if name == "threshold":
                 threshold_fallback(source_root, set(keys), references)
             for key, removal in verified_removals(name, events, references).items():
-                removals[key][name] = removal
+                previous = removals[key].get(name)
+                if not previous or datetime.fromisoformat(removal["removedAt"]) > datetime.fromisoformat(previous["removedAt"]):
+                    removals[key][name] = removal
             print(f"{name}: {len(events)} candidate events, {file_pairs} file pairs, {sum(name in value for value in removals.values())} keys removed", flush=True)
 
     entries = {}
@@ -240,6 +298,8 @@ def main():
     }
     destination = HERE / "history-report.json"
     destination.write_text(json.dumps(report, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    if persistent:
+        history_state.save(history_state.checkpoint(report, keys), base_revision)
     write_key_predicate(entries, "historicalUnusedKeys.qll", "historicalUnusedKey", "history-report.json's keys with lastRemoval")
     print(json.dumps({"report": str(destination), **report["counts"]}))
 

@@ -8,11 +8,18 @@ const id = "123e4567-e89b-42d3-a456-426614174000";
 function setup(dispatch = async () => {}) {
   const runs = new Map();
   const chunks = new Map();
+  let historyState = null;
   const store = {
     create: async (key, data) => runs.set(key, data),
     update: async (key, data) => runs.set(key, { ...runs.get(key), ...data }),
     get: async (key) => runs.get(key),
     saveChunks: async (key, value) => chunks.set(key, value),
+    getHistoryState: async () => historyState,
+    saveHistoryState: async (state, baseRevision) => {
+      if ((historyState?.revision ?? null) !== baseRevision) return null;
+      historyState = { ...state, revision: "new-revision" };
+      return historyState.revision;
+    },
   };
   const handler = createPhrasesAuditHandler({
     store,
@@ -22,7 +29,7 @@ function setup(dispatch = async () => {}) {
     newId: () => id,
     now: () => new Date("2026-10-03T12:00:00Z"),
   });
-  return { handler, runs, chunks };
+  return { handler, runs, chunks, getHistoryState: () => historyState };
 }
 
 const request = (action, body, secret, header = "x-phrases-secret") =>
@@ -123,4 +130,33 @@ test("a failed workflow records its failure without a report", async () => {
   assert.equal(runs.get(id).status, "failed");
   assert.equal(runs.get(id).error, "CodeQL failed");
   assert.equal(chunks.size, 0);
+});
+
+test("history checkpoint reads and writes require the report secret", async () => {
+  const { handler, getHistoryState } = setup();
+  const read = (secret) =>
+    request("history-state", { operation: "read" }, secret, "authorization");
+  assert.equal((await handler(read("Bearer wrong"))).status, 401);
+  assert.deepEqual(await (await handler(read("Bearer report-secret"))).json(), {
+    state: null,
+  });
+  const state = {
+    schemaVersion: 1,
+    logicVersion: 1,
+    checkedKeys: ["EE_old"],
+    report: { repositories: { website: { head: "a".repeat(40) } }, keys: {} },
+  };
+  const write = (baseRevision) =>
+    request(
+      "history-state",
+      { operation: "write", state, baseRevision },
+      "Bearer report-secret",
+      "authorization",
+    );
+  assert.deepEqual(await (await handler(write(null))).json(), {
+    revision: "new-revision",
+  });
+  assert.deepEqual(getHistoryState().checkedKeys, ["EE_old"]);
+  assert.equal((await handler(write(null))).status, 409);
+  assert.equal((await handler(write("new-revision"))).status, 200);
 });
