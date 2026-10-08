@@ -21,6 +21,8 @@ var PHRASES_FUNCTIONS_BASE_URL =
 var PHRASES_FUNCTION_URL = PHRASES_FUNCTIONS_BASE_URL + "/phrases";
 var PHRASES_AUDIT_URL =
   PHRASES_FUNCTIONS_BASE_URL + "/phrases-audit?action=start";
+var PHRASES_AUDIT_REVIEW_URL =
+  PHRASES_FUNCTIONS_BASE_URL + "/phrases-audit?action=review";
 var TRANSLATABLE_BACKGROUND = "#ffffff";
 var FIRST_TRANSLATION_ROW_INDEX = 9;
 var PHRASES_CHECKPOINT_KEY = "phrasesRetranslationCheckpoint";
@@ -78,6 +80,10 @@ function onOpen() {
       "compareLatestEasyEyesCopy",
     )
     .addItem("Run International Phrases audit", "requestPhrasesAudit")
+    .addItem(
+      "View International Phrases audit history",
+      "showPhrasesAuditHistory",
+    )
     .addToUi();
 }
 
@@ -112,6 +118,340 @@ function requestPhrasesAudit() {
       "error",
     );
   }
+}
+
+function fetchPhrasesAuditReview(operation, runId) {
+  var secret =
+    PropertiesService.getScriptProperties().getProperty("PHRASES_SECRET");
+  if (!secret)
+    throw new Error("PHRASES_SECRET is not set in Script Properties.");
+  var response = UrlFetchApp.fetch(PHRASES_AUDIT_REVIEW_URL, {
+    method: "post",
+    contentType: "application/json",
+    payload: JSON.stringify({ operation: operation, id: runId || null }),
+    headers: { "x-phrases-secret": secret },
+    muteHttpExceptions: true,
+  });
+  if (response.getResponseCode() !== 200) {
+    throw new Error(
+      "Could not load audit history (HTTP " + response.getResponseCode() + ").",
+    );
+  }
+  return JSON.parse(response.getContentText());
+}
+
+function listPhrasesAuditRuns() {
+  return fetchPhrasesAuditReview("list");
+}
+
+function getPhrasesAuditRun(runId) {
+  var result = fetchPhrasesAuditReview("get", runId);
+  if (!result.findings) return result;
+
+  var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = spreadsheet.getSheetByName("Translations");
+  if (!sheet) throw new Error('Sheet "Translations" not found.');
+  var header = sheet
+    .getRange(1, 1, 1, sheet.getLastColumn())
+    .getDisplayValues()[0];
+  var keyColumn = header.indexOf("EE_LanguageCode") + 1;
+  if (!keyColumn) throw new Error('Column "EE_LanguageCode" not found.');
+
+  var findings = result.findings;
+  var groups = [findings.missing, findings.removed, findings.unverified];
+  var entriesByKey = Object.create(null);
+  groups.forEach(function (entries) {
+    entries.forEach(function (entry) {
+      if (!entriesByKey[entry.key]) entriesByKey[entry.key] = [];
+      entriesByKey[entry.key].push(entry);
+    });
+  });
+  if (sheet.getLastRow() < 2) return result;
+
+  var keyValues = sheet
+    .getRange(2, keyColumn, sheet.getLastRow() - 1, 1)
+    .getDisplayValues();
+  var columnLetter = sheet
+    .getRange(1, keyColumn)
+    .getA1Notation()
+    .replace(/\d+$/, "");
+  var urlBase =
+    spreadsheet.getUrl().split("#")[0] +
+    "#gid=" +
+    sheet.getSheetId() +
+    "&range=";
+  keyValues.forEach(function (row, index) {
+    var key = String(row[0] || "").trim();
+    if (!Object.prototype.hasOwnProperty.call(entriesByKey, key)) return;
+    var url = urlBase + encodeURIComponent(columnLetter + (index + 2));
+    entriesByKey[key].forEach(function (entry) {
+      entry.sheetUrl = url;
+    });
+  });
+  return result;
+}
+
+function showPhrasesAuditHistory() {
+  SpreadsheetApp.getUi().showModalDialog(
+    HtmlService.createHtmlOutput(buildPhrasesAuditHistoryHtml())
+      .setWidth(1000)
+      .setHeight(700),
+    "International Phrases audit history",
+  );
+}
+
+function buildPhrasesAuditHistoryHtml() {
+  return `
+    <!doctype html>
+    <html>
+      <head>
+        <meta charset="utf-8">
+        <base target="_blank">
+        <style>
+          * { box-sizing: border-box; }
+          html, body { height: 100%; }
+          body { margin: 0; color: #202124; background: #fff; font: 14px/1.45 Arial, sans-serif; }
+          .audit-history { height: 100%; overflow: auto; padding: 20px; }
+          h1 { margin: 0 0 4px; font-size: 20px; }
+          h2 { margin: 0; font-size: 16px; }
+          p { margin: 4px 0 0; color: #5f6368; }
+          .toolbar { display: flex; flex-wrap: wrap; gap: 12px; margin: 18px 0; }
+          .control { display: grid; gap: 4px; flex: 1 1 250px; }
+          .control label { font-weight: 600; }
+          select, input { width: 100%; border: 1px solid #dadce0; border-radius: 4px; padding: 8px; font: inherit; background: #fff; }
+          :focus-visible { outline: 3px solid #8ab4f8; outline-offset: 2px; }
+          #status { min-height: 22px; margin: 8px 0; }
+          #status.error { color: #b3261e; }
+          .summary { display: flex; flex-wrap: wrap; gap: 8px; margin: 16px 0; }
+          .count { padding: 6px 10px; border: 1px solid #dadce0; border-radius: 4px; background: #f8f9fa; }
+          .group { border-top: 1px solid #dadce0; padding: 16px 0; }
+          .group-header { display: flex; gap: 8px; align-items: baseline; }
+          .group-number { color: #5f6368; font-size: 13px; }
+          .findings { display: grid; gap: 8px; margin-top: 12px; }
+          .finding { border: 1px solid #dadce0; border-radius: 6px; padding: 10px 12px; }
+          .finding summary { cursor: pointer; font-weight: 600; overflow-wrap: anywhere; }
+          .finding summary a { color: #1967d2; text-decoration: underline; }
+          .finding-detail { padding: 8px 0 0 16px; }
+          .finding-detail p { margin: 4px 0; }
+          .finding-detail a { color: #1967d2; overflow-wrap: anywhere; }
+          .muted { color: #5f6368; font-weight: 400; }
+          .warning { padding: 10px 12px; border: 1px solid #f9ab00; background: #fef7e0; border-radius: 4px; }
+          .hidden { display: none; }
+        </style>
+      </head>
+      <body>
+        <main class="audit-history">
+          <h1>International Phrases audit history</h1>
+          <p>Review stored audit findings. Source links open the exact GitHub revision used by the audit.</p>
+          <p>Click a key to open its current Sheet cell. Keys absent from the Sheet have no cell link.</p>
+          <div class="toolbar">
+            <div class="control"><label for="run-select">Audit run</label><select id="run-select" disabled></select></div>
+            <div class="control"><label for="key-search">Find a key</label><input id="key-search" type="search" placeholder="EE_…"></div>
+          </div>
+          <div id="status" role="status" aria-live="polite">Loading audit runs…</div>
+          <div id="content" class="hidden">
+            <div id="summary" class="summary" aria-label="Finding counts"></div>
+            <div id="mismatch-warning" class="warning hidden"></div>
+            <section class="group" aria-labelledby="missing-heading">
+              <div class="group-header"><span class="group-number">1</span><h2 id="missing-heading">Referenced in code, missing from sheet</h2></div>
+              <p>Review these first: source code references a key absent from the live sheet.</p>
+              <div id="missing-list" class="findings"></div>
+            </section>
+            <section class="group" aria-labelledby="removed-heading">
+              <div class="group-header"><span class="group-number">2</span><h2 id="removed-heading">Unused with verified removal</h2></div>
+              <p>The audit found a source reference before a commit removed it.</p>
+              <div id="removed-list" class="findings"></div>
+            </section>
+            <section class="group" aria-labelledby="unverified-heading">
+              <div class="group-header"><span class="group-number">3</span><h2 id="unverified-heading">Unused without verified removal</h2></div>
+              <p>No current reference or confirmed historical removal was found.</p>
+              <div id="unverified-list" class="findings"></div>
+            </section>
+            <section class="group"><h2>Used keys</h2><p id="used-summary"></p></section>
+          </div>
+        </main>
+        <script>
+          var selectedReport = null;
+          var activeRunRequest = 0;
+          var statusElement = document.getElementById("status");
+          var runSelect = document.getElementById("run-select");
+          var keySearch = document.getElementById("key-search");
+
+          function setStatus(message, error) {
+            statusElement.textContent = message;
+            statusElement.className = error ? "error" : "";
+          }
+
+          function formatDate(value) {
+            var date = new Date(value);
+            return value && !isNaN(date.getTime()) ? date.toLocaleString() : "Unknown date";
+          }
+
+          function addLink(parent, label, url) {
+            if (!url || url.indexOf("https://github.com/EasyEyes/") !== 0 ||
+                (url.indexOf("/blob/") === -1 && url.indexOf("/commit/") === -1)) {
+              var text = document.createElement("span");
+              text.textContent = label;
+              parent.appendChild(text);
+              return;
+            }
+            var link = document.createElement("a");
+            link.href = url;
+            link.target = "_blank";
+            link.rel = "noopener noreferrer";
+            link.textContent = label;
+            parent.appendChild(link);
+          }
+
+          function addDetail(parent, label, url) {
+            var row = document.createElement("p");
+            addLink(row, label, url);
+            parent.appendChild(row);
+          }
+
+          function renderKey(container, entry, kind) {
+            var item = document.createElement("details");
+            item.className = "finding";
+            var title = document.createElement("summary");
+            if (entry.sheetUrl && entry.sheetUrl.indexOf("https://docs.google.com/spreadsheets/d/") === 0) {
+              var sheetLink = document.createElement("a");
+              sheetLink.href = entry.sheetUrl;
+              sheetLink.target = "_blank";
+              sheetLink.rel = "noopener noreferrer";
+              sheetLink.textContent = entry.key;
+              sheetLink.setAttribute("aria-label", "Open " + entry.key + " in the Sheet");
+              title.appendChild(sheetLink);
+            } else {
+              title.textContent = entry.key;
+              var absent = document.createElement("span");
+              absent.className = "muted";
+              absent.textContent = " · not in current Sheet";
+              title.appendChild(absent);
+            }
+            if (kind === "removed" && entry.lastRemovedAt) {
+              var date = document.createElement("span");
+              date.className = "muted";
+              date.textContent = " · last removed " + formatDate(entry.lastRemovedAt);
+              title.appendChild(date);
+            }
+            item.appendChild(title);
+            var detail = document.createElement("div");
+            detail.className = "finding-detail";
+            if (kind === "missing") {
+              entry.references.forEach(function (reference) {
+                addDetail(detail, reference.repository + ": " + reference.path + ":" + reference.line, reference.url);
+              });
+            } else if (kind === "removed") {
+              entry.removals.forEach(function (removal) {
+                addDetail(detail, removal.repository + " · removal commit", removal.commitUrl);
+                removal.previousReferences.forEach(function (reference) {
+                  addDetail(detail, "Before removal: " + reference.path + ":" + reference.line, reference.url);
+                });
+              });
+            } else {
+              var note = document.createElement("p");
+              note.textContent = "No verified removal evidence is available for this key.";
+              detail.appendChild(note);
+            }
+            item.appendChild(detail);
+            container.appendChild(item);
+          }
+
+          function renderList(id, entries, kind, search) {
+            var container = document.getElementById(id);
+            container.textContent = "";
+            var matches = entries.filter(function (entry) {
+              return entry.key.toLowerCase().indexOf(search) !== -1;
+            });
+            if (!matches.length) {
+              var empty = document.createElement("p");
+              empty.textContent = search ? "No keys match the search." : "No findings in this group.";
+              container.appendChild(empty);
+              return;
+            }
+            var fragment = document.createDocumentFragment();
+            matches.forEach(function (entry) { renderKey(fragment, entry, kind); });
+            container.appendChild(fragment);
+          }
+
+          function renderReport() {
+            if (!selectedReport || !selectedReport.findings) return;
+            var findings = selectedReport.findings;
+            var search = keySearch.value.trim().toLowerCase();
+            var summary = document.getElementById("summary");
+            summary.textContent = "";
+            [
+              ["Missing from sheet", findings.missing.length],
+              ["Verified removal", findings.removed.length],
+              ["Other unused", findings.unverified.length],
+              ["Used", findings.usedCount]
+            ].forEach(function (item) {
+              var count = document.createElement("span");
+              count.className = "count";
+              count.textContent = item[0] + ": " + item[1];
+              summary.appendChild(count);
+            });
+            renderList("missing-list", findings.missing, "missing", search);
+            renderList("removed-list", findings.removed, "removed", search);
+            renderList("unverified-list", findings.unverified, "unverified", search);
+            document.getElementById("used-summary").textContent =
+              findings.usedCount + " keys are referenced in code. They are summarized here because they need less immediate review.";
+            var mismatches = findings.mismatches || {};
+            var mismatchCount = (mismatches.repositories || []).length +
+              Object.keys(mismatches.keys || {}).length + (mismatches.reportChecks || []).length;
+            var warning = document.getElementById("mismatch-warning");
+            warning.textContent = mismatchCount + " cross-scan differences need review before acting on findings.";
+            warning.className = mismatchCount ? "warning" : "warning hidden";
+          }
+
+          function loadRun(runId) {
+            var requestNumber = ++activeRunRequest;
+            document.getElementById("content").className = "hidden";
+            setStatus("Loading selected audit report…", false);
+            google.script.run
+              .withSuccessHandler(function (result) {
+                if (requestNumber !== activeRunRequest) return;
+                selectedReport = result;
+                if (!result.findings) {
+                  setStatus("This run is " + result.run.status + ". " + (result.run.error || "No report is available yet."), false);
+                  return;
+                }
+                setStatus("Report generated " + formatDate(result.run.generatedAt), false);
+                document.getElementById("content").className = "";
+                renderReport();
+              })
+              .withFailureHandler(function (error) {
+                if (requestNumber !== activeRunRequest) return;
+                setStatus("Could not load this report: " + (error.message || error), true);
+              })
+              .getPhrasesAuditRun(runId);
+          }
+
+          keySearch.addEventListener("input", renderReport);
+          runSelect.addEventListener("change", function () { loadRun(runSelect.value); });
+          google.script.run
+            .withSuccessHandler(function (result) {
+              var runs = result.runs || [];
+              if (!runs.length) { setStatus("No audit runs have been saved yet.", false); return; }
+              runs.forEach(function (run) {
+                var option = document.createElement("option");
+                option.value = run.id;
+                option.textContent = formatDate(run.requestedAt) + " · " + run.status + " · " + run.id.slice(0, 8);
+                runSelect.appendChild(option);
+              });
+              var latestCompleted = runs.find(function (run) { return run.status === "completed"; });
+              runSelect.value = (latestCompleted || runs[0]).id;
+              runSelect.disabled = false;
+              loadRun(runSelect.value);
+            })
+            .withFailureHandler(function (error) {
+              setStatus("Could not load audit runs: " + (error.message || error), true);
+            })
+            .listPhrasesAuditRuns();
+        </script>
+      </body>
+    </html>
+  `;
 }
 
 function notify(message, type, options) {

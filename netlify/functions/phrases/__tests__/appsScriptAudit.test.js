@@ -35,7 +35,102 @@ describe("International Phrases Firebase audit", () => {
       "Run International Phrases audit",
       "requestPhrasesAudit",
     );
+    expect(menu.addItem).toHaveBeenCalledWith(
+      "View International Phrases audit history",
+      "showPhrasesAuditHistory",
+    );
     expect(menu.addToUi).toHaveBeenCalledTimes(1);
+  });
+
+  test("reads audit history through Apps Script without exposing the secret to HTML", () => {
+    const fetch = jest.fn().mockReturnValue({
+      getResponseCode: () => 200,
+      getContentText: () => JSON.stringify({ runs: [] }),
+    });
+    const context = loadAppsScript({
+      PropertiesService: {
+        getScriptProperties: () => ({ getProperty: () => "sheet-secret" }),
+      },
+      UrlFetchApp: { fetch },
+    });
+
+    expect(context.listPhrasesAuditRuns()).toEqual({ runs: [] });
+    expect(fetch).toHaveBeenCalledWith(
+      "https://easyeyes.app/.netlify/functions/phrases-audit?action=review",
+      expect.objectContaining({
+        method: "post",
+        headers: { "x-phrases-secret": "sheet-secret" },
+        payload: JSON.stringify({ operation: "list", id: null }),
+      }),
+    );
+    const html = context.buildPhrasesAuditHistoryHtml();
+    expect(html).not.toContain("sheet-secret");
+    expect(html.indexOf("Referenced in code, missing from sheet")).toBeLessThan(
+      html.indexOf("Unused with verified removal"),
+    );
+    expect(html.indexOf("Unused with verified removal")).toBeLessThan(
+      html.indexOf("Unused without verified removal"),
+    );
+    const inlineScript = html.match(/<script>([\s\S]*)<\/script>/)?.[1];
+    expect(() => new vm.Script(inlineScript)).not.toThrow();
+  });
+
+  test("links audit keys to their current Sheet cells", () => {
+    const report = {
+      findings: {
+        missing: [{ key: "EE_absent" }, { key: "EE_addedLater" }],
+        removed: [{ key: "EE_removed" }],
+        unverified: [{ key: "EE_other" }],
+      },
+    };
+    const sheet = {
+      getLastColumn: () => 3,
+      getLastRow: () => 11,
+      getSheetId: () => 42,
+      getRange: jest.fn((row, column) => {
+        if (row === 1 && column === 1)
+          return {
+            getDisplayValues: () => [["note", "EE_LanguageCode", "en"]],
+          };
+        if (row === 1 && column === 2) return { getA1Notation: () => "B1" };
+        if (row === 2 && column === 2)
+          return {
+            getDisplayValues: () => [
+              ...Array.from({ length: 8 }, () => [""]),
+              ["EE_addedLater"],
+              ["EE_removed"],
+            ],
+          };
+        throw new Error("Unexpected range");
+      }),
+    };
+    const context = loadAppsScript({
+      PropertiesService: {
+        getScriptProperties: () => ({ getProperty: () => "sheet-secret" }),
+      },
+      UrlFetchApp: {
+        fetch: () => ({
+          getResponseCode: () => 200,
+          getContentText: () => JSON.stringify(report),
+        }),
+      },
+      SpreadsheetApp: {
+        getActiveSpreadsheet: () => ({
+          getSheetByName: () => sheet,
+          getUrl: () => "https://docs.google.com/spreadsheets/d/sheet123/edit",
+        }),
+      },
+    });
+
+    const result = context.getPhrasesAuditRun("run-1");
+    expect(result.findings.missing[0].sheetUrl).toBeUndefined();
+    expect(result.findings.missing[1].sheetUrl).toBe(
+      "https://docs.google.com/spreadsheets/d/sheet123/edit#gid=42&range=B10",
+    );
+    expect(result.findings.removed[0].sheetUrl).toBe(
+      "https://docs.google.com/spreadsheets/d/sheet123/edit#gid=42&range=B11",
+    );
+    expect(result.findings.unverified[0].sheetUrl).toBeUndefined();
   });
 
   test("requests a background audit without updating the spreadsheet", () => {
