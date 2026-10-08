@@ -30,6 +30,7 @@
  */
 import { createHash } from "crypto";
 import { corsHeaders, isAllowedOrigin } from "../shared/cors";
+import { nativeHandler } from "../shared/nativeHandler";
 
 type NetlifyEvent = {
   httpMethod: string;
@@ -487,7 +488,9 @@ export const createAssistantHandler = (
   };
 };
 
-export const handler = createAssistantHandler();
+export const legacyHandler = createAssistantHandler();
+
+export default nativeHandler(legacyHandler);
 
 export const config = {
   path: "/.netlify/functions/studio-assistant",

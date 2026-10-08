@@ -7,7 +7,7 @@ const headers = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-export const handler = async (event) => {
+const handler = async (event) => {
   // Handle preflight requests
   if (event.httpMethod === "OPTIONS") {
     return {

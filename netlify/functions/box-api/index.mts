@@ -8,7 +8,7 @@ const headers = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-export const handler = async (event) => {
+const handler = async (event) => {
   if (event.httpMethod === "OPTIONS") {
     return { statusCode: 200, headers, body: "" };
   }
