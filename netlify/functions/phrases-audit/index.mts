@@ -24,15 +24,6 @@ function firestoreStore() {
     create: (id: string, data: object) => collection.doc(id).create(data),
     update: (id: string, data: object) => collection.doc(id).update(data),
     get: async (id: string) => (await collection.doc(id).get()).data() ?? null,
-    saveChunks: async (id: string, chunks: string[]) => {
-      for (let index = 0; index < chunks.length; index++) {
-        await collection
-          .doc(id)
-          .collection("reportChunks")
-          .doc(String(index).padStart(5, "0"))
-          .set({ gzipBase64: chunks[index] });
-      }
-    },
     getHistoryState: async () => (await historyState.get()).data() ?? null,
     saveHistoryState: (state: object, baseRevision: string | null) =>
       getFirestore(app).runTransaction(async (transaction) => {
