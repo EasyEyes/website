@@ -35,6 +35,26 @@ jobs:
         uses: github/codeql-action/setup-codeql@v4
       - name: Check audit report logic
         run: python3 -m unittest discover -s website/scripts/phrases-audit -p test_audit.py
+      - name: Probe phrases endpoints from GitHub runner
+        shell: bash
+        run: |
+          headers=$(mktemp)
+          trap 'rm -f "$headers"' EXIT
+          for host in easyeyes.app easyeyes.netlify.app; do
+            for route in phrases audit; do
+              if [[ "$route" == phrases ]]; then
+                url="https://$host/.netlify/functions/phrases?versionOnly=1"
+                method=GET
+              else
+                url="https://$host/.netlify/functions/phrases-audit?action=result"
+                method=POST
+              fi
+              : > "$headers"
+              status=$(curl -sS --max-time 20 -X "$method" -D "$headers" -o /dev/null -w '%{http_code}' "$url") || status="transport-error"
+              echo "probe host=$host route=$route method=$method status=$status"
+              awk -F: '{ key=tolower($1); if (key=="server" || key=="cf-ray" || key=="cf-mitigated" || key=="x-nf-request-id" || key=="x-audit-diagnostic-id" || key=="content-type") print }' "$headers"
+            done
+          done
       - name: Run phrase audit
         id: audit
         run: python3 website/scripts/phrases-audit/audit.py

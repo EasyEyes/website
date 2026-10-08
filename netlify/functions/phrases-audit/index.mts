@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { cert, getApps, initializeApp } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
 import { createPhrasesAuditHandler } from "./handler.mjs";
@@ -54,15 +55,46 @@ async function dispatch(id: string) {
 }
 
 export default async function handler(request: Request) {
+  const requestId = randomUUID();
+  const action = new URL(request.url).searchParams.get("action");
+  let stage = "initialize";
+  console.info(
+    JSON.stringify({
+      event: "phrases_audit_request_started",
+      requestId,
+      method: request.method,
+      action,
+    }),
+  );
   try {
-    return await createPhrasesAuditHandler({
+    const auditHandler = createPhrasesAuditHandler({
       store: firestoreStore(),
       dispatch,
       phrasesSecret: env("PHRASES_SECRET"),
       reportSecret: env("CATALOG_USAGE_REPORT_SECRET"),
-    })(request);
+    });
+    stage = "handle";
+    const response = await auditHandler(request);
+    response.headers.set("x-audit-diagnostic-id", requestId);
+    console.info(
+      JSON.stringify({
+        event: "phrases_audit_request_completed",
+        requestId,
+        action,
+        status: response.status,
+      }),
+    );
+    return response;
   } catch (error) {
-    console.error("[phrases-audit] request failed", error);
+    console.error(
+      JSON.stringify({
+        event: "phrases_audit_request_failed",
+        requestId,
+        action,
+        stage,
+        errorName: error instanceof Error ? error.name : "UnknownError",
+      }),
+    );
     return new Response(
       JSON.stringify({ error: "Audit service unavailable" }),
       {
@@ -70,6 +102,7 @@ export default async function handler(request: Request) {
         headers: {
           "content-type": "application/json",
           "cache-control": "no-store",
+          "x-audit-diagnostic-id": requestId,
         },
       },
     );
