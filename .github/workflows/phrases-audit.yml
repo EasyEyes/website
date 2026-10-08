@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       run_id:
-        description: Firestore run ID created by the Sheet request
+        description: Sheet creates this ID automatically. Manual run? Create a queued Firestore run first; see scripts/phrases-audit/README.md.
         required: true
         type: string
 

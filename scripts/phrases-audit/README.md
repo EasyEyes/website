@@ -19,6 +19,18 @@ The Google Sheet's **Run International Phrases audit** menu item sends an authen
 
 The workflow file must be on the GitHub default branch before the menu can dispatch it. The Apps Script source must also be deployed to the sheet, and the Netlify function must be deployed.
 
+## Start an audit and find its run ID
+
+For a normal audit, choose **Run International Phrases audit** in the Google Sheet. The Netlify function creates a new document in Firestore's `internationalPhraseAuditRuns` collection, gives it a UUID as its document ID, and passes that ID to GitHub Actions as `run_id`. You do not need to enter an ID in GitHub. The ID connects the asynchronous workflow result to the correct Firestore document.
+
+To start the workflow manually from GitHub Actions:
+
+1. Generate a new UUID, for example with `python3 -c 'import uuid; print(uuid.uuid4())'`. Do not reuse an ID from a completed run.
+2. In the Firebase console, open the default Firestore database and create a document in `internationalPhraseAuditRuns` using that UUID as the **document ID**. Set `status` to the string `queued` and `requestedAt` to the current UTC time as an ISO 8601 string, such as `2026-10-09T12:00:00Z`.
+3. In GitHub, open **Actions → International phrases audit → Run workflow**. Select `main` and paste the same UUID into **Firestore run ID**.
+
+An arbitrary ID without a corresponding Firestore document will make result publication fail with `Unknown run`. The Sheet menu is simpler because it creates the document and starts the workflow together.
+
 ## Reuse historical scan results
 
 The history stage stores a checkpoint in Firestore at `internationalPhraseAuditHistory/current`. It contains the checked unused keys, verified removal evidence, source commits, and a logic version. When a source head is unchanged, the stage reuses that repository's result without cloning its history. When the head advances, it scans only new commits for previously checked keys. A newly unused key still needs one complete history scan. A rewritten branch or changed audit logic causes a full scan for that repository. The checkpoint is separate from the per-run report.
