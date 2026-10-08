@@ -8,7 +8,7 @@ python3 website/scripts/phrases-audit/audit.py
 
 Install the CodeQL CLI first, or set `CODEQL_BIN` to its executable path. The runner also uses `git` and `curl`. It reads the published phrases and the live International Phrases sheet, scans six source repositories, and writes `all-reports.json` after all three stages succeed. Generated JSON and CodeQL key files are ignored by Git; the CodeQL pack lock is kept with the source. This directory is the workflow's source of truth. The older workspace copy outside `website/` is not used by GitHub Actions.
 
-The Google Sheet's **Run International Phrases audit** menu item sends an authenticated request to `/.netlify/functions/phrases-audit?action=start`. The Netlify function creates a queued run in the Firestore `internationalPhraseAuditRuns` collection and dispatches `.github/workflows/phrases-audit.yml`. GitHub Actions runs `audit.py` and calls the same function with the completed or failed result. The full compressed report is stored in `reportChunks` documents below the run document, keeping each document below Firestore's size limit. There is no Sheet history menu.
+The Google Sheet's **Run International Phrases audit** menu item sends an authenticated request to `/.netlify/functions/phrases-audit?action=start`. The Netlify function creates a queued run in the Firestore `internationalPhraseAuditRuns` collection and dispatches `.github/workflows/phrases-audit.yml`. GitHub Actions runs `audit.py` and calls the same function with the completed or failed result. Each completed run stores its full report as a readable `report` map on the run document. The workflow compresses the report only for transport to Netlify. There is no Sheet history menu.
 
 ## Required configuration
 
@@ -30,6 +30,12 @@ To start the workflow manually from GitHub Actions:
 3. In GitHub, open **Actions → International phrases audit → Run workflow**. Select `main` and paste the same UUID into **Firestore run ID**.
 
 An arbitrary ID without a corresponding Firestore document will make result publication fail with `Unknown run`. The Sheet menu is simpler because it creates the document and starts the workflow together.
+
+## Read and migrate reports
+
+In the Firebase console, open Firestore's `internationalPhraseAuditRuns` collection, select a completed run, and expand its `report` field. It contains `phraseUsage`, `history`, `missingFromSheet`, and `mismatches`. Each report must fit in one Firestore document; the function rejects reports whose compact JSON exceeds 800,000 bytes rather than storing an incomplete report.
+
+The two completed reports created before this change were migrated from compressed `reportChunks` into readable `report` fields and verified before their chunks were removed. For any other older completed runs, set `FIREBASE_SERVICE_ACCOUNT_JSON` in the local environment and run `node scripts/phrases-audit/migrate_reports.mjs` to preview the migration. Run it again with `--apply` to save and verify the readable reports before deleting their chunks. The script can be rerun safely.
 
 ## Reuse historical scan results
 

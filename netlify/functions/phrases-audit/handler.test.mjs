@@ -7,13 +7,11 @@ const id = "123e4567-e89b-42d3-a456-426614174000";
 
 function setup(dispatch = async () => {}) {
   const runs = new Map();
-  const chunks = new Map();
   let historyState = null;
   const store = {
     create: async (key, data) => runs.set(key, data),
     update: async (key, data) => runs.set(key, { ...runs.get(key), ...data }),
     get: async (key) => runs.get(key),
-    saveChunks: async (key, value) => chunks.set(key, value),
     getHistoryState: async () => historyState,
     saveHistoryState: async (state, baseRevision) => {
       if ((historyState?.revision ?? null) !== baseRevision) return null;
@@ -29,7 +27,7 @@ function setup(dispatch = async () => {}) {
     newId: () => id,
     now: () => new Date("2026-10-03T12:00:00Z"),
   });
-  return { handler, runs, chunks, getHistoryState: () => historyState };
+  return { handler, runs, getHistoryState: () => historyState };
 }
 
 const request = (action, body, secret, header = "x-phrases-secret") =>
@@ -74,8 +72,8 @@ test("dispatch failure is recorded and reported to the Sheet", async () => {
   }
 });
 
-test("a completed workflow stores a full compressed report in Firestore chunks", async () => {
-  const { handler, runs, chunks } = setup();
+test("a completed workflow stores a readable report on its run document", async () => {
+  const { handler, runs } = setup();
   await handler(request("start", undefined, "sheet-secret"));
   const report = {
     generatedAt: "2026-10-03T12:05:00Z",
@@ -112,11 +110,12 @@ test("a completed workflow stores a full compressed report in Firestore chunks",
     runs.get(id).reportSizeBytes,
     Buffer.byteLength(JSON.stringify(report)),
   );
-  assert.equal(chunks.get(id).join(""), reportGzipBase64);
+  assert.deepEqual(runs.get(id).report, report);
+  assert.equal("chunkCount" in runs.get(id), false);
 });
 
 test("a failed workflow records its failure without a report", async () => {
-  const { handler, runs, chunks } = setup();
+  const { handler, runs } = setup();
   await handler(request("start", undefined, "sheet-secret"));
   const response = await handler(
     request(
@@ -129,7 +128,34 @@ test("a failed workflow records its failure without a report", async () => {
   assert.equal(response.status, 200);
   assert.equal(runs.get(id).status, "failed");
   assert.equal(runs.get(id).error, "CodeQL failed");
-  assert.equal(chunks.size, 0);
+  assert.equal("report" in runs.get(id), false);
+});
+
+test("an oversized readable report marks the run failed without storing a report", async () => {
+  const { handler, runs } = setup();
+  await handler(request("start", undefined, "sheet-secret"));
+  const report = {
+    generatedAt: "2026-10-03T12:05:00Z",
+    phraseUsage: { source: { version: "63.21" }, text: "x".repeat(800_000) },
+    history: {},
+    missingFromSheet: {},
+  };
+  const response = await handler(
+    request(
+      "result",
+      {
+        id,
+        status: "completed",
+        reportGzipBase64: gzipSync(JSON.stringify(report)).toString("base64"),
+      },
+      "Bearer report-secret",
+      "authorization",
+    ),
+  );
+  assert.equal(response.status, 413);
+  assert.equal(runs.get(id).status, "failed");
+  assert.match(runs.get(id).error, /document limit/);
+  assert.equal("report" in runs.get(id), false);
 });
 
 test("history checkpoint reads and writes require the report secret", async () => {

@@ -3,8 +3,8 @@ import { gunzipSync } from "node:zlib";
 
 const MAX_COMPRESSED_BASE64 = 4_000_000;
 const MAX_REPORT_BYTES = 12_000_000;
+export const MAX_STORED_REPORT_BYTES = 800_000;
 const MAX_HISTORY_BYTES = 900_000;
-const CHUNK_LENGTH = 200_000;
 const RUN_ID =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -155,17 +155,21 @@ export function createPhrasesAuditHandler({
         !report.missingFromSheet
       )
         return json({ error: "Incomplete audit report" }, 400);
-      const chunks =
-        body.reportGzipBase64.match(new RegExp(`.{1,${CHUNK_LENGTH}}`, "g")) ??
-        [];
-      await store.saveChunks(body.id, chunks);
+      if (Buffer.byteLength(JSON.stringify(report)) > MAX_STORED_REPORT_BYTES) {
+        await store.update(body.id, {
+          status: "failed",
+          completedAt: now().toISOString(),
+          error: "Audit report exceeds the readable Firestore document limit",
+        });
+        return json({ error: "Report exceeds Firestore document limit" }, 413);
+      }
       await store.update(body.id, {
         status: "completed",
         completedAt: now().toISOString(),
         reportGeneratedAt: report.generatedAt,
         phrasesVersion: report.phraseUsage.source?.version ?? null,
-        chunkCount: chunks.length,
         reportSizeBytes,
+        report,
       });
       return json({ id: body.id, status: "completed" });
     }
