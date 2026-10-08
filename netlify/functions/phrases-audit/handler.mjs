@@ -3,6 +3,7 @@ import { gunzipSync } from "node:zlib";
 
 const MAX_COMPRESSED_BASE64 = 4_000_000;
 const MAX_REPORT_BYTES = 12_000_000;
+const MAX_HISTORY_BYTES = 900_000;
 const CHUNK_LENGTH = 200_000;
 const RUN_ID =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -56,6 +57,41 @@ export function createPhrasesAuditHandler({
         return json({ error: "Could not start the audit workflow" }, 502);
       }
       return json({ id, status: "queued" }, 202);
+    }
+
+    if (action === "history-state") {
+      if (
+        !equalSecret(
+          request.headers.get("authorization")?.replace(/^Bearer\s+/i, ""),
+          reportSecret,
+        )
+      )
+        return json({ error: "Unauthorized" }, 401);
+      const raw = await request.text();
+      if (Buffer.byteLength(raw) > MAX_HISTORY_BYTES)
+        return json({ error: "History state too large" }, 413);
+      let body;
+      try {
+        body = JSON.parse(raw);
+      } catch {
+        return json({ error: "Invalid JSON" }, 400);
+      }
+      if (body?.operation === "read")
+        return json({ state: await store.getHistoryState() });
+      if (
+        body?.operation !== "write" ||
+        !body.state ||
+        body.state.schemaVersion !== 1 ||
+        body.state.logicVersion !== 1 ||
+        !Array.isArray(body.state.checkedKeys) ||
+        !body.state.report?.repositories ||
+        !body.state.report?.keys ||
+        (body.baseRevision !== null && typeof body.baseRevision !== "string")
+      )
+        return json({ error: "Invalid history state" }, 400);
+      const saved = await store.saveHistoryState(body.state, body.baseRevision);
+      if (!saved) return json({ error: "History state changed" }, 409);
+      return json({ revision: saved });
     }
 
     if (action === "result") {
