@@ -31,7 +31,39 @@ describe("International Phrases Firebase audit", () => {
       "Compare latest EasyEyes copy with this spreadsheet",
       "compareLatestEasyEyesCopy",
     );
+    expect(menu.addItem).toHaveBeenCalledWith(
+      "Run International Phrases audit",
+      "requestPhrasesAudit",
+    );
     expect(menu.addToUi).toHaveBeenCalledTimes(1);
+  });
+
+  test("requests a background audit without updating the spreadsheet", () => {
+    const fetch = jest.fn().mockReturnValue({
+      getResponseCode: () => 202,
+      getContentText: () => JSON.stringify({ id: "run-1", status: "queued" }),
+    });
+    const context = loadAppsScript({
+      PropertiesService: {
+        getScriptProperties: () => ({ getProperty: () => "secret" }),
+      },
+      UrlFetchApp: { fetch },
+    });
+    context.notify = jest.fn();
+
+    context.requestPhrasesAudit();
+
+    expect(fetch).toHaveBeenCalledWith(
+      "https://easyeyes.app/.netlify/functions/phrases-audit?action=start",
+      expect.objectContaining({
+        method: "post",
+        headers: { "x-phrases-secret": "secret" },
+      }),
+    );
+    expect(context.notify).toHaveBeenCalledWith(
+      "International Phrases audit requested. Run ID: run-1",
+      "success",
+    );
   });
 
   test("returns coordinates and both exact values for differing cells", () => {

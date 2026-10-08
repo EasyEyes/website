@@ -1,0 +1,57 @@
+name: International phrases audit
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: Firestore run ID created by the Sheet request
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - name: Check out website and compiler repositories
+        id: checkout
+        uses: actions/checkout@v6
+        with:
+          path: website
+          submodules: recursive
+      - uses: actions/checkout@v6
+        with:
+          repository: EasyEyes/remote-calibrator
+          path: remote-calibrator
+      - uses: actions/checkout@v6
+        with:
+          repository: EasyEyes/speaker-calibration
+          path: speaker-calibration
+      - name: Set up CodeQL CLI
+        id: codeql
+        uses: github/codeql-action/setup-codeql@v4
+      - name: Check audit report logic
+        run: python3 -m unittest discover -s website/scripts/phrases-audit -p test_audit.py
+      - name: Run phrase audit
+        id: audit
+        run: python3 website/scripts/phrases-audit/audit.py
+        env:
+          CODEQL_BIN: ${{ steps.codeql.outputs.codeql-path }}
+      - name: Upload report for workflow debugging
+        if: always() && steps.checkout.outcome == 'success'
+        uses: actions/upload-artifact@v6
+        with:
+          name: international-phrases-report-${{ inputs.run_id }}
+          path: website/scripts/phrases-audit/all-reports.json
+          if-no-files-found: ignore
+      - name: Save audit result in Firestore
+        if: always() && steps.checkout.outcome == 'success'
+        run: python3 website/scripts/phrases-audit/publish.py "$AUDIT_RUN_ID"
+        env:
+          AUDIT_RUN_ID: ${{ inputs.run_id }}
+          AUDIT_OUTCOME: ${{ steps.audit.outcome }}
+          CATALOG_USAGE_REPORT_URL: ${{ secrets.CATALOG_USAGE_REPORT_URL }}
+          CATALOG_USAGE_REPORT_SECRET: ${{ secrets.CATALOG_USAGE_REPORT_SECRET }}

@@ -14,7 +14,13 @@
  *   (Share button in the Apps Script IDE). Viewers must not be able to run it.
  */
 
-var PHRASES_FUNCTION_URL = "https://easyeyes.app/.netlify/functions/phrases";
+// Set this to a Netlify deploy URL when testing a specific deployment.
+var PHRASES_BASE_URL = "https://easyeyes.app";
+var PHRASES_FUNCTIONS_BASE_URL =
+  PHRASES_BASE_URL.replace(/\/+$/, "") + "/.netlify/functions";
+var PHRASES_FUNCTION_URL = PHRASES_FUNCTIONS_BASE_URL + "/phrases";
+var PHRASES_AUDIT_URL =
+  PHRASES_FUNCTIONS_BASE_URL + "/phrases-audit?action=start";
 var TRANSLATABLE_BACKGROUND = "#ffffff";
 var FIRST_TRANSLATION_ROW_INDEX = 9;
 var PHRASES_CHECKPOINT_KEY = "phrasesRetranslationCheckpoint";
@@ -71,7 +77,41 @@ function onOpen() {
       "Compare latest EasyEyes copy with this spreadsheet",
       "compareLatestEasyEyesCopy",
     )
+    .addItem("Run International Phrases audit", "requestPhrasesAudit")
     .addToUi();
+}
+
+function requestPhrasesAudit() {
+  try {
+    var secret =
+      PropertiesService.getScriptProperties().getProperty("PHRASES_SECRET");
+    if (!secret)
+      throw new Error("PHRASES_SECRET is not set in Script Properties.");
+    var response = UrlFetchApp.fetch(PHRASES_AUDIT_URL, {
+      method: "post",
+      headers: { "x-phrases-secret": secret },
+      muteHttpExceptions: true,
+    });
+    if (response.getResponseCode() !== 202) {
+      throw new Error(
+        "The audit request failed (HTTP " + response.getResponseCode() + ").",
+      );
+    }
+    var result = JSON.parse(response.getContentText());
+    if (!result.id || result.status !== "queued") {
+      throw new Error("The audit service returned an invalid response.");
+    }
+    notify(
+      "International Phrases audit requested. Run ID: " + result.id,
+      "success",
+    );
+  } catch (error) {
+    notify(
+      "Could not request the International Phrases audit.\n\n" +
+        (error && error.message ? error.message : String(error)),
+      "error",
+    );
+  }
 }
 
 function notify(message, type, options) {
