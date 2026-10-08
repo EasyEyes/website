@@ -35,6 +35,13 @@ jobs:
         uses: github/codeql-action/setup-codeql@v4
       - name: Check audit report logic
         run: python3 -m unittest discover -s website/scripts/phrases-audit -p test_audit.py
+      - name: Check missing-sheet CodeQL query
+        run: |
+          PYTHONPATH=website/scripts/phrases-audit python3 -c 'from missing_sheet import write_sheet_keys; write_sheet_keys(["EE_LanguageCode"])'
+          "$CODEQL_BIN" pack install website/scripts/phrases-audit
+          "$CODEQL_BIN" query compile --check-only website/scripts/phrases-audit/missing-sheet-keys.ql
+        env:
+          CODEQL_BIN: ${{ steps.codeql.outputs.codeql-path }}
       - name: Probe phrases endpoints from GitHub runner
         shell: bash
         run: |
