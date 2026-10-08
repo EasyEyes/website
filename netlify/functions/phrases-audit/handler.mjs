@@ -42,10 +42,17 @@ export function createPhrasesAuditHandler({
       if (!equalSecret(request.headers.get("x-phrases-secret"), phrasesSecret))
         return json({ error: "Unauthorized" }, 401);
       const id = newId();
-      await store.create(id, {
-        status: "queued",
-        requestedAt: now().toISOString(),
-      });
+      const active = await store.createQueued(id, now().toISOString());
+      if (active)
+        return json(
+          {
+            error: "An audit is still running. Wait for it to finish.",
+            code: "audit_in_progress",
+            id: active.id,
+            status: active.status,
+          },
+          409,
+        );
       try {
         await dispatch(id);
       } catch (error) {

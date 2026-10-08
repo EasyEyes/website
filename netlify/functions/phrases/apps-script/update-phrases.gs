@@ -98,6 +98,19 @@ function requestPhrasesAudit() {
       headers: { "x-phrases-secret": secret },
       muteHttpExceptions: true,
     });
+    if (response.getResponseCode() === 409) {
+      var active = JSON.parse(response.getContentText());
+      if (active.code === "audit_in_progress" && active.id) {
+        notify(
+          "A previous International Phrases audit is still running. " +
+            "Please wait for it to finish before requesting another audit. " +
+            "Run ID: " +
+            active.id,
+          "warning",
+        );
+        return;
+      }
+    }
     if (response.getResponseCode() !== 202) {
       throw new Error(
         "The audit request failed (HTTP " + response.getResponseCode() + ").",

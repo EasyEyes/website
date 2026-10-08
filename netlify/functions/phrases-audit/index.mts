@@ -20,8 +20,27 @@ function firestoreStore() {
   const historyState = getFirestore(app)
     .collection("internationalPhraseAuditHistory")
     .doc("current");
+  const activeAudit = getFirestore(app)
+    .collection("internationalPhraseAuditState")
+    .doc("active");
   return {
-    create: (id: string, data: object) => collection.doc(id).create(data),
+    createQueued: (id: string, requestedAt: string) =>
+      getFirestore(app).runTransaction(async (transaction) => {
+        const active = await transaction.get(activeAudit);
+        const activeId = active.data()?.runId;
+        if (activeId) {
+          const run = await transaction.get(collection.doc(activeId));
+          const status = run.data()?.status;
+          if (status === "queued" || status === "running")
+            return { id: activeId, status };
+        }
+        transaction.create(collection.doc(id), {
+          status: "queued",
+          requestedAt,
+        });
+        transaction.set(activeAudit, { runId: id });
+        return null;
+      }),
     update: (id: string, data: object) => collection.doc(id).update(data),
     get: async (id: string) => (await collection.doc(id).get()).data() ?? null,
     listRecent: async (limit: number) => {

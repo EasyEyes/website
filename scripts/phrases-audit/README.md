@@ -8,7 +8,7 @@ python3 website/scripts/phrases-audit/audit.py
 
 Install the CodeQL CLI first, or set `CODEQL_BIN` to its executable path. The runner also uses `git` and `curl`. It reads the published phrases and the live International Phrases sheet, scans six source repositories, and writes `all-reports.json` after all three stages succeed. Generated JSON and CodeQL key files are ignored by Git; the CodeQL pack lock is kept with the source. This directory is the workflow's source of truth. The older workspace copy outside `website/` is not used by GitHub Actions.
 
-The Google Sheet's **Run International Phrases audit** menu item sends an authenticated request to `/.netlify/functions/phrases-audit?action=start`. The Netlify function creates a queued run in the Firestore `internationalPhraseAuditRuns` collection and dispatches `.github/workflows/phrases-audit.yml`. GitHub Actions runs `audit.py` and calls the same function with the completed or failed result. Each completed run stores its full report as a readable `report` map on the run document. The workflow compresses the report only for transport to Netlify. There is no Sheet history menu.
+The Google Sheet's **Run International Phrases audit** menu item sends an authenticated request to `/.netlify/functions/phrases-audit?action=start`. The Netlify function creates a queued run in the Firestore `internationalPhraseAuditRuns` collection and dispatches `.github/workflows/phrases-audit.yml`. GitHub Actions runs `audit.py` and calls the same function with the completed or failed result. Each completed run stores its full report as a readable `report` map on the run document. The workflow compresses the report only for transport to Netlify.
 
 ## Required configuration
 
@@ -23,13 +23,15 @@ The workflow file must be on the GitHub default branch before the menu can dispa
 
 For a normal audit, choose **Run International Phrases audit** in the Google Sheet. The Netlify function creates a new document in Firestore's `internationalPhraseAuditRuns` collection, gives it a UUID as its document ID, and passes that ID to GitHub Actions as `run_id`. You do not need to enter an ID in GitHub. The ID connects the asynchronous workflow result to the correct Firestore document.
 
+If a run is still `queued` or `running`, another Sheet request returns the existing run ID and does not create or dispatch a new run. A Firestore transaction protects this check when users click at nearly the same time. The Sheet asks users to wait. Once the active run is `completed` or `failed`, the next request can start. GitHub Actions also serializes manually dispatched workflow runs. If a workflow is canceled before it publishes a result and its Firestore run remains `queued`, verify in GitHub Actions that it has stopped, then mark that run `failed` in Firestore to allow another Sheet request.
+
 To start the workflow manually from GitHub Actions:
 
 1. Generate a new UUID, for example with `python3 -c 'import uuid; print(uuid.uuid4())'`. Do not reuse an ID from a completed run.
 2. In the Firebase console, open the default Firestore database and create a document in `internationalPhraseAuditRuns` using that UUID as the **document ID**. Set `status` to the string `queued` and `requestedAt` to the current UTC time as an ISO 8601 string, such as `2026-10-09T12:00:00Z`.
 3. In GitHub, open **Actions → International phrases audit → Run workflow**. Select `main` and paste the same UUID into **Firestore run ID**.
 
-An arbitrary ID without a corresponding Firestore document will make result publication fail with `Unknown run`. The Sheet menu is simpler because it creates the document and starts the workflow together.
+An arbitrary ID without a corresponding Firestore document will make result publication fail with `Unknown run`. Manual GitHub dispatch bypasses the Sheet's active-run check, although the workflow concurrency setting prevents simultaneous execution. The Sheet menu is simpler because it creates the document and starts the workflow together.
 
 ## Review audit history in the Sheet
 
