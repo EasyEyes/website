@@ -275,9 +275,9 @@ def add_match_evidence(matches, source_roots):
 
 def main():
     codeql = os.environ.get("CODEQL_BIN", "codeql")
-    metadata = json.loads(run("curl", "-fLsS", "--retry", "3", ENDPOINT + "?versionOnly=1", capture=True))
+    metadata = json.loads(run("curl", "--compressed", "-fLsS", "--retry", "3", ENDPOINT + "?versionOnly=1", capture=True))
     version = metadata["version"]
-    payload = json.loads(run("curl", "-fLsS", "--retry", "3", ENDPOINT + "?v=" + version, capture=True))
+    payload = json.loads(run("curl", "--compressed", "-fLsS", "--retry", "3", ENDPOINT + "?v=" + version, capture=True))
     if payload.get("version") != version:
         raise RuntimeError("Phrases version changed between metadata and payload requests")
     keys = sorted(payload["phrases"], key=str.casefold)
