@@ -17,7 +17,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
-ENDPOINT = "https://easyeyes.app/.netlify/functions/phrases"
+ENDPOINT = "https://easyeyes.netlify.app/.netlify/functions/phrases"
 REPOSITORIES = [
     ("website", "website", "main", ("netlify/functions",)),
     ("threshold-scientists", "website/docs/experiment", "new-main", ("source",)),

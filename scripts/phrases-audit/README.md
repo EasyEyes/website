@@ -15,7 +15,7 @@ The Google Sheet's **Run International Phrases audit** menu item sends an authen
 - Keep `PHRASES_SECRET` in the Apps Script properties and Netlify environment; it authenticates the menu request.
 - Set `GITHUB_ACTIONS_DISPATCH_TOKEN` in Netlify with permission to dispatch the `EasyEyes/website` Actions workflow.
 - Set `FIREBASE_SERVICE_ACCOUNT_JSON` in Netlify to a service account JSON credential with read and write access to the target Firestore database. The existing `FIREBASE_DB` credential is for Realtime Database and cannot write Firestore.
-- Set `CATALOG_USAGE_REPORT_URL` and `CATALOG_USAGE_REPORT_SECRET` as GitHub Actions secrets. `publish.py` takes the origin from the URL and posts to the phrases audit function. The same `CATALOG_USAGE_REPORT_SECRET` value must be available in Netlify.
+- Set `CATALOG_USAGE_REPORT_URL` to `https://easyeyes.netlify.app/.netlify/functions/catalog-usage-report` and set `CATALOG_USAGE_REPORT_SECRET` as GitHub Actions secrets. `publish.py` takes the origin from the URL and posts to the phrases audit function. The same `CATALOG_USAGE_REPORT_SECRET` value must be available in Netlify. The audit reads phrases from the direct Netlify host as well because Cloudflare challenges GitHub Actions requests to `easyeyes.app`.
 
 The workflow file must be on the GitHub default branch before the menu can dispatch it. The Apps Script source must also be deployed to the sheet, and the Netlify function must be deployed.
 
