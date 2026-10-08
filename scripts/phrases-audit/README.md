@@ -35,7 +35,7 @@ An arbitrary ID without a corresponding Firestore document will make result publ
 
 After deploying the Netlify function and updating the Sheet's Apps Script from `netlify/functions/phrases/apps-script/update-phrases.gs`, choose **EasyEyes → View International Phrases audit history**. The modal lists the 20 most recent runs and opens the newest completed report by default. It uses the existing `PHRASES_SECRET` in Script Properties to fetch findings; the secret is never placed in the modal HTML.
 
-Findings appear in review order: keys referenced in code but missing from the sheet, unused keys with a verified removal (newest removal first), then unused keys without verified removal. Used keys appear as a count. Source links open the exact scanned GitHub file and line. For a removed reference, the modal links both to the removal commit and to the file at that commit's first parent, where the reference was still present. These are audit findings for review, not automatic instructions to delete or add keys.
+Findings appear in review order: keys referenced in code but missing from the sheet, unused keys with a verified removal (newest removal first), then unused keys without verified removal. Used keys appear as a count. A key links to its current cell in the `Translations` sheet when that key is present; the row is looked up when the report opens, so moved rows still work. Keys absent from the current sheet have no cell link. Source links open the exact scanned GitHub file and line. For a removed reference, the modal links both to the removal commit and to the file at that commit's first parent, where the reference was still present. These are audit findings for review, not automatic instructions to delete or add keys.
 
 ## Read and migrate reports
 

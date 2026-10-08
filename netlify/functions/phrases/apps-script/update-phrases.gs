@@ -145,7 +145,50 @@ function listPhrasesAuditRuns() {
 }
 
 function getPhrasesAuditRun(runId) {
-  return fetchPhrasesAuditReview("get", runId);
+  var result = fetchPhrasesAuditReview("get", runId);
+  if (!result.findings) return result;
+
+  var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = spreadsheet.getSheetByName("Translations");
+  if (!sheet) throw new Error('Sheet "Translations" not found.');
+  var header = sheet
+    .getRange(1, 1, 1, sheet.getLastColumn())
+    .getDisplayValues()[0];
+  var keyColumn = header.indexOf("EE_LanguageCode") + 1;
+  if (!keyColumn) throw new Error('Column "EE_LanguageCode" not found.');
+
+  var findings = result.findings;
+  var groups = [findings.missing, findings.removed, findings.unverified];
+  var entriesByKey = Object.create(null);
+  groups.forEach(function (entries) {
+    entries.forEach(function (entry) {
+      if (!entriesByKey[entry.key]) entriesByKey[entry.key] = [];
+      entriesByKey[entry.key].push(entry);
+    });
+  });
+  if (sheet.getLastRow() < 2) return result;
+
+  var keyValues = sheet
+    .getRange(2, keyColumn, sheet.getLastRow() - 1, 1)
+    .getDisplayValues();
+  var columnLetter = sheet
+    .getRange(1, keyColumn)
+    .getA1Notation()
+    .replace(/\d+$/, "");
+  var urlBase =
+    spreadsheet.getUrl().split("#")[0] +
+    "#gid=" +
+    sheet.getSheetId() +
+    "&range=";
+  keyValues.forEach(function (row, index) {
+    var key = String(row[0] || "").trim();
+    if (!Object.prototype.hasOwnProperty.call(entriesByKey, key)) return;
+    var url = urlBase + encodeURIComponent(columnLetter + (index + 2));
+    entriesByKey[key].forEach(function (entry) {
+      entry.sheetUrl = url;
+    });
+  });
+  return result;
 }
 
 function showPhrasesAuditHistory() {
@@ -187,6 +230,7 @@ function buildPhrasesAuditHistoryHtml() {
           .findings { display: grid; gap: 8px; margin-top: 12px; }
           .finding { border: 1px solid #dadce0; border-radius: 6px; padding: 10px 12px; }
           .finding summary { cursor: pointer; font-weight: 600; overflow-wrap: anywhere; }
+          .finding summary a { color: #1967d2; text-decoration: underline; }
           .finding-detail { padding: 8px 0 0 16px; }
           .finding-detail p { margin: 4px 0; }
           .finding-detail a { color: #1967d2; overflow-wrap: anywhere; }
@@ -199,6 +243,7 @@ function buildPhrasesAuditHistoryHtml() {
         <main class="audit-history">
           <h1>International Phrases audit history</h1>
           <p>Review stored audit findings. Source links open the exact GitHub revision used by the audit.</p>
+          <p>Click a key to open its current Sheet cell. Keys absent from the Sheet have no cell link.</p>
           <div class="toolbar">
             <div class="control"><label for="run-select">Audit run</label><select id="run-select" disabled></select></div>
             <div class="control"><label for="key-search">Find a key</label><input id="key-search" type="search" placeholder="EE_…"></div>
@@ -268,7 +313,21 @@ function buildPhrasesAuditHistoryHtml() {
             var item = document.createElement("details");
             item.className = "finding";
             var title = document.createElement("summary");
-            title.textContent = entry.key;
+            if (entry.sheetUrl && entry.sheetUrl.indexOf("https://docs.google.com/spreadsheets/d/") === 0) {
+              var sheetLink = document.createElement("a");
+              sheetLink.href = entry.sheetUrl;
+              sheetLink.target = "_blank";
+              sheetLink.rel = "noopener noreferrer";
+              sheetLink.textContent = entry.key;
+              sheetLink.setAttribute("aria-label", "Open " + entry.key + " in the Sheet");
+              title.appendChild(sheetLink);
+            } else {
+              title.textContent = entry.key;
+              var absent = document.createElement("span");
+              absent.className = "muted";
+              absent.textContent = " · not in current Sheet";
+              title.appendChild(absent);
+            }
             if (kind === "removed" && entry.lastRemovedAt) {
               var date = document.createElement("span");
               date.className = "muted";
