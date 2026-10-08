@@ -12,6 +12,14 @@ function setup(dispatch = async () => {}) {
     create: async (key, data) => runs.set(key, data),
     update: async (key, data) => runs.set(key, { ...runs.get(key), ...data }),
     get: async (key) => runs.get(key),
+    listRecent: async (limit) =>
+      [...runs.entries()]
+        .map(([key, value]) => ({
+          id: key,
+          status: value.status,
+          requestedAt: value.requestedAt,
+        }))
+        .slice(0, limit),
     getHistoryState: async () => historyState,
     saveHistoryState: async (state, baseRevision) => {
       if ((historyState?.revision ?? null) !== baseRevision) return null;
@@ -185,4 +193,42 @@ test("history checkpoint reads and writes require the report secret", async () =
   assert.deepEqual(getHistoryState().checkedKeys, ["EE_old"]);
   assert.equal((await handler(write(null))).status, 409);
   assert.equal((await handler(write("new-revision"))).status, 200);
+});
+
+test("the Sheet can list runs and read a report without the publication secret", async () => {
+  const { handler, runs } = setup();
+  runs.set(id, {
+    status: "completed",
+    requestedAt: "2026-10-03T12:00:00Z",
+    report: {
+      generatedAt: "2026-10-03T12:05:00Z",
+      phraseUsage: {
+        repositories: {},
+        unused: [],
+        used: {},
+        counts: { used: 0 },
+      },
+      history: { keys: {} },
+      missingFromSheet: { missing: {} },
+    },
+  });
+  const review = (body, secret) => request("review", body, secret);
+  assert.equal(
+    (await handler(review({ operation: "list" }, "wrong"))).status,
+    401,
+  );
+  const list = await handler(review({ operation: "list" }, "sheet-secret"));
+  assert.deepEqual(await list.json(), {
+    runs: [{ id, status: "completed", requestedAt: "2026-10-03T12:00:00Z" }],
+  });
+  const detail = await handler(
+    review({ operation: "get", id }, "sheet-secret"),
+  );
+  assert.equal(detail.status, 200);
+  assert.deepEqual((await detail.json()).findings.missing, []);
+  assert.equal(
+    (await handler(review({ operation: "get", id: "bad" }, "sheet-secret")))
+      .status,
+    400,
+  );
 });

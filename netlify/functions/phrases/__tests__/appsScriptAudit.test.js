@@ -35,7 +35,44 @@ describe("International Phrases Firebase audit", () => {
       "Run International Phrases audit",
       "requestPhrasesAudit",
     );
+    expect(menu.addItem).toHaveBeenCalledWith(
+      "View International Phrases audit history",
+      "showPhrasesAuditHistory",
+    );
     expect(menu.addToUi).toHaveBeenCalledTimes(1);
+  });
+
+  test("reads audit history through Apps Script without exposing the secret to HTML", () => {
+    const fetch = jest.fn().mockReturnValue({
+      getResponseCode: () => 200,
+      getContentText: () => JSON.stringify({ runs: [] }),
+    });
+    const context = loadAppsScript({
+      PropertiesService: {
+        getScriptProperties: () => ({ getProperty: () => "sheet-secret" }),
+      },
+      UrlFetchApp: { fetch },
+    });
+
+    expect(context.listPhrasesAuditRuns()).toEqual({ runs: [] });
+    expect(fetch).toHaveBeenCalledWith(
+      "https://easyeyes.app/.netlify/functions/phrases-audit?action=review",
+      expect.objectContaining({
+        method: "post",
+        headers: { "x-phrases-secret": "sheet-secret" },
+        payload: JSON.stringify({ operation: "list", id: null }),
+      }),
+    );
+    const html = context.buildPhrasesAuditHistoryHtml();
+    expect(html).not.toContain("sheet-secret");
+    expect(html.indexOf("Referenced in code, missing from sheet")).toBeLessThan(
+      html.indexOf("Unused with verified removal"),
+    );
+    expect(html.indexOf("Unused with verified removal")).toBeLessThan(
+      html.indexOf("Unused without verified removal"),
+    );
+    const inlineScript = html.match(/<script>([\s\S]*)<\/script>/)?.[1];
+    expect(() => new vm.Script(inlineScript)).not.toThrow();
   });
 
   test("requests a background audit without updating the spreadsheet", () => {

@@ -24,6 +24,20 @@ function firestoreStore() {
     create: (id: string, data: object) => collection.doc(id).create(data),
     update: (id: string, data: object) => collection.doc(id).update(data),
     get: async (id: string) => (await collection.doc(id).get()).data() ?? null,
+    listRecent: async (limit: number) => {
+      const snapshot = await collection
+        .orderBy("requestedAt", "desc")
+        .limit(limit)
+        .select(
+          "status",
+          "requestedAt",
+          "completedAt",
+          "reportGeneratedAt",
+          "error",
+        )
+        .get();
+      return snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+    },
     getHistoryState: async () => (await historyState.get()).data() ?? null,
     saveHistoryState: (state: object, baseRevision: string | null) =>
       getFirestore(app).runTransaction(async (transaction) => {

@@ -1,5 +1,6 @@
 import { randomUUID, timingSafeEqual } from "node:crypto";
 import { gunzipSync } from "node:zlib";
+import { reviewRun } from "./review.mjs";
 
 const MAX_COMPRESSED_BASE64 = 4_000_000;
 const MAX_REPORT_BYTES = 12_000_000;
@@ -57,6 +58,24 @@ export function createPhrasesAuditHandler({
         return json({ error: "Could not start the audit workflow" }, 502);
       }
       return json({ id, status: "queued" }, 202);
+    }
+
+    if (action === "review") {
+      if (!equalSecret(request.headers.get("x-phrases-secret"), phrasesSecret))
+        return json({ error: "Unauthorized" }, 401);
+      let body;
+      try {
+        body = JSON.parse(await request.text());
+      } catch {
+        return json({ error: "Invalid JSON" }, 400);
+      }
+      if (body?.operation === "list")
+        return json({ runs: await store.listRecent(20) });
+      if (body?.operation !== "get" || !RUN_ID.test(body?.id ?? ""))
+        return json({ error: "Invalid review request" }, 400);
+      const run = await store.get(body.id);
+      if (!run) return json({ error: "Unknown run" }, 404);
+      return json(reviewRun({ id: body.id, ...run }));
     }
 
     if (action === "history-state") {
