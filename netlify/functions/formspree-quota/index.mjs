@@ -18,16 +18,15 @@ const DEFAULT_FORM_ID = "mqkrdveg";
 const DEFAULT_MONTHLY_QUOTA = 20000;
 
 const responseWrapper = (statusCode, body) => {
-  return {
-    statusCode,
+  return new Response(JSON.stringify(body), {
+    status: statusCode,
     headers: {
       "Access-Control-Allow-Origin": "*",
       "Access-Control-Allow-Headers": "*",
       "Access-Control-Allow-Methods": "GET, OPTIONS",
       "Content-Type": "application/json",
     },
-    body: JSON.stringify(body),
-  };
+  });
 };
 
 const startOfCurrentMonthISO = () => {
@@ -77,8 +76,8 @@ const countSubmissionsThisMonth = async (formId, apiKey) => {
   return total;
 };
 
-exports.handler = async (event) => {
-  if (event.httpMethod === "OPTIONS") {
+export default async function handler(request) {
+  if (request.method === "OPTIONS") {
     return responseWrapper(200, {});
   }
 
@@ -109,4 +108,4 @@ exports.handler = async (event) => {
       reason: error.message || "Unknown error",
     });
   }
-};
+}

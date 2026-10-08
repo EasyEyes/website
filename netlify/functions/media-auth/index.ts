@@ -1,4 +1,5 @@
 import { corsHeaders } from "../shared/cors";
+import { nativeHandler } from "../shared/nativeHandler";
 import {
   loadRoleAssignments,
   permissionsForRole,
@@ -147,3 +148,5 @@ export async function handler(event: NetlifyEvent): Promise<NetlifyResponse> {
     );
   }
 }
+
+export default nativeHandler(handler);

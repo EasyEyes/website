@@ -1,5 +1,6 @@
 import { createHash } from "crypto";
 import { corsHeaders, isAllowedOrigin } from "../shared/cors";
+import { nativeHandler } from "../shared/nativeHandler";
 
 type NetlifyEvent = {
   httpMethod: string;
@@ -220,11 +221,7 @@ export const createSpeechTokenHandler = (
   const verifyExperimentContext =
     dependencies.verifyExperimentContext ??
     ((request: SpeechTokenRequest) =>
-      checkPavloviaExperimentContext(
-        fetchImpl,
-        request,
-        upstreamTimeoutMs,
-      ));
+      checkPavloviaExperimentContext(fetchImpl, request, upstreamTimeoutMs));
   const rateLimitWindowMs = validatePositive(
     dependencies.rateLimitWindowMs ?? DEFAULT_RATE_LIMIT_WINDOW_MS,
     "rateLimitWindowMs",
@@ -396,7 +393,9 @@ export const createSpeechTokenHandler = (
   };
 };
 
-export const handler = createSpeechTokenHandler();
+const handler = createSpeechTokenHandler();
+
+export default nativeHandler(handler);
 
 export const config = {
   path: "/.netlify/functions/speech-token",

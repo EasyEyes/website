@@ -1,11 +1,17 @@
 import { handler } from "../index";
 
 const ORIGIN = "https://easyeyes.app";
+const originalMediaRoles = process.env.MEDIA_ROLES;
 
 const post = (
   headers: Record<string, string | undefined> = {},
   body: string | null = null,
-) => handler({ httpMethod: "POST", headers: { origin: ORIGIN, ...headers }, body });
+) =>
+  handler({
+    httpMethod: "POST",
+    headers: { origin: ORIGIN, ...headers },
+    body,
+  });
 
 const mockPavloviaUser = (username: string, ok = true) => {
   (global as any).fetch = jest.fn().mockResolvedValue({
@@ -15,9 +21,15 @@ const mockPavloviaUser = (username: string, ok = true) => {
 };
 
 beforeEach(() => {
+  process.env.MEDIA_ROLES = "denis:admin,yonathan";
   jest.restoreAllMocks();
   jest.spyOn(console, "log").mockImplementation(() => {});
   jest.spyOn(console, "error").mockImplementation(() => {});
+});
+
+afterAll(() => {
+  if (originalMediaRoles === undefined) delete process.env.MEDIA_ROLES;
+  else process.env.MEDIA_ROLES = originalMediaRoles;
 });
 
 describe("media-auth handler", () => {

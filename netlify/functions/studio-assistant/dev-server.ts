@@ -18,7 +18,7 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "http";
 import { readFileSync } from "fs";
 import { resolve } from "path";
-import { handler, config } from "./index";
+import { legacyHandler, config } from "./index";
 
 const PORT = Number(process.env.PORT) || 8888;
 const UPSTREAM = process.env.UPSTREAM || "https://easyeyes.app";
@@ -116,7 +116,7 @@ const server = createServer((req, res) => {
 
     const started = Date.now();
     const text = body ? body.toString("utf8") : null;
-    const out = await handler({
+    const out = await legacyHandler({
       httpMethod: req.method ?? "GET",
       headers,
       body: text,

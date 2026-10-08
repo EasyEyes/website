@@ -54,7 +54,7 @@ const ghJson = async (endpoint, headers) => {
   return response.json();
 };
 
-export const handler = async (event) => {
+const handler = async (event) => {
   if (event.httpMethod === "OPTIONS") {
     return responseWrapper(200, {}, NO_CACHE);
   }

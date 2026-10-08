@@ -13,7 +13,7 @@ const responseWrapper = (statusCode, body) => {
   };
 };
 
-export const handler = async (event, context) => {
+const handler = async (event, context) => {
   let statusCode, data;
 
   if (event.httpMethod === "OPTIONS") {
