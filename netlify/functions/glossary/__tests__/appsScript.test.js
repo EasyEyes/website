@@ -97,7 +97,12 @@ describe("Glossary Apps Script client", () => {
       ["_about", "text"],
     ];
     const alert = jest.fn();
-    const fetch = jest.fn(() => makeResponse(200, { version: "3.2" }));
+    const fetch = jest
+      .fn()
+      .mockReturnValueOnce(makeResponse(200, { version: "3.2" }))
+      .mockReturnValueOnce(
+        makeResponse(202, { id: "audit-id", status: "queued" }),
+      );
     const { pushGlossary } = loadAppsScript({
       PropertiesService: {
         getScriptProperties: () => ({ getProperty: () => "test-secret" }),
@@ -115,13 +120,70 @@ describe("Glossary Apps Script client", () => {
 
     pushGlossary();
 
-    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(fetch).toHaveBeenCalledTimes(2);
     const [url, options] = fetch.mock.calls[0];
     expect(url).toBe("https://easyeyes.app/.netlify/functions/glossary");
     expect(options.headers["x-glossary-secret"]).toBe("test-secret");
     expect(JSON.parse(options.payload)).toEqual({ rows });
+    expect(fetch.mock.calls[1][0]).toBe(
+      "https://easyeyes.app/.netlify/functions/glossary-audit?action=start",
+    );
+    expect(fetch.mock.calls[1][1].headers["x-glossary-secret"]).toBe(
+      "test-secret",
+    );
     expect(alert).toHaveBeenCalledWith(
-      "Glossary pushed successfully. Version: 3.2",
+      expect.stringContaining("Glossary audit requested."),
+    );
+    expect(alert).toHaveBeenCalledWith(
+      expect.stringContaining("Glossary pushed successfully. Version: 3.2"),
+    );
+  });
+
+  test("generated modal JavaScript parses without exposing a secret", () => {
+    const { buildGlossaryAuditReportHtml } = loadAppsScript();
+    const html = buildGlossaryAuditReportHtml();
+    const script = html.match(/<script>([\s\S]*?)<\/script>/)[1];
+    expect(() => new vm.Script(script)).not.toThrow();
+    expect(html).not.toContain("GLOSSARY_SECRET");
+  });
+
+  test("derives the audit URL from the existing glossary URL", () => {
+    const context = loadAppsScript();
+    context.NETLIFY_FUNCTION_URL =
+      "https://preview.example/.netlify/functions/glossary";
+    expect(context.glossaryAuditUrl("review")).toBe(
+      "https://preview.example/.netlify/functions/glossary-audit?action=review",
+    );
+  });
+
+  test("retains successful publication when the audit dispatch fails", () => {
+    const alert = jest.fn();
+    const fetch = jest
+      .fn()
+      .mockReturnValueOnce(makeResponse(200, { version: "3.2" }))
+      .mockReturnValueOnce(
+        makeResponse(502, { error: "Could not start workflow" }),
+      );
+    const { pushGlossary } = loadAppsScript({
+      PropertiesService: {
+        getScriptProperties: () => ({ getProperty: () => "test-secret" }),
+      },
+      SpreadsheetApp: {
+        getUi: () => ({ alert }),
+        getActiveSpreadsheet: () => ({
+          getSheetByName: () => ({
+            getDataRange: () => ({ getDisplayValues: () => [["name"]] }),
+          }),
+        }),
+      },
+      UrlFetchApp: { fetch },
+    });
+    pushGlossary();
+    expect(alert).toHaveBeenCalledWith(
+      expect.stringContaining("Glossary pushed successfully. Version: 3.2"),
+    );
+    expect(alert).toHaveBeenCalledWith(
+      expect.stringContaining("The audit could not be started"),
     );
   });
 
