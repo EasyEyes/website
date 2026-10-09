@@ -10,6 +10,7 @@ on:
 
 permissions:
   contents: read
+  security-events: read
 
 concurrency:
   group: glossary-audit
@@ -17,7 +18,7 @@ concurrency:
 
 jobs:
   audit:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 120
     steps:
       - name: Check out website and compiler repositories
