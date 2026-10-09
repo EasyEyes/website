@@ -1,0 +1,15 @@
+paramReader.read("font", 1);
+reader.read("fontSource");
+const example = "font";
+// paramReader.read("font", 2);
+const text = 'paramReader.read("font", 2)';
+glossary.font;
+paramReader.read(variable);
+reader.readMatching(/questionAndAnswer/);
+reader.read(getGlossary()._calibrateSound1000HzMaxSD_dB.name);
+reader.read(getGlossary()["font"].name);
+reader.read(getGlossary().font.default);
+reader.read(otherGlossary().font.name);
+reader.read(getGlossary()[variable].name);
+// reader.read(getGlossary().font.name);
+const glossaryText = "reader.read(getGlossary().font.name)";

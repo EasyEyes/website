@@ -1,0 +1,69 @@
+name: Glossary audit
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: Sheet creates this ID automatically. Manual run? Create a queued Firestore run first; see scripts/glossary-audit/README.md.
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: glossary-audit
+  queue: max
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - name: Check out website and compiler repositories
+        id: checkout
+        uses: actions/checkout@v6
+        with:
+          path: website
+          submodules: recursive
+      - uses: actions/checkout@v6
+        with:
+          repository: EasyEyes/remote-calibrator
+          path: remote-calibrator
+      - uses: actions/checkout@v6
+        with:
+          repository: EasyEyes/speaker-calibration
+          path: speaker-calibration
+      - name: Set up CodeQL CLI
+        id: codeql
+        uses: github/codeql-action/setup-codeql@v4
+      - name: Install glossary query pack
+        run: '"$CODEQL_BIN" pack install website/scripts/glossary-audit'
+        env:
+          CODEQL_BIN: ${{ steps.codeql.outputs.codeql-path }}
+      - name: Check audit report logic
+        env:
+          CODEQL_BIN: ${{ steps.codeql.outputs.codeql-path }}
+        run: python3 -m unittest discover -s website/scripts/glossary-audit -p 'test_*.py'
+      - name: Run glossary audit
+        id: audit
+        run: python3 website/scripts/glossary-audit/audit.py
+        env:
+          CODEQL_BIN: ${{ steps.codeql.outputs.codeql-path }}
+          CATALOG_USAGE_REPORT_URL: ${{ secrets.CATALOG_USAGE_REPORT_URL }}
+          CATALOG_USAGE_REPORT_SECRET: ${{ secrets.CATALOG_USAGE_REPORT_SECRET }}
+      - name: Upload report for workflow debugging
+        if: always() && steps.checkout.outcome == 'success'
+        uses: actions/upload-artifact@v6
+        with:
+          name: glossary-report-${{ inputs.run_id }}
+          path: website/scripts/glossary-audit/glossary-report.json
+          if-no-files-found: ignore
+      - name: Save audit result in Firestore
+        if: always() && steps.checkout.outcome == 'success'
+        run: python3 website/scripts/glossary-audit/publish.py "$AUDIT_RUN_ID"
+        env:
+          AUDIT_RUN_ID: ${{ inputs.run_id }}
+          AUDIT_OUTCOME: ${{ steps.audit.outcome }}
+          CATALOG_USAGE_REPORT_URL: ${{ secrets.CATALOG_USAGE_REPORT_URL }}
+          CATALOG_USAGE_REPORT_SECRET: ${{ secrets.CATALOG_USAGE_REPORT_SECRET }}
