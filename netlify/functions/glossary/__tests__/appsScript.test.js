@@ -20,6 +20,46 @@ function makeResponse(status, body) {
 }
 
 describe("Glossary Apps Script client", () => {
+  test("places the audit action between update and report", () => {
+    const menu = { addItem: jest.fn().mockReturnThis(), addToUi: jest.fn() };
+    const { onOpen } = loadAppsScript({
+      SpreadsheetApp: { getUi: () => ({ createMenu: () => menu }) },
+    });
+    onOpen();
+    expect(menu.addItem.mock.calls).toEqual([
+      ["Update EasyEyes to use current Glossary", "pushGlossary"],
+      ["Run Glossary audit", "runGlossaryAudit"],
+      ["View Glossary audit report", "showGlossaryAuditReport"],
+    ]);
+  });
+  test.each([
+    [202, { id: "run-id", status: "queued" }, "Glossary audit requested."],
+    [
+      409,
+      { id: "run-id", status: "queued", code: "audit_in_progress" },
+      "already running",
+    ],
+    [502, { error: "Dispatch failed" }, "could not be started"],
+  ])("standalone action reports HTTP %s", (status, body, message) => {
+    const alert = jest.fn();
+    const fetch = jest.fn(() => makeResponse(status, body));
+    const { runGlossaryAudit } = loadAppsScript({
+      PropertiesService: {
+        getScriptProperties: () => ({ getProperty: () => "existing-secret" }),
+      },
+      SpreadsheetApp: { getUi: () => ({ alert }) },
+      UrlFetchApp: { fetch },
+    });
+    runGlossaryAudit();
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(fetch.mock.calls[0][0]).toBe(
+      "https://easyeyes.app/.netlify/functions/glossary-audit?action=start",
+    );
+    expect(fetch.mock.calls[0][1].headers["x-glossary-secret"]).toBe(
+      "existing-secret",
+    );
+    expect(alert).toHaveBeenCalledWith(expect.stringContaining(message));
+  });
   test("builds the raw-row payload expected by the glossary function", () => {
     const { buildPayload } = loadAppsScript();
     const rows = [

@@ -21,6 +21,7 @@ function onOpen() {
   SpreadsheetApp.getUi()
     .createMenu("EasyEyes")
     .addItem("Update EasyEyes to use current Glossary", "pushGlossary")
+    .addItem("Run Glossary audit", "runGlossaryAudit")
     .addItem("View Glossary audit report", "showGlossaryAuditReport")
     .addToUi();
 }
@@ -163,6 +164,22 @@ function requestGlossaryAudit() {
   if (!result.id)
     throw new Error("The glossary audit service returned no run ID.");
   return result;
+}
+
+function runGlossaryAudit() {
+  try {
+    var audit = requestGlossaryAudit();
+    notify(
+      (audit.alreadyRunning
+        ? "A glossary audit is already running."
+        : "Glossary audit requested.") +
+        " Run ID: " +
+        audit.id +
+        "\nUse View Glossary audit report to review the result.",
+    );
+  } catch (error) {
+    notify("The audit could not be started: " + error.message);
+  }
 }
 
 function listGlossaryAuditRuns() {
