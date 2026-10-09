@@ -150,6 +150,43 @@ export function createGlossaryAuditHandler({
       return json(reviewGlossaryRun({ id: body.id, ...run }));
     }
 
+    if (action === "history-state") {
+      if (
+        !equalSecret(
+          request.headers.get("authorization")?.replace(/^Bearer\s+/i, ""),
+          reportSecret,
+        )
+      )
+        return json({ error: "Unauthorized" }, 401);
+      const raw = await request.text();
+      if (Buffer.byteLength(raw) > MAX_STORED_REPORT_BYTES)
+        return json({ error: "History state too large" }, 413);
+      let body;
+      try {
+        body = JSON.parse(raw);
+      } catch {
+        return json({ error: "Invalid JSON" }, 400);
+      }
+      if (body?.operation === "read")
+        return json({ state: await store.getHistoryState() });
+      if (
+        body?.operation !== "write" ||
+        !body.state ||
+        body.state.schemaVersion !== 1 ||
+        body.state.logicVersion !== 1 ||
+        !Array.isArray(body.state.checkedKeys) ||
+        !body.state.report?.repositories ||
+        !body.state.report?.keys ||
+        (body.baseRevision !== null && typeof body.baseRevision !== "string")
+      )
+        return json({ error: "Invalid history state" }, 400);
+      if (firestoreValueBytes(body.state) > MAX_STORED_REPORT_BYTES)
+        return json({ error: "History state too large" }, 413);
+      const saved = await store.saveHistoryState(body.state, body.baseRevision);
+      if (!saved) return json({ error: "History state changed" }, 409);
+      return json({ revision: saved });
+    }
+
     if (action === "result") {
       if (
         !equalSecret(

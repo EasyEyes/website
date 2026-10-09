@@ -90,6 +90,17 @@ Run the scanner from an EasyEyes workspace containing the six repositories:
 CODEQL_BIN=/path/to/codeql python3 website/scripts/glossary-audit/audit.py
 ```
 
+History checkpoints are stored separately from phrase audit checkpoints in
+`glossaryAuditState/history`, using the existing report URL and secret. The first
+run scans full history. Later runs reuse saved removal evidence and scan only
+`previousHead..currentHead` for previously checked unused keys. Unchanged
+repositories skip history cloning and scanning. Newly unused keys receive a full
+history scan; rewritten history or incompatible checkpoint versions also trigger
+a full scan. Keys with no removals are recorded as checked too. Checkpoint writes
+use a revision check to prevent an older run from overwriting newer state.
+Local runs without the report URL and secret scan full history without saving a
+checkpoint. The current-source CodeQL scan still runs every time.
+
 `HISTORY_REPO_DIR` can point to a reusable directory of bare history clones.
 Generated `glossaryKeys.qll` and `glossary-report.json` are ignored by Git.
 

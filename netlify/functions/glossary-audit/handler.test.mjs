@@ -201,3 +201,86 @@ test("reviews queued/failed runs and rejects unsafe links", async () => {
     401,
   );
 });
+
+test("history checkpoint uses report authentication and rejects stale revisions", async () => {
+  let state = null;
+  const handler = createGlossaryAuditHandler({
+    reportSecret: "report-secret",
+    store: {
+      getHistoryState: async () => state,
+      saveHistoryState: async (next, base) => {
+        if ((state?.revision ?? null) !== base) return null;
+        state = { ...next, revision: "saved-revision" };
+        return state.revision;
+      },
+    },
+  });
+  const request = (body, token = "report-secret") =>
+    handler(
+      new Request(
+        "https://example.com/.netlify/functions/glossary-audit?action=history-state",
+        {
+          method: "POST",
+          headers: { authorization: `Bearer ${token}` },
+          body: JSON.stringify(body),
+        },
+      ),
+    );
+  assert.equal((await request({ operation: "read" }, "wrong")).status, 401);
+  assert.deepEqual(await (await request({ operation: "read" })).json(), {
+    state: null,
+  });
+  const checkpoint = {
+    schemaVersion: 1,
+    logicVersion: 1,
+    checkedKeys: ["missing"],
+    report: {
+      repositories: { threshold: { head: commit, completeHistory: true } },
+      keys: {},
+    },
+  };
+  assert.equal(
+    (
+      await request({
+        operation: "write",
+        state: checkpoint,
+        baseRevision: null,
+      })
+    ).status,
+    200,
+  );
+  assert.equal(
+    (
+      await request({
+        operation: "write",
+        state: checkpoint,
+        baseRevision: null,
+      })
+    ).status,
+    409,
+  );
+  assert.equal(
+    (await (await request({ operation: "read" })).json()).state.revision,
+    "saved-revision",
+  );
+  assert.equal(
+    (
+      await request({
+        operation: "write",
+        state: { ...checkpoint, logicVersion: 0 },
+        baseRevision: "saved-revision",
+      })
+    ).status,
+    400,
+  );
+  assert.equal(
+    (
+      await request({
+        operation: "write",
+        state: { ...checkpoint, extra: "x".repeat(800001) },
+        baseRevision: "saved-revision",
+      })
+    ).status,
+    413,
+  );
+});

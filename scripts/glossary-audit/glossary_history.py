@@ -12,6 +12,7 @@ import sys
 sys.path.append(str(Path(__file__).resolve().parent.parent / "phrases-audit"))
 
 import history
+import history_state
 from glossary_run import repository_evidence
 import run
 
@@ -21,6 +22,8 @@ def key_pattern(keys):
 
 
 def candidates(repository, environment, head, roots, keys):
+    if not keys:
+        return {}
     pattern = key_pattern(keys)
     output = history.git(repository, "log", head, "--first-parent", "--diff-merges=first-parent",
                          "--no-renames", "-p", "--unified=0", "-G" + "|".join(re.escape(k) for k in keys),
@@ -70,6 +73,12 @@ def main():
     if not entries:
         return
     codeql = os.environ.get("CODEQL_BIN", "codeql")
+    url = os.environ.get("CATALOG_USAGE_REPORT_URL")
+    secret = os.environ.get("CATALOG_USAGE_REPORT_SECRET")
+    if bool(url) != bool(secret):
+        raise RuntimeError("Both history checkpoint URL and secret must be configured")
+    state = history_state.load() if url else None
+    base_revision = state.get("revision") if state else None
     metadata = {}
     removals = defaultdict(list)
     with tempfile.TemporaryDirectory(prefix="easyeyes-glossary-history-") as temporary:
@@ -78,9 +87,21 @@ def main():
         cache.mkdir(parents=True, exist_ok=True)
         for name, local, branch, roots in run.REPOSITORIES:
             head = report["repositories"][name]["commit"]
+            checked, prior, old_head = history.reusable_history(state, name, None, head, entries)
+            if old_head == head and checked == set(entries):
+                for key, evidence in prior.items():
+                    removals[key].extend(evidence)
+                metadata[name] = {"head": head, "candidateEvents": 0, "completeHistory": True, "reusedKeys": len(checked)}
+                print(f"{name}: reused history for {len(checked)} keys", flush=True)
+                continue
             repository, environment = history.history_repository(name, local, branch, head, cache)
-            events = candidates(repository, environment, head, roots, entries)
-            metadata[name] = {"commit": head, "candidateEvents": len(events), "completeHistory": True}
+            checked, prior, old_head = history.reusable_history(state, name, repository, head, entries)
+            for key, evidence in prior.items():
+                removals[key].extend(evidence)
+            events = candidates(repository, environment, head, roots, set(entries) - checked)
+            if checked and old_head != head:
+                events.update(candidates(repository, environment, f"{old_head}..{head}", roots, checked))
+            metadata[name] = {"head": head, "candidateEvents": len(events), "completeHistory": True, "reusedKeys": len(checked)}
             print(f"{name}: checking {len(events)} candidate events", flush=True)
             if events:
                 sources = work / "sources" / name
@@ -96,6 +117,13 @@ def main():
         "generatedAt": datetime.now(timezone.utc).isoformat(), "repositories": metadata,
     }
     destination.write_text(json.dumps(report, indent=2, ensure_ascii=False) + "\n")
+    if url:
+        keys = {key: {"removalsByRepository": {
+            name: [item for item in evidence if item["repository"] == name]
+            for name in metadata if any(item["repository"] == name for item in evidence)
+        }} for key, evidence in removals.items() if evidence}
+        checkpoint_report = {"repositories": metadata, "keys": keys}
+        history_state.save(history_state.checkpoint(checkpoint_report, entries), base_revision)
     print(json.dumps({"keysWithRemovalEvidence": sum(bool(value) for value in removals.values()), "report": str(destination)}))
 
 

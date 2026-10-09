@@ -20,6 +20,9 @@ function firestoreStore() {
   const activeAudit = getFirestore(app)
     .collection("glossaryAuditState")
     .doc("active");
+  const historyState = getFirestore(app)
+    .collection("glossaryAuditState")
+    .doc("history");
   return {
     createQueued: (id: string, requestedAt: string) =>
       getFirestore(app).runTransaction(async (transaction) => {
@@ -54,6 +57,15 @@ function firestoreStore() {
         .get();
       return snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
     },
+    getHistoryState: async () => (await historyState.get()).data() ?? null,
+    saveHistoryState: (state: object, baseRevision: string | null) =>
+      getFirestore(app).runTransaction(async (transaction) => {
+        const current = await transaction.get(historyState);
+        if ((current.data()?.revision ?? null) !== baseRevision) return null;
+        const revision = randomUUID();
+        transaction.set(historyState, { ...state, revision });
+        return revision;
+      }),
   };
 }
 
