@@ -99,7 +99,21 @@ const DEFAULT_ACCOUNT_RATE_LIMIT_MAXIMUM_REQUESTS = 30;
 const EDGE_RATE_LIMIT_MAXIMUM_REQUESTS = 120;
 const EDGE_RATE_LIMIT_WINDOW_SECONDS = 60;
 
-export const MAX_BODY_BYTES = 2_000_000;
+/**
+ * The whole transcript comes with every call, attachments included (the
+ * Studio budgets those at 1 MB a conversation); Netlify's own limit is 6 MB.
+ */
+export const MAX_BODY_BYTES = 4_000_000;
+/** Content blocks the Studio sends; anything else is refused. */
+export const ALLOWED_BLOCK_TYPES = new Set([
+  "text",
+  "image",
+  "document",
+  "tool_use",
+  "tool_result",
+  "thinking",
+  "redacted_thinking",
+]);
 export const MAX_MESSAGES = 200;
 export const MAX_TOOLS = 24;
 export const MAX_SYSTEM_BLOCKS = 8;
@@ -218,6 +232,17 @@ export const parseRequest = (
     parsed.messages.length > MAX_MESSAGES
   )
     return undefined;
+  for (const m of parsed.messages as unknown[]) {
+    if (!m || typeof m !== "object") return undefined;
+    const content = (m as { content?: unknown }).content;
+    if (typeof content === "string") continue;
+    if (!Array.isArray(content)) return undefined;
+    for (const b of content as unknown[]) {
+      const type = (b as { type?: unknown } | null)?.type;
+      if (typeof type !== "string" || !ALLOWED_BLOCK_TYPES.has(type))
+        return undefined;
+    }
+  }
   const system = parsed.system ?? [];
   if (!Array.isArray(system) || system.length > MAX_SYSTEM_BLOCKS)
     return undefined;

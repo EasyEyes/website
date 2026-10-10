@@ -313,6 +313,38 @@ describe("studio-assistant Netlify function", () => {
     expect(parseRequest("not json")).toBeUndefined();
   });
 
+  it("parseRequest admits the Studio's block types and refuses others", () => {
+    const withBlocks = (blocks: unknown[]) =>
+      parseRequest(
+        JSON.stringify({
+          ...validBody(),
+          messages: [{ role: "user", content: blocks }],
+        }),
+      );
+    expect(
+      withBlocks([
+        { type: "text", text: "Here is my study" },
+        {
+          type: "document",
+          source: { type: "text", media_type: "text/plain", data: "a,b" },
+          title: "study.csv",
+        },
+        {
+          type: "image",
+          source: { type: "base64", media_type: "image/jpeg", data: "/9j/" },
+        },
+      ]),
+    ).toBeDefined();
+    expect(withBlocks([{ type: "server_tool_use" }])).toBeUndefined();
+    expect(withBlocks([{ text: "no type" }])).toBeUndefined();
+    expect(withBlocks(["text"])).toBeUndefined();
+    expect(
+      parseRequest(
+        JSON.stringify({ ...validBody(), messages: [{ role: "user" }] }),
+      ),
+    ).toBeUndefined();
+  });
+
   it("is deployed at the path the Studio calls, behind an edge rate limit", () => {
     expect(config.path).toBe("/.netlify/functions/studio-assistant");
     expect(config.rateLimit.aggregateBy).toEqual(["ip", "domain"]);
