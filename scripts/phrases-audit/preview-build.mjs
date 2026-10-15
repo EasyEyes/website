@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 export function selectPreviewAudit(environment, report, tree) {
   if (
     environment.CONTEXT !== "deploy-preview" ||
-    environment.BRANCH !== "feat/compiler-phrase-audit" ||
+    (environment.HEAD || environment.BRANCH) !== "feat/compiler-phrase-audit" ||
     environment.REVIEW_ID !== "153" ||
     !report
   )
@@ -46,6 +46,15 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
         { encoding: "utf8" },
       ).trim();
     },
+  );
+  console.log(
+    JSON.stringify({
+      context: process.env.CONTEXT,
+      branch: process.env.BRANCH,
+      head: process.env.HEAD,
+      review: process.env.REVIEW_ID,
+      reportPresent: Boolean(report),
+    }),
   );
   writeFileSync(
     new URL(

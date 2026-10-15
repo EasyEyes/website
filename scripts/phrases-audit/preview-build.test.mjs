@@ -37,6 +37,16 @@ test("matching preview sources enable the isolated audit", () => {
     report,
   );
 });
+test("Netlify pull request checkout refs use the HEAD branch name", () => {
+  assert.equal(
+    selectPreviewAudit(
+      { ...environment, BRANCH: "pull/153/head", HEAD: environment.BRANCH },
+      report,
+      () => "tree-sha",
+    ),
+    report,
+  );
+});
 test("changed sources fail closed", () => {
   assert.throws(() => selectPreviewAudit(environment, report, () => "changed"));
 });

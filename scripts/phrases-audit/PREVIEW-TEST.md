@@ -8,7 +8,8 @@ and commit it to the test branch to include the evidence in the preview build.
 Do not manually add used keys to the generated report.
 
 The Netlify build enables this report only when all three build variables match:
-`CONTEXT=deploy-preview`, `BRANCH=feat/compiler-phrase-audit`, and `REVIEW_ID=153`.
+`CONTEXT=deploy-preview`, `HEAD=feat/compiler-phrase-audit` (falling back to
+`BRANCH` when `HEAD` is absent), and `REVIEW_ID=153`.
 It validates the audited source tree hashes against the checkout for the website,
 compiler, threshold, and PsychoJS. The other two repositories are pinned in the
 workflow and their commits are recorded in the report. Other deployment contexts
