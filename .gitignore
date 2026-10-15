@@ -121,3 +121,4 @@ glossary_local.js
 
 # Build-specific phrase source index, generated before the compiler bundle.
 netlify/functions/study-phrase-analysis/source-index.json
+netlify/functions/phrases-audit-compiler/preview-report.json
