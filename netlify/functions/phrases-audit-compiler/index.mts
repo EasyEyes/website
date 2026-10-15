@@ -1,7 +1,6 @@
 import { cert, getApps, initializeApp } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
 import { compilerAudit } from "../phrases-audit/compiler.mjs";
-import previewReport from "./preview-report.json";
 
 export default async function handler(request: Request) {
   const json = (body: object, status = 200) =>
@@ -15,7 +14,6 @@ export default async function handler(request: Request) {
   if (request.method !== "GET")
     return json({ error: "Method not allowed" }, 405);
   try {
-    if (previewReport.run) return json(compilerAudit(previewReport.run));
     const credentials = Netlify.env.get("FIREBASE_SERVICE_ACCOUNT_JSON");
     if (!credentials) throw new Error("Missing audit credentials");
     const app =
