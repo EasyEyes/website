@@ -20,6 +20,13 @@ function setup(dispatch = async () => {}, newId = () => id) {
     },
     update: async (key, data) => runs.set(key, { ...runs.get(key), ...data }),
     get: async (key) => runs.get(key),
+    listPage: async (limit, cursor) => {
+      const entries = [...runs.entries()];
+      const start = entries.findIndex(([key]) => key === cursor) + 1;
+      return entries
+        .slice(start, start + limit)
+        .map(([key, value]) => ({ id: key, status: value.status }));
+    },
     listRecent: async (limit) =>
       [...runs.entries()]
         .map(([key, value]) => ({
@@ -55,6 +62,87 @@ const request = (action, body, secret, header = "x-phrases-secret") =>
       body: body === undefined ? undefined : JSON.stringify(body),
     },
   );
+
+test("audit history pages use cursors without repeating the last item", async () => {
+  const { handler, runs } = setup();
+  for (let index = 0; index < 45; index++) {
+    const key = `123e4567-e89b-42d3-a456-${String(index).padStart(12, "0")}`;
+    runs.set(key, { status: "completed" });
+  }
+  const first = await (
+    await handler(request("review", { operation: "list" }, "sheet-secret"))
+  ).json();
+  const second = await (
+    await handler(
+      request(
+        "review",
+        { operation: "list-page", id: first.nextCursor },
+        "sheet-secret",
+      ),
+    )
+  ).json();
+  const third = await (
+    await handler(
+      request(
+        "review",
+        { operation: "list-page", id: second.nextCursor },
+        "sheet-secret",
+      ),
+    )
+  ).json();
+  assert.deepEqual(
+    [first.runs.length, second.runs.length, third.runs.length],
+    [20, 20, 5],
+  );
+  assert.equal(
+    new Set([...first.runs, ...second.runs, ...third.runs].map((run) => run.id))
+      .size,
+    45,
+  );
+  assert.equal(third.nextCursor, null);
+  assert.equal(
+    (
+      await handler(
+        request(
+          "review",
+          { operation: "list-page", id: "invalid" },
+          "sheet-secret",
+        ),
+      )
+    ).status,
+    400,
+  );
+  assert.equal(
+    (
+      await handler(
+        request(
+          "review",
+          { operation: "list-page", id: first.nextCursor },
+          "wrong",
+        ),
+      )
+    ).status,
+    401,
+  );
+});
+
+test("status checks are authenticated and omit report contents", async () => {
+  const { handler, runs } = setup();
+  runs.set(id, { status: "completed", report: { large: "report" } });
+  assert.equal(
+    (await handler(request("review", { operation: "status", id }, "wrong")))
+      .status,
+    401,
+  );
+  const response = await handler(
+    request("review", { operation: "status", id }, "sheet-secret"),
+  );
+  assert.deepEqual(await response.json(), {
+    id,
+    status: "completed",
+    error: null,
+  });
+});
 
 test("the Sheet request is authenticated, queued, and dispatched", async () => {
   let dispatched;
@@ -253,6 +341,7 @@ test("the Sheet can list runs and read a report without the publication secret",
   const list = await handler(review({ operation: "list" }, "sheet-secret"));
   assert.deepEqual(await list.json(), {
     runs: [{ id, status: "completed", requestedAt: "2026-10-03T12:00:00Z" }],
+    nextCursor: null,
   });
   const detail = await handler(
     review({ operation: "get", id }, "sheet-secret"),
