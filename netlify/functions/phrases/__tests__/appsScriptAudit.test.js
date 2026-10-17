@@ -13,6 +13,17 @@ function loadAppsScript(globals = {}) {
 }
 
 describe("International Phrases Firebase audit", () => {
+  test("omits the unused Edit sheet control from both audit windows", () => {
+    const context = loadAppsScript();
+    for (const html of [
+      context.buildPhrasesAuditHistoryHtml(),
+      context.buildPhraseAuditHtml({ differences: [] }),
+    ]) {
+      expect(html).not.toContain("audit-window-edit");
+      expect(html).not.toContain(">Edit sheet<");
+      expect(html).toContain("audit-window-toggle");
+    }
+  });
   test("opens audit history without blocking spreadsheet editing", () => {
     const output = { setWidth: jest.fn(), setHeight: jest.fn() };
     output.setWidth.mockReturnValue(output);
@@ -571,7 +582,6 @@ describe("International Phrases Firebase audit", () => {
     [
       "audit-window-toggle",
       "audit-window-content",
-      "audit-window-edit",
       "firebase-date",
       "sheet-date",
       "cell-list",
@@ -623,7 +633,6 @@ describe("International Phrases Firebase audit", () => {
     expect(elements["sheet-value"].textContent).toContain(
       "International phrase",
     );
-    elements["audit-window-edit"].onclick();
-    expect(host.editor.focus).toHaveBeenCalledTimes(2);
+    expect(host.editor.focus).toHaveBeenCalledTimes(1);
   });
 });

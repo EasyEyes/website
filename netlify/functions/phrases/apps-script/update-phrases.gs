@@ -232,7 +232,6 @@ function addPhraseAuditWindowControls(html) {
   var controls = `
     <div class="audit-window-controls" role="group" aria-label="Audit window controls">
       <button id="audit-window-toggle" type="button" aria-expanded="true" aria-controls="audit-window-content">Minimize</button>
-      <button id="audit-window-edit" type="button">Edit sheet</button>
     </div>
   `;
   var script = `
@@ -254,9 +253,6 @@ function addPhraseAuditWindowControls(html) {
         google.script.host.setWidth(collapsed ? 340 : expandedWidth);
         google.script.host.setHeight(collapsed ? 100 : expandedHeight);
         if (collapsed) google.script.host.editor.focus();
-      };
-      document.getElementById("audit-window-edit").onclick = function () {
-        google.script.host.editor.focus();
       };
     })();
   `;
