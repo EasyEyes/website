@@ -76,12 +76,40 @@ export function createPhrasesAuditHandler({
       } catch {
         return json({ error: "Invalid JSON" }, 400);
       }
-      if (body?.operation === "list")
-        return json({ runs: await store.listRecent(20) });
-      if (body?.operation !== "get" || !RUN_ID.test(body?.id ?? ""))
+      if (body?.operation === "list") {
+        const runs = await store.listRecent(20);
+        return json({
+          runs,
+          nextCursor: runs.length >= 20 ? runs[19].id : null,
+        });
+      }
+      if (body?.operation === "list-page") {
+        if (!RUN_ID.test(body?.id ?? ""))
+          return json({ error: "Invalid audit cursor" }, 400);
+        if (!(await store.get(body.id)))
+          return json(
+            { error: "Audit cursor no longer exists. Reopen audit history." },
+            400,
+          );
+        const page = await store.listPage(21, body.id);
+        return json({
+          runs: page.slice(0, 20),
+          nextCursor: page.length > 20 ? page[19].id : null,
+        });
+      }
+      if (
+        !["get", "status"].includes(body?.operation) ||
+        !RUN_ID.test(body?.id ?? "")
+      )
         return json({ error: "Invalid review request" }, 400);
       const run = await store.get(body.id);
       if (!run) return json({ error: "Unknown run" }, 404);
+      if (body.operation === "status")
+        return json({
+          id: body.id,
+          status: run.status,
+          error: run.error ?? null,
+        });
       return json(reviewRun({ id: body.id, ...run }));
     }
 

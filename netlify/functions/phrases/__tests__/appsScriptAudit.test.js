@@ -13,6 +13,215 @@ function loadAppsScript(globals = {}) {
 }
 
 describe("International Phrases Firebase audit", () => {
+  test.each(["running", "queued", "failed"])(
+    "shows the saved report while the newest run is %s",
+    (status) => {
+      const html = loadAppsScript().buildPhrasesAuditHistoryHtml();
+      const elements = {};
+      const createElement = () => ({
+        textContent: "",
+        value: "",
+        className: "",
+        children: [],
+        style: {},
+        addEventListener: jest.fn(),
+        appendChild(child) {
+          this.children.push(child);
+        },
+      });
+      const document = {
+        getElementById: (id) =>
+          elements[id] || (elements[id] = createElement()),
+        createElement,
+        createDocumentFragment: createElement,
+      };
+      const getRun = jest.fn();
+      const runner = {
+        withSuccessHandler(callback) {
+          this.success = callback;
+          return this;
+        },
+        withFailureHandler() {
+          return this;
+        },
+        listPhrasesAuditRuns() {
+          this.success({
+            runs: [
+              { id: "new", status },
+              { id: "saved", status: "completed" },
+            ],
+          });
+        },
+        getPhrasesAuditRun(id) {
+          getRun(id);
+          this.success({
+            run: { generatedAt: "2026-10-15" },
+            findings: {
+              missing: [],
+              removed: [],
+              unverified: [],
+              usedCount: 3,
+            },
+          });
+        },
+      };
+      vm.runInNewContext(html.match(/<script>([\s\S]*)<\/script>/)[1], {
+        document,
+        google: { script: { run: runner } },
+        window: { addEventListener: jest.fn() },
+        setTimeout: jest.fn(),
+        clearTimeout: jest.fn(),
+      });
+      expect(getRun).toHaveBeenCalledWith("saved");
+      expect(elements.content.className).toBe("");
+      expect(elements["used-summary"].textContent).toContain("3 keys");
+      expect(elements["run-select"].children[0].textContent).toContain(status);
+      expect(elements["run-select"].children[0].style.color).toBe(
+        status === "failed" ? "#b3261e" : "#137333",
+      );
+    },
+  );
+
+  test.each(["completed", "failed"])(
+    "polls a selectable active run until %s without replacing another report",
+    (terminalStatus) => {
+      const html = loadAppsScript().buildPhrasesAuditHistoryHtml();
+      const elements = {};
+      const createElement = () => ({
+        textContent: "",
+        value: "",
+        className: "",
+        children: [],
+        listeners: {},
+        style: {},
+        addEventListener(event, callback) {
+          this.listeners[event] = callback;
+        },
+        appendChild(child) {
+          this.children.push(child);
+        },
+      });
+      const document = {
+        getElementById: (id) =>
+          elements[id] || (elements[id] = createElement()),
+        createElement,
+        createDocumentFragment: createElement,
+      };
+      const timers = [];
+      const setTimeout = jest.fn((callback) => {
+        timers.push(callback);
+        return timers.length;
+      });
+      const clearTimeout = jest.fn();
+      const events = {};
+      let status = "running";
+      let statusSuccess;
+      let statusFailure;
+      const getRun = jest.fn();
+      const runner = {
+        withSuccessHandler(callback) {
+          this.success = callback;
+          return this;
+        },
+        withFailureHandler(callback) {
+          this.failure = callback;
+          return this;
+        },
+        listPhrasesAuditRuns(cursor) {
+          if (cursor) {
+            expect(cursor).toBe("saved");
+            this.success({
+              runs: [
+                { id: "saved", status: "completed" },
+                { id: "older", status: "completed" },
+              ],
+              nextCursor: null,
+            });
+            return;
+          }
+          this.success({
+            runs: [
+              { id: "new", status },
+              { id: "saved", status: "completed" },
+            ],
+            nextCursor: "saved",
+          });
+        },
+        getPhrasesAuditStatus() {
+          statusSuccess = this.success;
+          statusFailure = this.failure;
+        },
+        getPhrasesAuditRun(id) {
+          getRun(id);
+          const runStatus = id === "saved" ? "completed" : status;
+          this.success({
+            run: {
+              status: runStatus,
+              error: "Audit failed",
+              generatedAt: "2026-10-15",
+            },
+            ...(runStatus === "completed"
+              ? {
+                  findings: {
+                    missing: [],
+                    removed: [],
+                    unverified: [],
+                    usedCount: 3,
+                  },
+                }
+              : {}),
+          });
+        },
+      };
+      vm.runInNewContext(html.match(/<script>([\s\S]*)<\/script>/)[1], {
+        document,
+        google: { script: { run: runner } },
+        setTimeout,
+        clearTimeout,
+        window: {
+          addEventListener: (event, callback) => {
+            events[event] = callback;
+          },
+        },
+      });
+      expect(setTimeout).toHaveBeenLastCalledWith(expect.any(Function), 10000);
+      elements["load-older-audits"].listeners.click();
+      expect(elements["run-select"].children).toHaveLength(3);
+      expect(elements["run-select"].value).toBe("saved");
+      expect(getRun).toHaveBeenCalledTimes(1);
+      expect(elements["load-older-audits"].className).toBe("hidden");
+      timers.shift()();
+      expect(timers).toHaveLength(0);
+      statusFailure(new Error("Offline"));
+      expect(setTimeout).toHaveBeenLastCalledWith(expect.any(Function), 20000);
+      timers.shift()();
+      statusSuccess({ status: "running" });
+      expect(getRun).toHaveBeenCalledTimes(1);
+      expect(elements["run-select"].value).toBe("saved");
+      elements["run-select"].value = "new";
+      elements["run-select"].listeners.change();
+      expect(elements.status.textContent).toBe("This audit is in progress.");
+      expect(elements.content.className).toBe("hidden");
+      expect(elements["run-select"].children[0].disabled).not.toBe(true);
+      timers.shift()();
+      status = terminalStatus;
+      statusSuccess({ status });
+      expect(elements["run-select"].children[0].textContent).toContain(
+        terminalStatus,
+      );
+      expect(elements["run-select"].children[0].style.color).toBe(
+        terminalStatus === "failed" ? "#b3261e" : "",
+      );
+      expect(getRun).toHaveBeenCalledTimes(3);
+      expect(timers).toHaveLength(0);
+      expect(elements.content.className).toBe(
+        terminalStatus === "completed" ? "" : "hidden",
+      );
+      events.pagehide();
+      expect(clearTimeout).toHaveBeenCalled();
+    },
+  );
+
   test("adds the audit command to the EasyEyes menu", () => {
     const menu = {
       addItem: jest.fn(),

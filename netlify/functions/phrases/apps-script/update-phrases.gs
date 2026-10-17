@@ -153,8 +153,12 @@ function fetchPhrasesAuditReview(operation, runId) {
   return JSON.parse(response.getContentText());
 }
 
-function listPhrasesAuditRuns() {
-  return fetchPhrasesAuditReview("list");
+function listPhrasesAuditRuns(cursor) {
+  return cursor ? fetchPhrasesAuditReview("list-page", cursor) : fetchPhrasesAuditReview("list");
+}
+
+function getPhrasesAuditStatus(runId) {
+  return fetchPhrasesAuditReview("status", runId);
 }
 
 function getPhrasesAuditRun(runId) {
@@ -262,6 +266,8 @@ function buildPhrasesAuditHistoryHtml() {
             <div class="control"><label for="key-search">Find a key</label><input id="key-search" type="search" placeholder="EE_…"></div>
           </div>
           <div id="status" role="status" aria-live="polite">Loading audit runs…</div>
+          <button id="load-older-audits" type="button" class="hidden">Load older audits</button>
+          <span id="audit-page-status" role="status" aria-live="polite"></span>
           <div id="content" class="hidden">
             <div id="summary" class="summary" aria-label="Finding counts"></div>
             <div id="mismatch-warning" class="warning hidden"></div>
@@ -286,6 +292,12 @@ function buildPhrasesAuditHistoryHtml() {
         <script>
           var selectedReport = null;
           var activeRunRequest = 0;
+          var auditRuns = [];
+          var pollTimer = null;
+          var closed = false;
+          var pollFailures = 0;
+          var nextAuditCursor = null;
+          var loadingAuditPage = false;
           var statusElement = document.getElementById("status");
           var runSelect = document.getElementById("run-select");
           var keySearch = document.getElementById("key-search");
@@ -426,6 +438,10 @@ function buildPhrasesAuditHistoryHtml() {
                 if (requestNumber !== activeRunRequest) return;
                 selectedReport = result;
                 if (!result.findings) {
+                  if (result.run.status === "queued" || result.run.status === "running") {
+                    setStatus("This audit is in progress.", false);
+                    return;
+                  }
                   setStatus("This run is " + result.run.status + ". " + (result.run.error || "No report is available yet."), false);
                   return;
                 }
@@ -442,20 +458,108 @@ function buildPhrasesAuditHistoryHtml() {
 
           keySearch.addEventListener("input", renderReport);
           runSelect.addEventListener("change", function () { loadRun(runSelect.value); });
+          function isActive(run) {
+            return run.status === "queued" || run.status === "running";
+          }
+
+          function updateOption(run) {
+            run.option.textContent = formatDate(run.requestedAt) + " · " + run.status + " · " + run.id.slice(0, 8);
+            run.option.style.color = run.status === "failed" ? "#b3261e" : isActive(run) ? "#137333" : "";
+          }
+
+          function appendRuns(runs) {
+            runs.forEach(function (run) {
+              if (auditRuns.some(function (existing) { return existing.id === run.id; })) return;
+              run.option = document.createElement("option");
+              run.option.value = run.id;
+              updateOption(run);
+              auditRuns.push(run);
+              runSelect.appendChild(run.option);
+            });
+          }
+
+          function updatePaging(result) {
+            nextAuditCursor = result.nextCursor || null;
+            var button = document.getElementById("load-older-audits");
+            button.className = nextAuditCursor ? "" : "hidden";
+            button.disabled = false;
+          }
+
+          document.getElementById("load-older-audits").addEventListener("click", function () {
+            if (closed || loadingAuditPage || !nextAuditCursor) return;
+            loadingAuditPage = true;
+            document.getElementById("load-older-audits").disabled = true;
+            document.getElementById("audit-page-status").textContent = "Loading older audits…";
+            google.script.run
+              .withSuccessHandler(function (result) {
+                if (closed) return;
+                var selection = runSelect.value;
+                appendRuns(result.runs || []);
+                runSelect.value = selection;
+                updatePaging(result);
+                loadingAuditPage = false;
+                document.getElementById("audit-page-status").textContent = nextAuditCursor ? "" : "All audit runs loaded.";
+              })
+              .withFailureHandler(function (error) {
+                if (closed) return;
+                loadingAuditPage = false;
+                document.getElementById("load-older-audits").disabled = false;
+                document.getElementById("audit-page-status").textContent = "Could not load older audits: " + (error.message || error);
+              })
+              .listPhrasesAuditRuns(nextAuditCursor);
+          });
+
+          function schedulePoll() {
+            if (closed || !auditRuns.some(isActive)) return;
+            pollTimer = setTimeout(pollActiveRuns, Math.min(10000 * Math.pow(2, pollFailures), 60000));
+          }
+
+          function pollActiveRuns() {
+            pollTimer = null;
+            var pending = auditRuns.filter(isActive);
+            function next() {
+              if (closed) return;
+              var run = pending.shift();
+              if (!run) { schedulePoll(); return; }
+              google.script.run
+                .withSuccessHandler(function (result) {
+                  if (closed) return;
+                  pollFailures = 0;
+                  var previousStatus = run.status;
+                  run.status = result.status;
+                  updateOption(run);
+                  if (previousStatus !== run.status && !isActive(run) && runSelect.value === run.id) {
+                    loadRun(run.id);
+                  }
+                  next();
+                })
+                .withFailureHandler(function () {
+                  if (closed) return;
+                  pollFailures++;
+                  schedulePoll();
+                })
+                .getPhrasesAuditStatus(run.id);
+            }
+            next();
+          }
+
+          window.addEventListener("pagehide", function () {
+            closed = true;
+            clearTimeout(pollTimer);
+            activeRunRequest++;
+          });
           google.script.run
             .withSuccessHandler(function (result) {
               var runs = result.runs || [];
+              if (closed) return;
+              updatePaging(result);
               if (!runs.length) { setStatus("No audit runs have been saved yet.", false); return; }
-              runs.forEach(function (run) {
-                var option = document.createElement("option");
-                option.value = run.id;
-                option.textContent = formatDate(run.requestedAt) + " · " + run.status + " · " + run.id.slice(0, 8);
-                runSelect.appendChild(option);
-              });
+              appendRuns(runs.filter(isActive).concat(runs.filter(function (run) { return !isActive(run); })));
               var latestCompleted = runs.find(function (run) { return run.status === "completed"; });
-              runSelect.value = (latestCompleted || runs[0]).id;
+              runSelect.value = (latestCompleted || auditRuns[0]).id;
               runSelect.disabled = false;
               loadRun(runSelect.value);
+              schedulePoll();
             })
             .withFailureHandler(function (error) {
               setStatus("Could not load audit runs: " + (error.message || error), true);

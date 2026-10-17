@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { cert, getApps, initializeApp } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
 import { createPhrasesAuditHandler } from "./handler.mjs";
+import { listReviewRuns } from "./history.mjs";
 
 const collectionName = "internationalPhraseAuditRuns";
 const env = (name: string) => Netlify.env.get(name);
@@ -43,9 +44,10 @@ function firestoreStore() {
       }),
     update: (id: string, data: object) => collection.doc(id).update(data),
     get: async (id: string) => (await collection.doc(id).get()).data() ?? null,
-    listRecent: async (limit: number) => {
+    listPage: async (limit: number, cursor: string) => {
       const snapshot = await collection
         .orderBy("requestedAt", "desc")
+        .startAfter(await collection.doc(cursor).get())
         .limit(limit)
         .select(
           "status",
@@ -57,6 +59,23 @@ function firestoreStore() {
         .get();
       return snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
     },
+    listRecent: async (limit: number) =>
+      listReviewRuns(async (cursor: string | null) => {
+        let query = collection
+          .orderBy("requestedAt", "desc")
+          .limit(limit)
+          .select(
+            "status",
+            "requestedAt",
+            "completedAt",
+            "reportGeneratedAt",
+            "error",
+          );
+        if (cursor)
+          query = query.startAfter(await collection.doc(cursor).get());
+        const snapshot = await query.get();
+        return snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+      }, limit),
     getHistoryState: async () => (await historyState.get()).data() ?? null,
     saveHistoryState: (state: object, baseRevision: string | null) =>
       getFirestore(app).runTransaction(async (transaction) => {
