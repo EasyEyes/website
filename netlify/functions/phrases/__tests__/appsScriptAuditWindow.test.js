@@ -8,6 +8,8 @@ function harness(kind) {
   let failReopen = false;
   let status = "running";
   const opened = [];
+  const reportReads = [];
+  let deferReports = false;
   const context = vm.createContext({ console });
   vm.runInContext(
     fs.readFileSync(
@@ -50,6 +52,8 @@ function harness(kind) {
             });
           },
           getPhrasesAuditRun(id) {
+            reportReads.push(id);
+            if (deferReports) return;
             this.success(
               id === "active"
                 ? report()
@@ -126,6 +130,10 @@ function harness(kind) {
       return current;
     },
     opened,
+    reportReads,
+    deferReports(value) {
+      deferReports = value;
+    },
     setStatus(v) {
       status = v;
     },
@@ -200,6 +208,60 @@ test("recreates comparison with the same selected cell and snapshot; failure lea
     expect(
       h.current.document.getElementById("firebase-value").textContent,
     ).toBe("Saved");
+  } finally {
+    h.current.dom.window.close();
+  }
+});
+
+test("restores the loaded completed report without another report read", () => {
+  const h = harness("history");
+  try {
+    expect(h.reportReads).toEqual(["saved"]);
+    h.toggle();
+    h.setStatus("completed");
+    h.current.timers.shift()();
+    h.toggle();
+    expect(h.reportReads).toEqual(["saved"]);
+    expect(h.current.document.getElementById("run-select").value).toBe("saved");
+    expect(
+      h.current.document.getElementById("used-summary").textContent,
+    ).toContain("3 keys");
+    h.toggle();
+    h.toggle();
+    expect(h.reportReads).toEqual(["saved"]);
+  } finally {
+    h.current.dom.window.close();
+  }
+});
+
+test("does not restore the previous report under a newly selected run that is still loading", () => {
+  const h = harness("history");
+  try {
+    h.deferReports(true);
+    const select = h.current.document.getElementById("run-select");
+    select.value = "active";
+    select.dispatchEvent(new h.current.dom.window.Event("change"));
+    h.toggle();
+    h.deferReports(false);
+    h.toggle();
+    expect(h.current.document.getElementById("run-select").value).toBe(
+      "active",
+    );
+    expect(h.current.document.getElementById("content").className).toBe(
+      "hidden",
+    );
+    expect(h.current.document.getElementById("status").textContent).toContain(
+      "in progress",
+    );
+    h.setStatus("completed");
+    h.current.timers.shift()();
+    const readsAfterCompletion = h.reportReads.length;
+    h.toggle();
+    h.toggle();
+    expect(h.reportReads).toHaveLength(readsAfterCompletion);
+    expect(
+      h.current.document.getElementById("used-summary").textContent,
+    ).toContain("7 keys");
   } finally {
     h.current.dom.window.close();
   }

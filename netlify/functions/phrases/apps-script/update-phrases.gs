@@ -219,7 +219,7 @@ function showPhrasesAuditHistory() {
   );
 }
 
-// Experimental: recreate the host dialog so Google receives its new initial size.
+// Recreate the host dialog so Google receives its new initial size.
 function reopenPhraseAuditWindow(state) {
   if (!state || (state.kind !== "history" && state.kind !== "comparison")) {
     throw new Error("Invalid audit window state.");
@@ -285,6 +285,7 @@ function addPhraseAuditWindowControls(html, state) {
         state.width = phraseAuditWindowState.collapsed ? phraseAuditWindowState.width : (window.innerWidth || 1000);
         state.height = phraseAuditWindowState.collapsed ? phraseAuditWindowState.height : (window.innerHeight || 700);
         toggle.disabled = true;
+        toggle.textContent = state.collapsed ? "Minimizing…" : "Restoring…";
         content.inert = true;
         document.getElementById("audit-window-error").textContent = "";
         google.script.run
@@ -293,6 +294,7 @@ function addPhraseAuditWindowControls(html, state) {
           })
           .withFailureHandler(function (error) {
             toggle.disabled = false;
+            toggle.textContent = phraseAuditWindowState.collapsed ? "Restore report" : "Minimize";
             content.inert = false;
             document.getElementById("audit-window-error").textContent =
               "Could not reopen the report: " + (error.message || error);
@@ -410,10 +412,13 @@ function buildPhrasesAuditHistoryHtml(windowState) {
                 return copy;
               }),
               selectedRun: runSelect.value,
+              // Carry only this window's loaded result; do not refetch it on restore.
+              cachedReport: selectedReport && selectedReport.findings
+                ? { runId: runSelect.value, report: selectedReport } : null,
               search: keySearch.value,
               nextCursor: nextAuditCursor,
               scrollTop: phraseAuditWindowState.collapsed ? phraseAuditWindowState.scrollTop : document.getElementById("audit-window-content").scrollTop,
-              openFindings: Array.from(document.querySelectorAll("details")).map(function (item, index) { return item.open ? index : -1; }).filter(function (index) { return index >= 0; }),
+              openFindings: phraseAuditWindowState.collapsed ? (phraseAuditWindowState.openFindings || []) : Array.from(document.querySelectorAll("details")).map(function (item, index) { return item.open ? index : -1; }).filter(function (index) { return index >= 0; }),
             };
           };
 
@@ -516,6 +521,7 @@ function buildPhrasesAuditHistoryHtml(windowState) {
           }
 
           function renderReport() {
+            if (phraseAuditWindowState.collapsed) return;
             if (!selectedReport || !selectedReport.findings) return;
             var findings = selectedReport.findings;
             var search = keySearch.value.trim().toLowerCase();
@@ -553,25 +559,31 @@ function buildPhrasesAuditHistoryHtml(windowState) {
 
           }
 
+          function showLoadedReport(result) {
+            selectedReport = result;
+            if (!result.findings) {
+              if (result.run.status === "queued" || result.run.status === "running") {
+                setStatus("This audit is in progress.", false);
+                return;
+              }
+              setStatus("This run is " + result.run.status + ". " + (result.run.error || "No report is available yet."), false);
+              return;
+            }
+            setStatus("Report generated " + formatDate(result.run.generatedAt), false);
+            document.getElementById("content").className = "";
+            renderReport();
+          }
+
           function loadRun(runId) {
             var requestNumber = ++activeRunRequest;
+            // A pending selection must not carry the previous run's report.
+            selectedReport = null;
             document.getElementById("content").className = "hidden";
             setStatus("Loading selected audit report…", false);
             google.script.run
               .withSuccessHandler(function (result) {
                 if (requestNumber !== activeRunRequest) return;
-                selectedReport = result;
-                if (!result.findings) {
-                  if (result.run.status === "queued" || result.run.status === "running") {
-                    setStatus("This audit is in progress.", false);
-                    return;
-                  }
-                  setStatus("This run is " + result.run.status + ". " + (result.run.error || "No report is available yet."), false);
-                  return;
-                }
-                setStatus("Report generated " + formatDate(result.run.generatedAt), false);
-                document.getElementById("content").className = "";
-                renderReport();
+                showLoadedReport(result);
               })
               .withFailureHandler(function (error) {
                 if (requestNumber !== activeRunRequest) return;
@@ -677,7 +689,12 @@ function buildPhrasesAuditHistoryHtml(windowState) {
             updatePaging({ nextCursor: phraseAuditWindowState.nextCursor });
             runSelect.value = phraseAuditWindowState.selectedRun || auditRuns[0].id;
             runSelect.disabled = false;
-            loadRun(runSelect.value);
+            var cached = phraseAuditWindowState.cachedReport;
+            if (cached && cached.runId === runSelect.value && cached.report && cached.report.findings) {
+              showLoadedReport(cached.report);
+            } else {
+              loadRun(runSelect.value);
+            }
             schedulePoll();
           } else google.script.run
             .withSuccessHandler(function (result) {
