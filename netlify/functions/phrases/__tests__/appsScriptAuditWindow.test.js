@@ -1,0 +1,206 @@
+const fs = require("fs");
+const path = require("path");
+const vm = require("vm");
+const { JSDOM } = require("jsdom");
+
+function harness(kind) {
+  let current;
+  let failReopen = false;
+  let status = "running";
+  const opened = [];
+  const context = vm.createContext({ console });
+  vm.runInContext(
+    fs.readFileSync(
+      path.resolve(__dirname, "../apps-script/update-phrases.gs"),
+      "utf8",
+    ),
+    context,
+  );
+  const report = () => ({
+    run: { status, generatedAt: "2026-10-17" },
+    ...(status === "completed"
+      ? { findings: { missing: [], removed: [], unverified: [], usedCount: 7 } }
+      : {}),
+  });
+  function mount(html) {
+    const timers = [];
+    const dom = new JSDOM(html, {
+      runScripts: "dangerously",
+      beforeParse(window) {
+        window.setTimeout = (f) => {
+          timers.push(f);
+          return timers.length;
+        };
+        window.clearTimeout = () => {};
+        const runner = {
+          withSuccessHandler(f) {
+            this.success = f;
+            return this;
+          },
+          withFailureHandler(f) {
+            this.failure = f;
+            return this;
+          },
+          listPhrasesAuditRuns() {
+            this.success({
+              runs: [
+                { id: "active", status },
+                { id: "saved", status: "completed" },
+              ],
+            });
+          },
+          getPhrasesAuditRun(id) {
+            this.success(
+              id === "active"
+                ? report()
+                : {
+                    run: { status: "completed" },
+                    findings: {
+                      missing: [],
+                      removed: [],
+                      unverified: [],
+                      usedCount: 3,
+                    },
+                  },
+            );
+          },
+          getPhrasesAuditStatus() {
+            this.success({ status });
+          },
+          reopenPhraseAuditWindow(state) {
+            if (failReopen) {
+              this.failure(new Error("Offline"));
+              return;
+            }
+            context.reopenPhraseAuditWindow(JSON.parse(JSON.stringify(state)));
+          },
+        };
+        window.google = { script: { run: runner } };
+      },
+    });
+    current = { dom, timers, document: dom.window.document };
+  }
+  context.HtmlService = {
+    createHtmlOutput(html) {
+      return {
+        html,
+        setWidth(w) {
+          this.width = w;
+          return this;
+        },
+        setHeight(h) {
+          this.height = h;
+          return this;
+        },
+      };
+    },
+  };
+  context.SpreadsheetApp = {
+    getUi: () => ({
+      showModelessDialog(output) {
+        const previous = current;
+        opened.push({ width: output.width, height: output.height });
+        mount(output.html);
+        if (previous) previous.dom.window.close();
+      },
+    }),
+  };
+  const audit = {
+    differences: [
+      {
+        coordinate: "C5",
+        sheetValue: "Sheet </script> $& text",
+        firebaseValue: "Saved",
+      },
+    ],
+    sheetUrl: "https://example.com",
+    sheetId: 1,
+  };
+  mount(
+    kind === "history"
+      ? context.buildPhrasesAuditHistoryHtml()
+      : context.buildPhraseAuditHtml(audit),
+  );
+  return {
+    get current() {
+      return current;
+    },
+    opened,
+    setStatus(v) {
+      status = v;
+    },
+    fail(v) {
+      failReopen = v;
+    },
+    toggle() {
+      current.document.getElementById("audit-window-toggle").click();
+    },
+  };
+}
+
+test.each(["completed", "failed"])(
+  "recreates history, preserves selection/search, and observes %s while minimized",
+  (terminal) => {
+    const h = harness("history");
+    try {
+      const select = h.current.document.getElementById("run-select");
+      select.value = "active";
+      select.dispatchEvent(new h.current.dom.window.Event("change"));
+      h.current.document.getElementById("key-search").value = "EE_example";
+      h.toggle();
+      expect(h.opened[0]).toEqual({ width: 340, height: 100 });
+      expect(
+        h.current.document.getElementById("audit-window-content").hidden,
+      ).toBe(true);
+      h.setStatus(terminal);
+      h.current.timers.shift()();
+      h.toggle();
+      expect(h.opened[1].width).toBeGreaterThan(340);
+      expect(h.current.document.getElementById("run-select").value).toBe(
+        "active",
+      );
+      expect(h.current.document.getElementById("key-search").value).toBe(
+        "EE_example",
+      );
+      expect(
+        h.current.document.getElementById("audit-window-content").hidden,
+      ).toBe(false);
+      expect(h.current.document.getElementById("status").textContent).toContain(
+        terminal === "completed" ? "Report generated" : "failed",
+      );
+    } finally {
+      h.current.dom.window.close();
+    }
+  },
+);
+
+test("recreates comparison with the same selected cell and snapshot; failure leaves the original usable", () => {
+  const h = harness("comparison");
+  try {
+    h.current.document.querySelector(".cell-button").click();
+    h.fail(true);
+    h.toggle();
+    expect(h.opened).toHaveLength(0);
+    expect(
+      h.current.document.getElementById("audit-window-toggle").disabled,
+    ).toBe(false);
+    expect(
+      h.current.document.getElementById("audit-window-error").textContent,
+    ).toContain("Offline");
+    h.fail(false);
+    h.toggle();
+    expect(h.opened[0]).toEqual({ width: 340, height: 100 });
+    h.toggle();
+    expect(h.current.document.getElementById("detail").style.display).toBe(
+      "grid",
+    );
+    expect(h.current.document.getElementById("sheet-value").textContent).toBe(
+      "Sheet </script> $& text",
+    );
+    expect(
+      h.current.document.getElementById("firebase-value").textContent,
+    ).toBe("Saved");
+  } finally {
+    h.current.dom.window.close();
+  }
+});

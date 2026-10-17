@@ -219,52 +219,105 @@ function showPhrasesAuditHistory() {
   );
 }
 
-// Keep the report DOM mounted while collapsed so selection and polling survive.
-function addPhraseAuditWindowControls(html) {
+// Experimental: recreate the host dialog so Google receives its new initial size.
+function reopenPhraseAuditWindow(state) {
+  if (!state || (state.kind !== "history" && state.kind !== "comparison")) {
+    throw new Error("Invalid audit window state.");
+  }
+  if (
+    state.kind === "comparison" &&
+    (!state.audit || !Array.isArray(state.audit.differences))
+  ) {
+    throw new Error("The comparison snapshot is missing.");
+  }
+  var width = state.collapsed
+    ? 340
+    : Math.max(340, Math.min(1600, Number(state.width) || 1000));
+  var height = state.collapsed
+    ? 100
+    : Math.max(200, Math.min(1200, Number(state.height) || 700));
+  var html =
+    state.kind === "history"
+      ? buildPhrasesAuditHistoryHtml(state)
+      : buildPhraseAuditHtml(state.audit, state);
+  SpreadsheetApp.getUi().showModelessDialog(
+    HtmlService.createHtmlOutput(html).setWidth(width).setHeight(height),
+    state.kind === "history"
+      ? "International Phrases audit history"
+      : "International Phrases audit",
+  );
+}
+
+function addPhraseAuditWindowControls(html, state) {
+  var savedState = JSON.stringify(state || {}).replace(
+    /[<>&\u2028\u2029]/g,
+    function (character) {
+      return "\\u" + character.charCodeAt(0).toString(16).padStart(4, "0");
+    },
+  );
+  var collapsed = !!(state && state.collapsed);
   var styles = `
     body { display: grid; grid-template-rows: auto minmax(0, 1fr); overflow: hidden; }
     .audit-window-controls { display: flex; gap: 8px; padding: 8px 12px; border-bottom: 1px solid #dadce0; background: #f8f9fa; }
     .audit-window-controls button { padding: 6px 10px; border: 1px solid #dadce0; border-radius: 4px; background: white; color: #1967d2; font: inherit; cursor: pointer; }
     .audit-window-controls button:focus-visible { outline: 3px solid #8ab4f8; outline-offset: 2px; }
+    #audit-window-error { color: #b3261e; overflow: auto; }
     #audit-window-content { min-height: 0; }
     #audit-window-content[hidden] { display: none; }
   `;
   var controls = `
     <div class="audit-window-controls" role="group" aria-label="Audit window controls">
-      <button id="audit-window-toggle" type="button" aria-expanded="true" aria-controls="audit-window-content">Minimize</button>
+      <button id="audit-window-toggle" type="button" aria-expanded="${!collapsed}" aria-controls="audit-window-content">${
+        collapsed ? "Restore report" : "Minimize"
+      }</button>
+      <span id="audit-window-error" role="alert"></span>
     </div>
   `;
   var script = `
+    var phraseAuditWindowState = ${savedState};
     (function () {
       var toggle = document.getElementById("audit-window-toggle");
       var content = document.getElementById("audit-window-content");
-      var collapsed = false;
-      var expandedWidth = 1000;
-      var expandedHeight = 700;
       toggle.onclick = function () {
-        if (!collapsed) {
-          expandedWidth = window.innerWidth || 1000;
-          expandedHeight = window.innerHeight || 700;
-        }
-        collapsed = !collapsed;
-        content.hidden = collapsed;
-        toggle.textContent = collapsed ? "Restore report" : "Minimize";
-        toggle.setAttribute("aria-expanded", String(!collapsed));
-        google.script.host.setWidth(collapsed ? 340 : expandedWidth);
-        google.script.host.setHeight(collapsed ? 100 : expandedHeight);
-        if (collapsed) google.script.host.editor.focus();
+        if (toggle.disabled) return;
+        var state = window.capturePhraseAuditWindowState();
+        state.collapsed = !phraseAuditWindowState.collapsed;
+        state.width = phraseAuditWindowState.collapsed ? phraseAuditWindowState.width : (window.innerWidth || 1000);
+        state.height = phraseAuditWindowState.collapsed ? phraseAuditWindowState.height : (window.innerHeight || 700);
+        toggle.disabled = true;
+        content.inert = true;
+        document.getElementById("audit-window-error").textContent = "";
+        google.script.run
+          .withSuccessHandler(function () {
+            // The host replaces the old dialog. Do not close the replacement.
+          })
+          .withFailureHandler(function (error) {
+            toggle.disabled = false;
+            content.inert = false;
+            document.getElementById("audit-window-error").textContent =
+              "Could not reopen the report: " + (error.message || error);
+          })
+          .reopenPhraseAuditWindow(state);
       };
     })();
   `;
   return html
     .replace("</style>", styles + "</style>")
     .replace("<body>", "<body>" + controls)
-    .replace("<main class=", '<main id="audit-window-content" class=')
-    .replace("<script>", "<script>" + script);
+    .replace(
+      "<main class=",
+      '<main id="audit-window-content"' +
+        (collapsed ? " hidden" : "") +
+        " class=",
+    )
+    .replace("<script>", function () {
+      return "<script>" + script;
+    });
 }
 
-function buildPhrasesAuditHistoryHtml() {
-  return addPhraseAuditWindowControls(`
+function buildPhrasesAuditHistoryHtml(windowState) {
+  return addPhraseAuditWindowControls(
+    `
     <!doctype html>
     <html>
       <head>
@@ -347,6 +400,23 @@ function buildPhrasesAuditHistoryHtml() {
           var statusElement = document.getElementById("status");
           var runSelect = document.getElementById("run-select");
           var keySearch = document.getElementById("key-search");
+          keySearch.value = phraseAuditWindowState.search || "";
+          window.capturePhraseAuditWindowState = function () {
+            return {
+              kind: "history",
+              runs: auditRuns.map(function (run) {
+                var copy = {};
+                Object.keys(run).forEach(function (key) { if (key !== "option") copy[key] = run[key]; });
+                return copy;
+              }),
+              selectedRun: runSelect.value,
+              search: keySearch.value,
+              nextCursor: nextAuditCursor,
+              scrollTop: phraseAuditWindowState.collapsed ? phraseAuditWindowState.scrollTop : document.getElementById("audit-window-content").scrollTop,
+              openFindings: Array.from(document.querySelectorAll("details")).map(function (item, index) { return item.open ? index : -1; }).filter(function (index) { return index >= 0; }),
+            };
+          };
+
 
           function setStatus(message, error) {
             statusElement.textContent = message;
@@ -473,6 +543,14 @@ function buildPhrasesAuditHistoryHtml() {
             var warning = document.getElementById("mismatch-warning");
             warning.textContent = mismatchCount + " cross-scan differences need review before acting on findings.";
             warning.className = mismatchCount ? "warning" : "warning hidden";
+            if (phraseAuditWindowState.selectedRun === runSelect.value) {
+              (phraseAuditWindowState.openFindings || []).forEach(function (index) {
+                var item = document.querySelectorAll("details")[index];
+                if (item) item.open = true;
+              });
+              document.getElementById("audit-window-content").scrollTop = phraseAuditWindowState.scrollTop || 0;
+            }
+
           }
 
           function loadRun(runId) {
@@ -594,7 +672,14 @@ function buildPhrasesAuditHistoryHtml() {
             clearTimeout(pollTimer);
             activeRunRequest++;
           });
-          google.script.run
+          if (phraseAuditWindowState.runs && phraseAuditWindowState.runs.length) {
+            appendRuns(phraseAuditWindowState.runs);
+            updatePaging({ nextCursor: phraseAuditWindowState.nextCursor });
+            runSelect.value = phraseAuditWindowState.selectedRun || auditRuns[0].id;
+            runSelect.disabled = false;
+            loadRun(runSelect.value);
+            schedulePoll();
+          } else google.script.run
             .withSuccessHandler(function (result) {
               var runs = result.runs || [];
               if (closed) return;
@@ -614,7 +699,9 @@ function buildPhrasesAuditHistoryHtml() {
         </script>
       </body>
     </html>
-  `);
+  `,
+    windowState,
+  );
 }
 
 function notify(message, type, options) {
@@ -870,7 +957,7 @@ function compareLatestEasyEyesCopy() {
   }
 }
 
-function buildPhraseAuditHtml(audit) {
+function buildPhraseAuditHtml(audit, windowState) {
   var safeAuditJson = JSON.stringify(audit)
     .replace(/</g, "\\u003c")
     .replace(/>/g, "\\u003e")
@@ -1057,7 +1144,12 @@ function buildPhraseAuditHtml(audit) {
             list.appendChild(fragment);
           }
 
+          var selectedCellIndex = null;
+          window.capturePhraseAuditWindowState = function () {
+            return { kind: "comparison", audit: audit, selectedCellIndex: selectedCellIndex };
+          };
           function showDetail(index) {
+            selectedCellIndex = index;
             var difference = audit.differences[index];
             var sheetCellLink = document.getElementById("sheet-cell-link");
             sheetCellLink.textContent = difference.coordinate;
@@ -1068,16 +1160,21 @@ function buildPhraseAuditHtml(audit) {
             document.getElementById("firebase-value").textContent = difference.firebaseValue;
             document.getElementById("summary").style.display = "none";
             document.getElementById("detail").style.display = "grid";
-            document.getElementById("back").focus();
+            if (!phraseAuditWindowState.collapsed) document.getElementById("back").focus();
+          }
+          if (Number.isInteger(phraseAuditWindowState.selectedCellIndex) && audit.differences[phraseAuditWindowState.selectedCellIndex]) {
+            showDetail(phraseAuditWindowState.selectedCellIndex);
           }
 
           document.getElementById("back").addEventListener("click", function () {
+            selectedCellIndex = null;
             document.getElementById("detail").style.display = "none";
             document.getElementById("summary").style.display = "grid";
           });
         </script>
       </body>
     </html>`,
+    windowState,
   );
 }
 
