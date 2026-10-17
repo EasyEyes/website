@@ -154,7 +154,9 @@ function fetchPhrasesAuditReview(operation, runId) {
 }
 
 function listPhrasesAuditRuns(cursor) {
-  return cursor ? fetchPhrasesAuditReview("list-page", cursor) : fetchPhrasesAuditReview("list");
+  return cursor
+    ? fetchPhrasesAuditReview("list-page", cursor)
+    : fetchPhrasesAuditReview("list");
 }
 
 function getPhrasesAuditStatus(runId) {
@@ -209,7 +211,7 @@ function getPhrasesAuditRun(runId) {
 }
 
 function showPhrasesAuditHistory() {
-  SpreadsheetApp.getUi().showModalDialog(
+  SpreadsheetApp.getUi().showModelessDialog(
     HtmlService.createHtmlOutput(buildPhrasesAuditHistoryHtml())
       .setWidth(1000)
       .setHeight(700),
@@ -217,8 +219,56 @@ function showPhrasesAuditHistory() {
   );
 }
 
+// Keep the report DOM mounted while collapsed so selection and polling survive.
+function addPhraseAuditWindowControls(html) {
+  var styles = `
+    body { display: grid; grid-template-rows: auto minmax(0, 1fr); overflow: hidden; }
+    .audit-window-controls { display: flex; gap: 8px; padding: 8px 12px; border-bottom: 1px solid #dadce0; background: #f8f9fa; }
+    .audit-window-controls button { padding: 6px 10px; border: 1px solid #dadce0; border-radius: 4px; background: white; color: #1967d2; font: inherit; cursor: pointer; }
+    .audit-window-controls button:focus-visible { outline: 3px solid #8ab4f8; outline-offset: 2px; }
+    #audit-window-content { min-height: 0; }
+    #audit-window-content[hidden] { display: none; }
+  `;
+  var controls = `
+    <div class="audit-window-controls" role="group" aria-label="Audit window controls">
+      <button id="audit-window-toggle" type="button" aria-expanded="true" aria-controls="audit-window-content">Minimize</button>
+      <button id="audit-window-edit" type="button">Edit sheet</button>
+    </div>
+  `;
+  var script = `
+    (function () {
+      var toggle = document.getElementById("audit-window-toggle");
+      var content = document.getElementById("audit-window-content");
+      var collapsed = false;
+      var expandedWidth = 1000;
+      var expandedHeight = 700;
+      toggle.onclick = function () {
+        if (!collapsed) {
+          expandedWidth = window.innerWidth || 1000;
+          expandedHeight = window.innerHeight || 700;
+        }
+        collapsed = !collapsed;
+        content.hidden = collapsed;
+        toggle.textContent = collapsed ? "Restore report" : "Minimize";
+        toggle.setAttribute("aria-expanded", String(!collapsed));
+        google.script.host.setWidth(collapsed ? 340 : expandedWidth);
+        google.script.host.setHeight(collapsed ? 100 : expandedHeight);
+        if (collapsed) google.script.host.editor.focus();
+      };
+      document.getElementById("audit-window-edit").onclick = function () {
+        google.script.host.editor.focus();
+      };
+    })();
+  `;
+  return html
+    .replace("</style>", styles + "</style>")
+    .replace("<body>", "<body>" + controls)
+    .replace("<main class=", '<main id="audit-window-content" class=')
+    .replace("<script>", "<script>" + script);
+}
+
 function buildPhrasesAuditHistoryHtml() {
-  return `
+  return addPhraseAuditWindowControls(`
     <!doctype html>
     <html>
       <head>
@@ -568,7 +618,7 @@ function buildPhrasesAuditHistoryHtml() {
         </script>
       </body>
     </html>
-  `;
+  `);
 }
 
 function notify(message, type, options) {
@@ -811,7 +861,7 @@ function compareLatestEasyEyesCopy() {
       differences: differences,
     });
 
-    SpreadsheetApp.getUi().showModalDialog(
+    SpreadsheetApp.getUi().showModelessDialog(
       HtmlService.createHtmlOutput(html).setWidth(1000).setHeight(700),
       "International Phrases audit",
     );
@@ -833,7 +883,7 @@ function buildPhraseAuditHtml(audit) {
     .replace(/\u2029/g, "\\u2029");
   var differenceCount = audit.differences.length;
 
-  return (
+  return addPhraseAuditWindowControls(
     `
     <!doctype html>
     <html>
@@ -948,8 +998,8 @@ function buildPhraseAuditHtml(audit) {
           <section class="view">
             <div class="summary" id="summary">
               <h1>Differing cells: ` +
-    differenceCount +
-    `</h1>
+      differenceCount +
+      `</h1>
               <div class="cell-list" id="cell-list"></div>
             </div>
             <div class="detail" id="detail">
@@ -971,8 +1021,8 @@ function buildPhraseAuditHtml(audit) {
         </main>
         <script>
           var audit = ` +
-    safeAuditJson +
-    `;
+      safeAuditJson +
+      `;
 
           function formatLocalDate(iso) {
             if (!iso) return "Unavailable";
@@ -1031,7 +1081,7 @@ function buildPhraseAuditHtml(audit) {
           });
         </script>
       </body>
-    </html>`
+    </html>`,
   );
 }
 

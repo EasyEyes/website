@@ -13,6 +13,22 @@ function loadAppsScript(globals = {}) {
 }
 
 describe("International Phrases Firebase audit", () => {
+  test("opens audit history without blocking spreadsheet editing", () => {
+    const output = { setWidth: jest.fn(), setHeight: jest.fn() };
+    output.setWidth.mockReturnValue(output);
+    output.setHeight.mockReturnValue(output);
+    const showModelessDialog = jest.fn();
+    const context = loadAppsScript({
+      SpreadsheetApp: { getUi: () => ({ showModelessDialog }) },
+      HtmlService: { createHtmlOutput: () => output },
+    });
+    context.showPhrasesAuditHistory();
+    expect(showModelessDialog).toHaveBeenCalledWith(
+      output,
+      "International Phrases audit history",
+    );
+  });
+
   test.each(["running", "queued", "failed"])(
     "shows the saved report while the newest run is %s",
     (status) => {
@@ -94,6 +110,7 @@ describe("International Phrases Firebase audit", () => {
         children: [],
         listeners: {},
         style: {},
+        setAttribute: jest.fn(),
         addEventListener(event, callback) {
           this.listeners[event] = callback;
         },
@@ -113,6 +130,11 @@ describe("International Phrases Firebase audit", () => {
         return timers.length;
       });
       const clearTimeout = jest.fn();
+      const host = {
+        setWidth: jest.fn(),
+        setHeight: jest.fn(),
+        editor: { focus: jest.fn() },
+      };
       const events = {};
       let status = "running";
       let statusSuccess;
@@ -175,7 +197,7 @@ describe("International Phrases Firebase audit", () => {
       };
       vm.runInNewContext(html.match(/<script>([\s\S]*)<\/script>/)[1], {
         document,
-        google: { script: { run: runner } },
+        google: { script: { run: runner, host } },
         setTimeout,
         clearTimeout,
         window: {
@@ -190,6 +212,10 @@ describe("International Phrases Firebase audit", () => {
       expect(elements["run-select"].value).toBe("saved");
       expect(getRun).toHaveBeenCalledTimes(1);
       expect(elements["load-older-audits"].className).toBe("hidden");
+      elements["audit-window-toggle"].onclick();
+      expect(elements["audit-window-content"].hidden).toBe(true);
+      expect(host.setHeight).toHaveBeenLastCalledWith(100);
+      expect(host.editor.focus).toHaveBeenCalledTimes(1);
       timers.shift()();
       expect(timers).toHaveLength(0);
       statusFailure(new Error("Offline"));
@@ -217,6 +243,13 @@ describe("International Phrases Firebase audit", () => {
       expect(elements.content.className).toBe(
         terminalStatus === "completed" ? "" : "hidden",
       );
+      elements["audit-window-toggle"].onclick();
+      expect(elements["audit-window-content"].hidden).toBe(false);
+      expect(elements["run-select"].value).toBe("new");
+      expect(host.setHeight).toHaveBeenLastCalledWith(700);
+      expect(
+        elements["audit-window-toggle"].setAttribute,
+      ).toHaveBeenLastCalledWith("aria-expanded", "true");
       events.pagehide();
       expect(clearTimeout).toHaveBeenCalled();
     },
@@ -536,6 +569,9 @@ describe("International Phrases Firebase audit", () => {
 
     const elements = {};
     [
+      "audit-window-toggle",
+      "audit-window-content",
+      "audit-window-edit",
       "firebase-date",
       "sheet-date",
       "cell-list",
@@ -555,7 +591,16 @@ describe("International Phrases Firebase audit", () => {
       getElementById: (id) => elements[id],
     };
 
-    vm.runInNewContext(inlineScript, { document });
+    const host = {
+      setWidth: jest.fn(),
+      setHeight: jest.fn(),
+      editor: { focus: jest.fn() },
+    };
+    vm.runInNewContext(inlineScript, {
+      document,
+      window: { innerWidth: 900, innerHeight: 600 },
+      google: { script: { host } },
+    });
     const firstCellButton = elements["cell-list"].children[0].children[0];
     firstCellButton.listeners.click();
 
@@ -568,5 +613,17 @@ describe("International Phrases Firebase audit", () => {
     );
     expect(elements["firebase-coordinate"].textContent).toBe("AA123");
     expect(elements["firebase-value"].textContent).toBe("Firebase phrase");
+    elements["audit-window-toggle"].onclick();
+    expect(elements["audit-window-content"].hidden).toBe(true);
+    elements["audit-window-toggle"].onclick();
+    expect(elements["audit-window-content"].hidden).toBe(false);
+    expect(host.setWidth).toHaveBeenLastCalledWith(900);
+    expect(host.setHeight).toHaveBeenLastCalledWith(600);
+    expect(elements.detail.style.display).toBe("grid");
+    expect(elements["sheet-value"].textContent).toContain(
+      "International phrase",
+    );
+    elements["audit-window-edit"].onclick();
+    expect(host.editor.focus).toHaveBeenCalledTimes(2);
   });
 });
