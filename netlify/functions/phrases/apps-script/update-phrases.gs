@@ -299,7 +299,7 @@ function addPhraseAuditWindowControls(html, state, allowExport) {
   var controls = `
     <div class="audit-window-controls" role="group" aria-label="Audit window controls">
       <button id="audit-window-toggle" type="button" aria-expanded="${!collapsed}" aria-controls="audit-window-content">${
-        collapsed ? "Restore report" : "Minimize"
+        collapsed ? "Re-expand" : "Minimize"
       }</button>
       ${
         allowExport
@@ -323,7 +323,7 @@ function addPhraseAuditWindowControls(html, state, allowExport) {
         state.width = phraseAuditWindowState.collapsed ? phraseAuditWindowState.width : (window.innerWidth || 1000);
         state.height = phraseAuditWindowState.collapsed ? phraseAuditWindowState.height : (window.innerHeight || 700);
         toggle.disabled = true;
-        toggle.textContent = state.collapsed ? "Minimizing…" : "Restoring…";
+        toggle.textContent = state.collapsed ? "Minimizing…" : "Re-expanding…";
         content.inert = true;
         document.getElementById("audit-window-error").textContent = "";
         google.script.run
@@ -332,7 +332,7 @@ function addPhraseAuditWindowControls(html, state, allowExport) {
           })
           .withFailureHandler(function (error) {
             toggle.disabled = false;
-            toggle.textContent = phraseAuditWindowState.collapsed ? "Restore report" : "Minimize";
+            toggle.textContent = phraseAuditWindowState.collapsed ? "Re-expand" : "Minimize";
             content.inert = false;
             document.getElementById("audit-window-error").textContent =
               "Could not reopen the report: " + (error.message || error);
