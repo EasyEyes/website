@@ -614,3 +614,49 @@ describe("International Phrases Firebase audit", () => {
     expect(elements["firebase-value"].textContent).toBe("Firebase phrase");
   });
 });
+
+describe("selecting an audit phrase in the live sheet", () => {
+  function setup(keys) {
+    let selected;
+    const sheet = {
+      getLastColumn: () => 2,
+      getLastRow: () => keys.length + 1,
+      getRange(row, column, count) {
+        if (row === 1)
+          return { getDisplayValues: () => [["en", "EE_LanguageCode"]] };
+        if (count) return { getDisplayValues: () => keys.map((key) => [key]) };
+        return {
+          activate: () => {
+            selected = [row, column];
+          },
+        };
+      },
+    };
+    const spreadsheet = {
+      getSheetByName: () => sheet,
+      setActiveSheet: jest.fn(),
+    };
+    const context = loadAppsScript({
+      SpreadsheetApp: { getActiveSpreadsheet: () => spreadsheet },
+    });
+    return { context, spreadsheet, selected: () => selected };
+  }
+  test("resolves the current row after a phrase moves", () => {
+    const keys = ["EE_target", "EE_other"];
+    const h = setup(keys);
+    h.context.focusPhraseInSheet("EE_target");
+    expect(h.selected()).toEqual([2, 2]);
+    keys.reverse();
+    h.context.focusPhraseInSheet("EE_target");
+    expect(h.selected()).toEqual([3, 2]);
+  });
+  test.each([[[]], [["EE_other"]], [["EE_target", "EE_target"]]])(
+    "does not select a missing or ambiguous key: %j",
+    (keys) => {
+      const h = setup(keys);
+      expect(() => h.context.focusPhraseInSheet("EE_target")).toThrow();
+      expect(h.selected()).toBeUndefined();
+      expect(h.spreadsheet.setActiveSheet).not.toHaveBeenCalled();
+    },
+  );
+});

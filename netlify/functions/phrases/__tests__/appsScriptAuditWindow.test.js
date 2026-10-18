@@ -9,6 +9,8 @@ function harness(kind) {
   let status = "running";
   const opened = [];
   const reportReads = [];
+  const selections = [];
+  const focus = jest.fn();
   let deferReports = false;
   const context = vm.createContext({ console });
   vm.runInContext(
@@ -60,13 +62,24 @@ function harness(kind) {
                 : {
                     run: { status: "completed" },
                     findings: {
-                      missing: [],
+                      missing: [
+                        {
+                          key: "EE_target",
+                          references: [],
+                          sheetUrl:
+                            "https://docs.google.com/spreadsheets/d/example#gid=1&range=B2",
+                        },
+                      ],
                       removed: [],
                       unverified: [],
                       usedCount: 3,
                     },
                   },
             );
+          },
+          focusPhraseInSheet(key) {
+            selections.push(key);
+            this.success();
           },
           getPhrasesAuditStatus() {
             this.success({ status });
@@ -79,7 +92,9 @@ function harness(kind) {
             context.reopenPhraseAuditWindow(JSON.parse(JSON.stringify(state)));
           },
         };
-        window.google = { script: { run: runner } };
+        window.google = {
+          script: { run: runner, host: { editor: { focus } } },
+        };
       },
     });
     current = { dom, timers, document: dom.window.document };
@@ -131,6 +146,8 @@ function harness(kind) {
     },
     opened,
     reportReads,
+    selections,
+    focus,
     deferReports(value) {
       deferReports = value;
     },
@@ -262,6 +279,26 @@ test("does not restore the previous report under a newly selected run that is st
     expect(
       h.current.document.getElementById("used-summary").textContent,
     ).toContain("7 keys");
+  } finally {
+    h.current.dom.window.close();
+  }
+});
+
+test("phrase clicks select the live sheet cell after cached restore without navigating", () => {
+  const h = harness("history");
+  try {
+    h.toggle();
+    h.toggle();
+    const link = h.current.document.querySelector(".finding summary a");
+    const click = new h.current.dom.window.MouseEvent("click", {
+      bubbles: true,
+      cancelable: true,
+    });
+    expect(link.dispatchEvent(click)).toBe(false);
+    expect(h.selections).toEqual(["EE_target"]);
+    expect(h.focus).toHaveBeenCalledTimes(1);
+    expect(link.closest("details").open).toBe(false);
+    expect(h.reportReads.filter((id) => id === "saved")).toHaveLength(1);
   } finally {
     h.current.dom.window.close();
   }

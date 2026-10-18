@@ -210,6 +210,37 @@ function getPhrasesAuditRun(runId) {
   return result;
 }
 
+function focusPhraseInSheet(key) {
+  if (typeof key !== "string" || !key.trim()) {
+    throw new Error("A phrase key is required.");
+  }
+  key = key.trim();
+  var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = spreadsheet.getSheetByName("Translations");
+  if (!sheet) throw new Error('Sheet "Translations" not found.');
+  var header = sheet
+    .getRange(1, 1, 1, sheet.getLastColumn())
+    .getDisplayValues()[0];
+  var keyColumn = header.indexOf("EE_LanguageCode") + 1;
+  if (!keyColumn) throw new Error('Column "EE_LanguageCode" not found.');
+  var rows =
+    sheet.getLastRow() > 1
+      ? sheet
+          .getRange(2, keyColumn, sheet.getLastRow() - 1, 1)
+          .getDisplayValues()
+      : [];
+  var matches = [];
+  rows.forEach(function (row, index) {
+    if (String(row[0] || "").trim() === key) matches.push(index + 2);
+  });
+  if (!matches.length)
+    throw new Error("Phrase " + key + " is no longer in the Sheet.");
+  if (matches.length > 1)
+    throw new Error("Multiple Sheet rows match " + key + ".");
+  spreadsheet.setActiveSheet(sheet);
+  sheet.getRange(matches[0], keyColumn).activate();
+}
+
 function showPhrasesAuditHistory() {
   SpreadsheetApp.getUi().showModelessDialog(
     HtmlService.createHtmlOutput(buildPhrasesAuditHistoryHtml())
@@ -462,10 +493,22 @@ function buildPhrasesAuditHistoryHtml(windowState) {
             if (entry.sheetUrl && entry.sheetUrl.indexOf("https://docs.google.com/spreadsheets/d/") === 0) {
               var sheetLink = document.createElement("a");
               sheetLink.href = entry.sheetUrl;
-              sheetLink.target = "_blank";
-              sheetLink.rel = "noopener noreferrer";
               sheetLink.textContent = entry.key;
               sheetLink.setAttribute("aria-label", "Open " + entry.key + " in the Sheet");
+              sheetLink.addEventListener("click", function(event) {
+                event.preventDefault();
+                event.stopPropagation();
+                setStatus("Selecting " + entry.key + " in the Sheet…", false);
+                google.script.run
+                  .withSuccessHandler(function() {
+                    setStatus("Selected " + entry.key + " in the Sheet.", false);
+                    google.script.host.editor.focus();
+                  })
+                  .withFailureHandler(function(error) {
+                    setStatus(error.message || String(error), true);
+                  })
+                  .focusPhraseInSheet(entry.key);
+              });
               title.appendChild(sheetLink);
             } else {
               title.textContent = entry.key;
