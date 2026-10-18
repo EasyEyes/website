@@ -13,6 +13,33 @@ function loadAppsScript(globals = {}) {
 }
 
 describe("International Phrases Firebase audit", () => {
+  test("omits the unused Edit sheet control from both audit windows", () => {
+    const context = loadAppsScript();
+    for (const html of [
+      context.buildPhrasesAuditHistoryHtml(),
+      context.buildPhraseAuditHtml({ differences: [] }),
+    ]) {
+      expect(html).not.toContain("audit-window-edit");
+      expect(html).not.toContain(">Edit sheet<");
+      expect(html).toContain("audit-window-toggle");
+    }
+  });
+  test("opens audit history without blocking spreadsheet editing", () => {
+    const output = { setWidth: jest.fn(), setHeight: jest.fn() };
+    output.setWidth.mockReturnValue(output);
+    output.setHeight.mockReturnValue(output);
+    const showModelessDialog = jest.fn();
+    const context = loadAppsScript({
+      SpreadsheetApp: { getUi: () => ({ showModelessDialog }) },
+      HtmlService: { createHtmlOutput: () => output },
+    });
+    context.showPhrasesAuditHistory();
+    expect(showModelessDialog).toHaveBeenCalledWith(
+      output,
+      "International Phrases audit history",
+    );
+  });
+
   test.each(["running", "queued", "failed"])(
     "shows the saved report while the newest run is %s",
     (status) => {
@@ -94,6 +121,7 @@ describe("International Phrases Firebase audit", () => {
         children: [],
         listeners: {},
         style: {},
+        setAttribute: jest.fn(),
         addEventListener(event, callback) {
           this.listeners[event] = callback;
         },
@@ -113,6 +141,11 @@ describe("International Phrases Firebase audit", () => {
         return timers.length;
       });
       const clearTimeout = jest.fn();
+      const host = {
+        setWidth: jest.fn(),
+        setHeight: jest.fn(),
+        editor: { focus: jest.fn() },
+      };
       const events = {};
       let status = "running";
       let statusSuccess;
@@ -175,7 +208,7 @@ describe("International Phrases Firebase audit", () => {
       };
       vm.runInNewContext(html.match(/<script>([\s\S]*)<\/script>/)[1], {
         document,
-        google: { script: { run: runner } },
+        google: { script: { run: runner, host } },
         setTimeout,
         clearTimeout,
         window: {
@@ -536,6 +569,8 @@ describe("International Phrases Firebase audit", () => {
 
     const elements = {};
     [
+      "audit-window-toggle",
+      "audit-window-content",
       "firebase-date",
       "sheet-date",
       "cell-list",
@@ -555,7 +590,16 @@ describe("International Phrases Firebase audit", () => {
       getElementById: (id) => elements[id],
     };
 
-    vm.runInNewContext(inlineScript, { document });
+    const host = {
+      setWidth: jest.fn(),
+      setHeight: jest.fn(),
+      editor: { focus: jest.fn() },
+    };
+    vm.runInNewContext(inlineScript, {
+      document,
+      window: { innerWidth: 900, innerHeight: 600 },
+      google: { script: { host } },
+    });
     const firstCellButton = elements["cell-list"].children[0].children[0];
     firstCellButton.listeners.click();
 
@@ -569,4 +613,50 @@ describe("International Phrases Firebase audit", () => {
     expect(elements["firebase-coordinate"].textContent).toBe("AA123");
     expect(elements["firebase-value"].textContent).toBe("Firebase phrase");
   });
+});
+
+describe("selecting an audit phrase in the live sheet", () => {
+  function setup(keys) {
+    let selected;
+    const sheet = {
+      getLastColumn: () => 2,
+      getLastRow: () => keys.length + 1,
+      getRange(row, column, count) {
+        if (row === 1)
+          return { getDisplayValues: () => [["en", "EE_LanguageCode"]] };
+        if (count) return { getDisplayValues: () => keys.map((key) => [key]) };
+        return {
+          activate: () => {
+            selected = [row, column];
+          },
+        };
+      },
+    };
+    const spreadsheet = {
+      getSheetByName: () => sheet,
+      setActiveSheet: jest.fn(),
+    };
+    const context = loadAppsScript({
+      SpreadsheetApp: { getActiveSpreadsheet: () => spreadsheet },
+    });
+    return { context, spreadsheet, selected: () => selected };
+  }
+  test("resolves the current row after a phrase moves", () => {
+    const keys = ["EE_target", "EE_other"];
+    const h = setup(keys);
+    h.context.focusPhraseInSheet("EE_target");
+    expect(h.selected()).toEqual([2, 2]);
+    keys.reverse();
+    h.context.focusPhraseInSheet("EE_target");
+    expect(h.selected()).toEqual([3, 2]);
+  });
+  test.each([[[]], [["EE_other"]], [["EE_target", "EE_target"]]])(
+    "does not select a missing or ambiguous key: %j",
+    (keys) => {
+      const h = setup(keys);
+      expect(() => h.context.focusPhraseInSheet("EE_target")).toThrow();
+      expect(h.selected()).toBeUndefined();
+      expect(h.spreadsheet.setActiveSheet).not.toHaveBeenCalled();
+    },
+  );
 });

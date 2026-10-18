@@ -154,7 +154,9 @@ function fetchPhrasesAuditReview(operation, runId) {
 }
 
 function listPhrasesAuditRuns(cursor) {
-  return cursor ? fetchPhrasesAuditReview("list-page", cursor) : fetchPhrasesAuditReview("list");
+  return cursor
+    ? fetchPhrasesAuditReview("list-page", cursor)
+    : fetchPhrasesAuditReview("list");
 }
 
 function getPhrasesAuditStatus(runId) {
@@ -208,8 +210,39 @@ function getPhrasesAuditRun(runId) {
   return result;
 }
 
+function focusPhraseInSheet(key) {
+  if (typeof key !== "string" || !key.trim()) {
+    throw new Error("A phrase key is required.");
+  }
+  key = key.trim();
+  var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = spreadsheet.getSheetByName("Translations");
+  if (!sheet) throw new Error('Sheet "Translations" not found.');
+  var header = sheet
+    .getRange(1, 1, 1, sheet.getLastColumn())
+    .getDisplayValues()[0];
+  var keyColumn = header.indexOf("EE_LanguageCode") + 1;
+  if (!keyColumn) throw new Error('Column "EE_LanguageCode" not found.');
+  var rows =
+    sheet.getLastRow() > 1
+      ? sheet
+          .getRange(2, keyColumn, sheet.getLastRow() - 1, 1)
+          .getDisplayValues()
+      : [];
+  var matches = [];
+  rows.forEach(function (row, index) {
+    if (String(row[0] || "").trim() === key) matches.push(index + 2);
+  });
+  if (!matches.length)
+    throw new Error("Phrase " + key + " is no longer in the Sheet.");
+  if (matches.length > 1)
+    throw new Error("Multiple Sheet rows match " + key + ".");
+  spreadsheet.setActiveSheet(sheet);
+  sheet.getRange(matches[0], keyColumn).activate();
+}
+
 function showPhrasesAuditHistory() {
-  SpreadsheetApp.getUi().showModalDialog(
+  SpreadsheetApp.getUi().showModelessDialog(
     HtmlService.createHtmlOutput(buildPhrasesAuditHistoryHtml())
       .setWidth(1000)
       .setHeight(700),
@@ -217,8 +250,114 @@ function showPhrasesAuditHistory() {
   );
 }
 
-function buildPhrasesAuditHistoryHtml() {
-  return `
+// Recreate the host dialog so Google receives its new initial size.
+function reopenPhraseAuditWindow(state) {
+  if (!state || (state.kind !== "history" && state.kind !== "comparison")) {
+    throw new Error("Invalid audit window state.");
+  }
+  if (
+    state.kind === "comparison" &&
+    (!state.audit || !Array.isArray(state.audit.differences))
+  ) {
+    throw new Error("The comparison snapshot is missing.");
+  }
+  var width = state.collapsed
+    ? 340
+    : Math.max(340, Math.min(1600, Number(state.width) || 1000));
+  var height = state.collapsed
+    ? 100
+    : Math.max(200, Math.min(1200, Number(state.height) || 700));
+  var html =
+    state.kind === "history"
+      ? buildPhrasesAuditHistoryHtml(state)
+      : buildPhraseAuditHtml(state.audit, state);
+  SpreadsheetApp.getUi().showModelessDialog(
+    HtmlService.createHtmlOutput(html).setWidth(width).setHeight(height),
+    state.kind === "history"
+      ? "International Phrases audit history"
+      : "International Phrases audit",
+  );
+}
+
+function addPhraseAuditWindowControls(html, state, allowExport) {
+  var savedState = JSON.stringify(state || {}).replace(
+    /[<>&\u2028\u2029]/g,
+    function (character) {
+      return "\\u" + character.charCodeAt(0).toString(16).padStart(4, "0");
+    },
+  );
+  var collapsed = !!(state && state.collapsed);
+  var styles = `
+    body { display: grid; grid-template-rows: auto minmax(0, 1fr); overflow: hidden; }
+    .audit-window-controls { display: flex; gap: 8px; padding: 8px 12px; border-bottom: 1px solid #dadce0; background: #f8f9fa; }
+    .audit-window-controls button { padding: 6px 10px; border: 1px solid #dadce0; border-radius: 4px; background: white; color: #1967d2; font: inherit; cursor: pointer; }
+    .audit-window-controls button:focus-visible { outline: 3px solid #8ab4f8; outline-offset: 2px; }
+    #audit-window-error { color: #b3261e; overflow: auto; }
+    #audit-window-content { min-height: 0; }
+    #audit-window-content[hidden] { display: none; }
+  `;
+  var controls = `
+    <div class="audit-window-controls" role="group" aria-label="Audit window controls">
+      <button id="audit-window-toggle" type="button" aria-expanded="${!collapsed}" aria-controls="audit-window-content">${
+        collapsed ? "Re-expand" : "Minimize"
+      }</button>
+      ${
+        allowExport
+          ? '<button id="audit-window-export" type="button" disabled' +
+            (collapsed ? " hidden" : "") +
+            ">Save</button>"
+          : ""
+      }
+      <span id="audit-window-error" role="alert"></span>
+    </div>
+  `;
+  var script = `
+    var phraseAuditWindowState = ${savedState};
+    (function () {
+      var toggle = document.getElementById("audit-window-toggle");
+      var content = document.getElementById("audit-window-content");
+      toggle.onclick = function () {
+        if (toggle.disabled) return;
+        var state = window.capturePhraseAuditWindowState();
+        state.collapsed = !phraseAuditWindowState.collapsed;
+        state.width = phraseAuditWindowState.collapsed ? phraseAuditWindowState.width : (window.innerWidth || 1000);
+        state.height = phraseAuditWindowState.collapsed ? phraseAuditWindowState.height : (window.innerHeight || 700);
+        toggle.disabled = true;
+        toggle.textContent = state.collapsed ? "Minimizing…" : "Re-expanding…";
+        content.inert = true;
+        document.getElementById("audit-window-error").textContent = "";
+        google.script.run
+          .withSuccessHandler(function () {
+            // The host replaces the old dialog. Do not close the replacement.
+          })
+          .withFailureHandler(function (error) {
+            toggle.disabled = false;
+            toggle.textContent = phraseAuditWindowState.collapsed ? "Re-expand" : "Minimize";
+            content.inert = false;
+            document.getElementById("audit-window-error").textContent =
+              "Could not reopen the report: " + (error.message || error);
+          })
+          .reopenPhraseAuditWindow(state);
+      };
+    })();
+  `;
+  return html
+    .replace("</style>", styles + "</style>")
+    .replace("<body>", "<body>" + controls)
+    .replace(
+      "<main class=",
+      '<main id="audit-window-content"' +
+        (collapsed ? " hidden" : "") +
+        " class=",
+    )
+    .replace("<script>", function () {
+      return "<script>" + script;
+    });
+}
+
+function buildPhrasesAuditHistoryHtml(windowState) {
+  return addPhraseAuditWindowControls(
+    `
     <!doctype html>
     <html>
       <head>
@@ -301,6 +440,121 @@ function buildPhrasesAuditHistoryHtml() {
           var statusElement = document.getElementById("status");
           var runSelect = document.getElementById("run-select");
           var keySearch = document.getElementById("key-search");
+          keySearch.value = phraseAuditWindowState.search || "";
+          var exportButton = document.getElementById("audit-window-export");
+          var exportBusy = false;
+          var excelLibrary = null;
+          function updateExportButton() {
+            exportButton.disabled = exportBusy || !selectedReport || !selectedReport.findings;
+          }
+          function loadExcelLibrary() {
+            if (window.XLSX) return Promise.resolve(window.XLSX);
+            if (excelLibrary) return excelLibrary;
+            excelLibrary = new Promise(function(resolve, reject) {
+              var script = document.createElement("script");
+              script.src = "https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js";
+              script.onload = function() {
+                if (window.XLSX) resolve(window.XLSX);
+                else { script.remove(); excelLibrary = null; reject(new Error("Excel library did not load.")); }
+              };
+              script.onerror = function() {
+                script.remove();
+                excelLibrary = null;
+                reject(new Error("Could not load the Excel library. Please try again."));
+              };
+              document.head.appendChild(script);
+            });
+            return excelLibrary;
+          }
+          exportButton.onclick = function() {
+            if (exportButton.disabled || !selectedReport || !selectedReport.findings) return;
+            // Capture the visible selection before the library loads asynchronously.
+            var report = selectedReport;
+            var runId = runSelect.value;
+            var search = keySearch.value.trim().toLowerCase();
+            var findings = report.findings;
+            exportBusy = true;
+            updateExportButton();
+            exportButton.textContent = "Saving…";
+            document.getElementById("audit-window-error").textContent = "";
+            loadExcelLibrary().then(function(XLSX) {
+              var book = XLSX.utils.book_new();
+              function addSheet(name, rows) {
+                XLSX.utils.book_append_sheet(book, XLSX.utils.aoa_to_sheet(rows), name);
+              }
+              var keys = [["Category", "Key", "Sheet cell URL", "Last removed"]];
+              var evidence = [["Category", "Key", "Repository", "Path", "Line", "Reference URL", "Removal commit URL"]];
+              [
+                ["Missing from sheet", findings.missing],
+                ["Verified removal", findings.removed],
+                ["Other unused", findings.unverified]
+              ].forEach(function(group) {
+                group[1].filter(function(entry) {
+                  return entry.key.toLowerCase().indexOf(search) !== -1;
+                }).forEach(function(entry) {
+                  keys.push([group[0], entry.key, entry.sheetUrl || "", entry.lastRemovedAt || ""]);
+                  (entry.references || []).forEach(function(ref) {
+                    evidence.push([group[0], entry.key, ref.repository || "", ref.path || "", ref.line || "", ref.url || "", ""]);
+                  });
+                  (entry.removals || []).forEach(function(removal) {
+                    var refs = removal.previousReferences || [];
+                    if (!refs.length) refs = [{}];
+                    refs.forEach(function(ref) {
+                      evidence.push([group[0], entry.key, removal.repository || ref.repository || "", ref.path || "", ref.line || "", ref.url || "", removal.commitUrl || ""]);
+                    });
+                  });
+                });
+              });
+              addSheet("Summary", [
+                ["Field", "Value"],
+                ["Audit run", runId],
+                ["Status", report.run.status],
+                ["Generated at", report.run.generatedAt || ""],
+                ["Search filter", search],
+                ["Exported findings", keys.length - 1],
+                ["Missing from sheet (entire run)", findings.missing.length],
+                ["Verified removal (entire run)", findings.removed.length],
+                ["Other unused (entire run)", findings.unverified.length],
+                ["Used keys (entire run, count only)", findings.usedCount]
+              ].concat([[]], keys));
+              addSheet("Evidence", evidence);
+              var checks = [["Type", "Details"]];
+              var mismatches = findings.mismatches || {};
+              (mismatches.repositories || []).forEach(function(item) { checks.push(["Repository", JSON.stringify(item)]); });
+              Object.keys(mismatches.keys || {}).forEach(function(key) { checks.push([key, JSON.stringify(mismatches.keys[key])]); });
+              (mismatches.reportChecks || []).forEach(function(item) { checks.push(["Report check", JSON.stringify(item)]); });
+              addSheet("Cross-scan differences", checks);
+              XLSX.writeFile(book, "phrase-audit-" + runId.replace(/[^a-zA-Z0-9_-]/g, "_") + ".xlsx");
+              exportBusy = false;
+              exportButton.textContent = "Save";
+              updateExportButton();
+            }).catch(function(error) {
+              exportBusy = false;
+              exportButton.textContent = "Save";
+              updateExportButton();
+              document.getElementById("audit-window-error").textContent = "Could not download Excel: " + (error.message || error);
+            });
+          };
+
+          window.capturePhraseAuditWindowState = function () {
+            return {
+              kind: "history",
+              runs: auditRuns.map(function (run) {
+                var copy = {};
+                Object.keys(run).forEach(function (key) { if (key !== "option") copy[key] = run[key]; });
+                return copy;
+              }),
+              selectedRun: runSelect.value,
+              // Carry only this window's loaded result; do not refetch it on restore.
+              cachedReport: selectedReport && selectedReport.findings
+                ? { runId: runSelect.value, report: selectedReport } : null,
+              search: keySearch.value,
+              nextCursor: nextAuditCursor,
+              scrollTop: phraseAuditWindowState.collapsed ? phraseAuditWindowState.scrollTop : document.getElementById("audit-window-content").scrollTop,
+              openFindings: phraseAuditWindowState.collapsed ? (phraseAuditWindowState.openFindings || []) : Array.from(document.querySelectorAll("details")).map(function (item, index) { return item.open ? index : -1; }).filter(function (index) { return index >= 0; }),
+            };
+          };
+
 
           function setStatus(message, error) {
             statusElement.textContent = message;
@@ -341,10 +595,22 @@ function buildPhrasesAuditHistoryHtml() {
             if (entry.sheetUrl && entry.sheetUrl.indexOf("https://docs.google.com/spreadsheets/d/") === 0) {
               var sheetLink = document.createElement("a");
               sheetLink.href = entry.sheetUrl;
-              sheetLink.target = "_blank";
-              sheetLink.rel = "noopener noreferrer";
               sheetLink.textContent = entry.key;
               sheetLink.setAttribute("aria-label", "Open " + entry.key + " in the Sheet");
+              sheetLink.addEventListener("click", function(event) {
+                event.preventDefault();
+                event.stopPropagation();
+                setStatus("Selecting " + entry.key + " in the Sheet…", false);
+                google.script.run
+                  .withSuccessHandler(function() {
+                    setStatus("Selected " + entry.key + " in the Sheet.", false);
+                    google.script.host.editor.focus();
+                  })
+                  .withFailureHandler(function(error) {
+                    setStatus(error.message || String(error), true);
+                  })
+                  .focusPhraseInSheet(entry.key);
+              });
               title.appendChild(sheetLink);
             } else {
               title.textContent = entry.key;
@@ -400,6 +666,7 @@ function buildPhrasesAuditHistoryHtml() {
           }
 
           function renderReport() {
+            if (phraseAuditWindowState.collapsed) return;
             if (!selectedReport || !selectedReport.findings) return;
             var findings = selectedReport.findings;
             var search = keySearch.value.trim().toLowerCase();
@@ -427,27 +694,43 @@ function buildPhrasesAuditHistoryHtml() {
             var warning = document.getElementById("mismatch-warning");
             warning.textContent = mismatchCount + " cross-scan differences need review before acting on findings.";
             warning.className = mismatchCount ? "warning" : "warning hidden";
+            if (phraseAuditWindowState.selectedRun === runSelect.value) {
+              (phraseAuditWindowState.openFindings || []).forEach(function (index) {
+                var item = document.querySelectorAll("details")[index];
+                if (item) item.open = true;
+              });
+              document.getElementById("audit-window-content").scrollTop = phraseAuditWindowState.scrollTop || 0;
+            }
+
+          }
+
+          function showLoadedReport(result) {
+            selectedReport = result;
+            updateExportButton();
+            if (!result.findings) {
+              if (result.run.status === "queued" || result.run.status === "running") {
+                setStatus("This audit is in progress.", false);
+                return;
+              }
+              setStatus("This run is " + result.run.status + ". " + (result.run.error || "No report is available yet."), false);
+              return;
+            }
+            setStatus("Report generated " + formatDate(result.run.generatedAt), false);
+            document.getElementById("content").className = "";
+            renderReport();
           }
 
           function loadRun(runId) {
             var requestNumber = ++activeRunRequest;
+            // A pending selection must not carry the previous run's report.
+            selectedReport = null;
+            updateExportButton();
             document.getElementById("content").className = "hidden";
             setStatus("Loading selected audit report…", false);
             google.script.run
               .withSuccessHandler(function (result) {
                 if (requestNumber !== activeRunRequest) return;
-                selectedReport = result;
-                if (!result.findings) {
-                  if (result.run.status === "queued" || result.run.status === "running") {
-                    setStatus("This audit is in progress.", false);
-                    return;
-                  }
-                  setStatus("This run is " + result.run.status + ". " + (result.run.error || "No report is available yet."), false);
-                  return;
-                }
-                setStatus("Report generated " + formatDate(result.run.generatedAt), false);
-                document.getElementById("content").className = "";
-                renderReport();
+                showLoadedReport(result);
               })
               .withFailureHandler(function (error) {
                 if (requestNumber !== activeRunRequest) return;
@@ -548,7 +831,19 @@ function buildPhrasesAuditHistoryHtml() {
             clearTimeout(pollTimer);
             activeRunRequest++;
           });
-          google.script.run
+          if (phraseAuditWindowState.runs && phraseAuditWindowState.runs.length) {
+            appendRuns(phraseAuditWindowState.runs);
+            updatePaging({ nextCursor: phraseAuditWindowState.nextCursor });
+            runSelect.value = phraseAuditWindowState.selectedRun || auditRuns[0].id;
+            runSelect.disabled = false;
+            var cached = phraseAuditWindowState.cachedReport;
+            if (cached && cached.runId === runSelect.value && cached.report && cached.report.findings) {
+              showLoadedReport(cached.report);
+            } else {
+              loadRun(runSelect.value);
+            }
+            schedulePoll();
+          } else google.script.run
             .withSuccessHandler(function (result) {
               var runs = result.runs || [];
               if (closed) return;
@@ -568,7 +863,10 @@ function buildPhrasesAuditHistoryHtml() {
         </script>
       </body>
     </html>
-  `;
+  `,
+    windowState,
+    true,
+  );
 }
 
 function notify(message, type, options) {
@@ -811,7 +1109,7 @@ function compareLatestEasyEyesCopy() {
       differences: differences,
     });
 
-    SpreadsheetApp.getUi().showModalDialog(
+    SpreadsheetApp.getUi().showModelessDialog(
       HtmlService.createHtmlOutput(html).setWidth(1000).setHeight(700),
       "International Phrases audit",
     );
@@ -824,7 +1122,7 @@ function compareLatestEasyEyesCopy() {
   }
 }
 
-function buildPhraseAuditHtml(audit) {
+function buildPhraseAuditHtml(audit, windowState) {
   var safeAuditJson = JSON.stringify(audit)
     .replace(/</g, "\\u003c")
     .replace(/>/g, "\\u003e")
@@ -833,7 +1131,7 @@ function buildPhraseAuditHtml(audit) {
     .replace(/\u2029/g, "\\u2029");
   var differenceCount = audit.differences.length;
 
-  return (
+  return addPhraseAuditWindowControls(
     `
     <!doctype html>
     <html>
@@ -948,8 +1246,8 @@ function buildPhraseAuditHtml(audit) {
           <section class="view">
             <div class="summary" id="summary">
               <h1>Differing cells: ` +
-    differenceCount +
-    `</h1>
+      differenceCount +
+      `</h1>
               <div class="cell-list" id="cell-list"></div>
             </div>
             <div class="detail" id="detail">
@@ -971,8 +1269,8 @@ function buildPhraseAuditHtml(audit) {
         </main>
         <script>
           var audit = ` +
-    safeAuditJson +
-    `;
+      safeAuditJson +
+      `;
 
           function formatLocalDate(iso) {
             if (!iso) return "Unavailable";
@@ -1011,7 +1309,12 @@ function buildPhraseAuditHtml(audit) {
             list.appendChild(fragment);
           }
 
+          var selectedCellIndex = null;
+          window.capturePhraseAuditWindowState = function () {
+            return { kind: "comparison", audit: audit, selectedCellIndex: selectedCellIndex };
+          };
           function showDetail(index) {
+            selectedCellIndex = index;
             var difference = audit.differences[index];
             var sheetCellLink = document.getElementById("sheet-cell-link");
             sheetCellLink.textContent = difference.coordinate;
@@ -1022,16 +1325,21 @@ function buildPhraseAuditHtml(audit) {
             document.getElementById("firebase-value").textContent = difference.firebaseValue;
             document.getElementById("summary").style.display = "none";
             document.getElementById("detail").style.display = "grid";
-            document.getElementById("back").focus();
+            if (!phraseAuditWindowState.collapsed) document.getElementById("back").focus();
+          }
+          if (Number.isInteger(phraseAuditWindowState.selectedCellIndex) && audit.differences[phraseAuditWindowState.selectedCellIndex]) {
+            showDetail(phraseAuditWindowState.selectedCellIndex);
           }
 
           document.getElementById("back").addEventListener("click", function () {
+            selectedCellIndex = null;
             document.getElementById("detail").style.display = "none";
             document.getElementById("summary").style.display = "grid";
           });
         </script>
       </body>
-    </html>`
+    </html>`,
+    windowState,
   );
 }
 
