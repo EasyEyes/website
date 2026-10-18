@@ -303,3 +303,101 @@ test("phrase clicks select the live sheet cell after cached restore without navi
     h.current.dom.window.close();
   }
 });
+
+test("exports filtered cached findings after restore without fetching the report", async () => {
+  const h = harness("history");
+  try {
+    h.current.document.getElementById("key-search").value = "TARGET";
+    h.toggle();
+    h.toggle();
+    const XLSX = require("xlsx");
+    const downloads = [];
+    h.current.dom.window.XLSX = {
+      ...XLSX,
+      writeFile: (book, name) => downloads.push({ book, name }),
+    };
+    h.current.document.getElementById("audit-window-export").click();
+    await Promise.resolve();
+    expect(downloads).toHaveLength(1);
+    const { book, name } = downloads[0];
+    expect(name).toBe("phrase-audit-saved.xlsx");
+    const bytes = XLSX.write(book, { type: "buffer", bookType: "xlsx" });
+    const parsed = XLSX.read(bytes, { type: "buffer" });
+    expect(parsed.SheetNames).toEqual([
+      "Summary",
+      "Evidence",
+      "Cross-scan differences",
+    ]);
+    expect(parsed.Sheets.Findings).toBeUndefined();
+    const summaryRows = XLSX.utils.sheet_to_json(parsed.Sheets.Summary, {
+      header: 1,
+    });
+    const findingsHeader = summaryRows.findIndex(
+      (row) => row[0] === "Category",
+    );
+    expect(findingsHeader).toBeGreaterThan(
+      summaryRows.findIndex(
+        (row) => row[0] === "Used keys (entire run, count only)",
+      ),
+    );
+    const rows = XLSX.utils.sheet_to_json(parsed.Sheets.Summary, {
+      range: findingsHeader,
+    });
+    expect(rows.map((row) => row.Key)).toEqual(["EE_target"]);
+    expect(h.reportReads).toEqual(["saved"]);
+    h.current.document.getElementById("key-search").value = "not-present";
+    h.current.document.getElementById("audit-window-export").click();
+    await Promise.resolve();
+    expect(
+      XLSX.utils.sheet_to_json(downloads[1].book.Sheets.Summary, {
+        range: findingsHeader,
+      }),
+    ).toEqual([]);
+    h.deferReports(true);
+    const select = h.current.document.getElementById("run-select");
+    select.value = "active";
+    select.dispatchEvent(new h.current.dom.window.Event("change"));
+    expect(
+      h.current.document.getElementById("audit-window-export").disabled,
+    ).toBe(true);
+  } finally {
+    h.current.dom.window.close();
+  }
+});
+
+test("export library failure allows retry and exports the snapshot selected at click time", async () => {
+  const h = harness("history");
+  try {
+    const button = h.current.document.getElementById("audit-window-export");
+    button.click();
+    let script = h.current.document.querySelector('script[src*="sheetjs"]');
+    script.onerror();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(button.disabled).toBe(false);
+    expect(
+      h.current.document.getElementById("audit-window-error").textContent,
+    ).toContain("Could not download");
+    button.click();
+    script = h.current.document.querySelector('script[src*="sheetjs"]');
+    const XLSX = require("xlsx");
+    const writeFile = jest.fn();
+    h.current.dom.window.XLSX = { ...XLSX, writeFile };
+    h.current.document.getElementById("key-search").value = "no-match";
+    script.onload();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(writeFile).toHaveBeenCalledTimes(1);
+    expect(
+      XLSX.utils.sheet_to_json(writeFile.mock.calls[0][0].Sheets.Summary, {
+        range: XLSX.utils
+          .sheet_to_json(writeFile.mock.calls[0][0].Sheets.Summary, {
+            header: 1,
+          })
+          .findIndex((row) => row[0] === "Category"),
+      }),
+    ).toHaveLength(1);
+  } finally {
+    h.current.dom.window.close();
+  }
+});

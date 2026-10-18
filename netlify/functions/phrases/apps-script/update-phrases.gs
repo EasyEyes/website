@@ -279,7 +279,7 @@ function reopenPhraseAuditWindow(state) {
   );
 }
 
-function addPhraseAuditWindowControls(html, state) {
+function addPhraseAuditWindowControls(html, state, allowExport) {
   var savedState = JSON.stringify(state || {}).replace(
     /[<>&\u2028\u2029]/g,
     function (character) {
@@ -301,6 +301,13 @@ function addPhraseAuditWindowControls(html, state) {
       <button id="audit-window-toggle" type="button" aria-expanded="${!collapsed}" aria-controls="audit-window-content">${
         collapsed ? "Restore report" : "Minimize"
       }</button>
+      ${
+        allowExport
+          ? '<button id="audit-window-export" type="button" disabled' +
+            (collapsed ? " hidden" : "") +
+            ">Save</button>"
+          : ""
+      }
       <span id="audit-window-error" role="alert"></span>
     </div>
   `;
@@ -434,6 +441,101 @@ function buildPhrasesAuditHistoryHtml(windowState) {
           var runSelect = document.getElementById("run-select");
           var keySearch = document.getElementById("key-search");
           keySearch.value = phraseAuditWindowState.search || "";
+          var exportButton = document.getElementById("audit-window-export");
+          var exportBusy = false;
+          var excelLibrary = null;
+          function updateExportButton() {
+            exportButton.disabled = exportBusy || !selectedReport || !selectedReport.findings;
+          }
+          function loadExcelLibrary() {
+            if (window.XLSX) return Promise.resolve(window.XLSX);
+            if (excelLibrary) return excelLibrary;
+            excelLibrary = new Promise(function(resolve, reject) {
+              var script = document.createElement("script");
+              script.src = "https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js";
+              script.onload = function() {
+                if (window.XLSX) resolve(window.XLSX);
+                else { script.remove(); excelLibrary = null; reject(new Error("Excel library did not load.")); }
+              };
+              script.onerror = function() {
+                script.remove();
+                excelLibrary = null;
+                reject(new Error("Could not load the Excel library. Please try again."));
+              };
+              document.head.appendChild(script);
+            });
+            return excelLibrary;
+          }
+          exportButton.onclick = function() {
+            if (exportButton.disabled || !selectedReport || !selectedReport.findings) return;
+            // Capture the visible selection before the library loads asynchronously.
+            var report = selectedReport;
+            var runId = runSelect.value;
+            var search = keySearch.value.trim().toLowerCase();
+            var findings = report.findings;
+            exportBusy = true;
+            updateExportButton();
+            exportButton.textContent = "Saving…";
+            document.getElementById("audit-window-error").textContent = "";
+            loadExcelLibrary().then(function(XLSX) {
+              var book = XLSX.utils.book_new();
+              function addSheet(name, rows) {
+                XLSX.utils.book_append_sheet(book, XLSX.utils.aoa_to_sheet(rows), name);
+              }
+              var keys = [["Category", "Key", "Sheet cell URL", "Last removed"]];
+              var evidence = [["Category", "Key", "Repository", "Path", "Line", "Reference URL", "Removal commit URL"]];
+              [
+                ["Missing from sheet", findings.missing],
+                ["Verified removal", findings.removed],
+                ["Other unused", findings.unverified]
+              ].forEach(function(group) {
+                group[1].filter(function(entry) {
+                  return entry.key.toLowerCase().indexOf(search) !== -1;
+                }).forEach(function(entry) {
+                  keys.push([group[0], entry.key, entry.sheetUrl || "", entry.lastRemovedAt || ""]);
+                  (entry.references || []).forEach(function(ref) {
+                    evidence.push([group[0], entry.key, ref.repository || "", ref.path || "", ref.line || "", ref.url || "", ""]);
+                  });
+                  (entry.removals || []).forEach(function(removal) {
+                    var refs = removal.previousReferences || [];
+                    if (!refs.length) refs = [{}];
+                    refs.forEach(function(ref) {
+                      evidence.push([group[0], entry.key, removal.repository || ref.repository || "", ref.path || "", ref.line || "", ref.url || "", removal.commitUrl || ""]);
+                    });
+                  });
+                });
+              });
+              addSheet("Summary", [
+                ["Field", "Value"],
+                ["Audit run", runId],
+                ["Status", report.run.status],
+                ["Generated at", report.run.generatedAt || ""],
+                ["Search filter", search],
+                ["Exported findings", keys.length - 1],
+                ["Missing from sheet (entire run)", findings.missing.length],
+                ["Verified removal (entire run)", findings.removed.length],
+                ["Other unused (entire run)", findings.unverified.length],
+                ["Used keys (entire run, count only)", findings.usedCount]
+              ].concat([[]], keys));
+              addSheet("Evidence", evidence);
+              var checks = [["Type", "Details"]];
+              var mismatches = findings.mismatches || {};
+              (mismatches.repositories || []).forEach(function(item) { checks.push(["Repository", JSON.stringify(item)]); });
+              Object.keys(mismatches.keys || {}).forEach(function(key) { checks.push([key, JSON.stringify(mismatches.keys[key])]); });
+              (mismatches.reportChecks || []).forEach(function(item) { checks.push(["Report check", JSON.stringify(item)]); });
+              addSheet("Cross-scan differences", checks);
+              XLSX.writeFile(book, "phrase-audit-" + runId.replace(/[^a-zA-Z0-9_-]/g, "_") + ".xlsx");
+              exportBusy = false;
+              exportButton.textContent = "Save";
+              updateExportButton();
+            }).catch(function(error) {
+              exportBusy = false;
+              exportButton.textContent = "Save";
+              updateExportButton();
+              document.getElementById("audit-window-error").textContent = "Could not download Excel: " + (error.message || error);
+            });
+          };
+
           window.capturePhraseAuditWindowState = function () {
             return {
               kind: "history",
@@ -604,6 +706,7 @@ function buildPhrasesAuditHistoryHtml(windowState) {
 
           function showLoadedReport(result) {
             selectedReport = result;
+            updateExportButton();
             if (!result.findings) {
               if (result.run.status === "queued" || result.run.status === "running") {
                 setStatus("This audit is in progress.", false);
@@ -621,6 +724,7 @@ function buildPhrasesAuditHistoryHtml(windowState) {
             var requestNumber = ++activeRunRequest;
             // A pending selection must not carry the previous run's report.
             selectedReport = null;
+            updateExportButton();
             document.getElementById("content").className = "hidden";
             setStatus("Loading selected audit report…", false);
             google.script.run
@@ -761,6 +865,7 @@ function buildPhrasesAuditHistoryHtml(windowState) {
     </html>
   `,
     windowState,
+    true,
   );
 }
 
