@@ -73,6 +73,7 @@ if (process.argv.includes("--fingerprint")) {
 const parser = deps("@babel/parser"),
   traverse = deps("@babel/traverse").default;
 
+const glossarySites = [];
 const sites = [],
   edges = [],
   failures = [],
@@ -142,8 +143,7 @@ function expr(n, p, seen = new Set()) {
 }
 function keys(n, p, seen = new Set()) {
   if (!n) return [];
-  if (n.type === "StringLiteral")
-    return /^(EE|RC|T)_/.test(n.value) ? [n.value] : [];
+  if (n.type === "StringLiteral") return [n.value];
   if (n.type === "ConditionalExpression")
     return [
       ...keys(n.consequent, p, new Set(seen)),
@@ -221,7 +221,15 @@ for (const { absolute, source } of inventory) {
           line: n.loc.start.line,
         });
       }
-      if (fn !== "readi18nPhrases") return;
+      const member = n.callee;
+      const readerMethod =
+        member.type === "MemberExpression" &&
+        !member.computed &&
+        ["paramReader", "reader", "ParamReader"].includes(member.object.name) &&
+        ["read", "has", "readMatching"].includes(member.property.name)
+          ? member.property.name
+          : null;
+      if (fn !== "readi18nPhrases" && !readerMethod) return;
       const guards = [];
       for (let q = p.parentPath; q; q = q.parentPath) {
         if (q.isFunction()) break;
@@ -235,12 +243,23 @@ for (const { absolute, source } of inventory) {
             });
         }
       }
-      sites.push({
+      (readerMethod ? glossarySites : sites).push({
+        ...(readerMethod
+          ? { readerMethod, detection: "named-reader-heuristic" }
+          : {}),
         id: file + ":" + n.loc.start.line + ":" + n.start,
         file,
         line: n.loc.start.line,
         function: owner(p, file),
-        keys: [...new Set(keys(n.arguments[0], p))],
+        keys: [
+          ...new Set(
+            readerMethod === "readMatching"
+              ? []
+              : keys(n.arguments[0], p).filter(
+                  (key) => readerMethod || /^(EE|RC|T)_/.test(key),
+                ),
+          ),
+        ],
         argument: source.slice(
           n.arguments[0]?.start ?? n.start,
           n.arguments[0]?.end ?? n.end,
@@ -252,22 +271,30 @@ for (const { absolute, source } of inventory) {
 }
 const callers = {};
 for (const e of edges) (callers[e.to] ??= []).push(e);
-for (const s of sites) s.callers = callers[s.function] ?? [];
+for (const s of [...sites, ...glossarySites])
+  s.callers = callers[s.function] ?? [];
 process.stdout.write(
   JSON.stringify(
     {
       schemaVersion: 2,
       fingerprint,
       manifest,
-      scope: "deployed-threshold-direct-phrase-readers",
+      scope: "deployed-threshold-direct-phrase-and-glossary-readers",
       sites,
+      glossarySites,
       snapshots,
       parseFailures: failures,
       coverage: {
         files: snapshots.length,
         directReaderSites: sites.length,
+        glossaryReaderSites: glossarySites.length,
+        unresolvedGlossarySites: glossarySites.filter(
+          (site) => !site.keys.length,
+        ).length,
         dynamicUnresolvedSites: sites.filter((s) => !s.keys.length).length,
         limitations: [
+          "Glossary reader receivers are identified by name, not proven object type; dynamic and regex keys remain unresolved.",
+          "Glossary-wide logging reads do not establish task-specific parameter use.",
           "Wrapper forwarding and direct phrases object reads are not fully indexed.",
           "Separately hosted calibration bundles are outside this index.",
           "Caller graph includes direct named calls only; callbacks and scheduling remain unresolved.",

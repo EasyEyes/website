@@ -1,5 +1,6 @@
 import {
   analysePhrasePaths,
+  analyseGlossaryPaths,
   type PhraseSourceIndex,
   type PhraseCondition,
 } from "../../../docs/experiment/threshold/preprocess/phrasePathAnalysis";
@@ -24,6 +25,8 @@ export function createStudyPhraseAnalysisHandler(index: PhraseSourceIndex) {
         return json({ error: "Study configuration is too large" }, 413);
       const input = JSON.parse(text);
       if (
+        (input.analysis !== undefined &&
+          !["phrases", "glossary"].includes(input.analysis)) ||
         input.schemaVersion !== 1 ||
         typeof input.fingerprint !== "string" ||
         !Array.isArray(input.conditions) ||
@@ -57,7 +60,11 @@ export function createStudyPhraseAnalysisHandler(index: PhraseSourceIndex) {
         )
       )
         return json({ error: "Invalid condition parameters" }, 400);
-      return json(analysePhrasePaths(index, input.conditions));
+      return json(
+        (input.analysis === "glossary"
+          ? analyseGlossaryPaths
+          : analysePhrasePaths)(index, input.conditions),
+      );
     } catch (error) {
       if (error instanceof SyntaxError)
         return json({ error: "Invalid JSON" }, 400);
