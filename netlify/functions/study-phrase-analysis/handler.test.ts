@@ -99,3 +99,23 @@ test("does not use an incomplete index", async () => {
   });
   assert.equal((await unavailable(request(input))).status, 503);
 });
+
+test("C8 analyses glossary keys on the same fingerprint while preserving phrase output", async () => {
+  const glossaryHandler = createStudyPhraseAnalysisHandler({
+    ...index,
+    glossarySites: [{ ...index.sites[0], keys: ["font"] }],
+  });
+  const result = await (
+    await glossaryHandler(request({ ...input, analysis: "glossary" }))
+  ).json();
+  assert.deepEqual(result.candidateKeys, ["font"]);
+  assert.equal(result.fullRuntimeAnswerAvailable, false);
+  assert.deepEqual(
+    (await (await glossaryHandler(request(input))).json()).candidateKeys,
+    ["EE_test"],
+  );
+  assert.equal(
+    (await glossaryHandler(request({ ...input, analysis: "execute" }))).status,
+    400,
+  );
+});

@@ -27,6 +27,7 @@ if (
   cached?.schemaVersion === 2 &&
   cached.fingerprint === fingerprint &&
   Array.isArray(cached.sites) &&
+  Array.isArray(cached.glossarySites) &&
   Array.isArray(cached.parseFailures) &&
   !cached.parseFailures.length &&
   cached.contentSha256 === checksum(cached)
