@@ -43,12 +43,17 @@
     "debug": "^4.4.3",
     "eslint": "^8.53.0",
     "husky": "^8.0.3",
-    "lint-staged": "^15.0.2",
-    "netlify-cli": "^23.13.0",
+    "lint-staged": "^17.6.0",
+    "netlify-cli": "^27.14.2",
     "prettier": "^3.0.3",
     "tsx": "^4.23.13"
   },
   "lint-staged": {
     "*.{js,json,md,html,css}": "prettier --write"
-  }
+  },
+  "engines": {
+    "node": ">=24.22.1 <25",
+    "npm": ">=11.19.1"
+  },
+  "packageManager": "npm@11.19.1"
 }
