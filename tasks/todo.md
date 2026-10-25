@@ -59,3 +59,11 @@ changes. Fresh focused verification passed 81 tests, the authoring TypeScript
 check, and shared source-index generation. Live preview verification follows
 deployment. The invalid-parameter and old-glossary scenario is deferred at the
 user's request.
+
+## Missing phrase compiler improvements (2026-10-25)
+
+- [x] Check phrase key membership only, preserving errors for explicit missing keys and warnings for source candidates. Test absent and empty translations.
+- [x] Use the requested scientist wording and remove the unused runtime-error simulation module. Verify desktop/mobile warning presentation.
+- [x] Verify language category errors, run package checks, review diffs, and publish linked PRs with the full submodule chain.
+
+Verification: 34 focused authoring tests, 6 language tests, 7 API tests, and desktop/mobile Chromium checks passed. The source index rebuilt without the removed test key. Authoring production build passed with 4 Webpack warnings using local deployment metadata and a test Firebase URL. Full authoring suite had 3 failing suites; full threshold suite had 9 failing suites due to test assertions, missing fixtures, and Rust bindings. Threshold build/hook was blocked by unchanged Array.at TypeScript errors in tools/mem-baseline/run-mem-baseline.ts; the hook was bypassed for the threshold commit only. PsychoJS source and gitlink remain unchanged.
