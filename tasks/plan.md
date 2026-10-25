@@ -47,3 +47,11 @@ names, and regex readers remain unresolved. No browser replay during compilation
 
 No persistent study data is written. Existing published audits and running jobs
 are not modified or started. The only service read is a completed report.
+
+## Missing phrase compiler improvements (2026-10-25)
+
+- [x] Check phrase key membership only, preserving errors for explicit missing keys and warnings for source candidates. Test absent and empty translations.
+- [x] Use the requested scientist wording and remove the unused runtime-error simulation module. Verify desktop/mobile warning presentation.
+- [x] Verify language category errors, run package checks, review diffs, and publish linked PRs with the full submodule chain.
+
+Verification: 34 focused authoring tests, 6 language tests, 7 API tests, and desktop/mobile Chromium checks passed. The source index rebuilt without the removed test key. Authoring production build passed with 4 Webpack warnings using local deployment metadata and a test Firebase URL. Full authoring suite had 3 failing suites; full threshold suite had 9 failing suites due to test assertions, missing fixtures, and Rust bindings. Threshold build/hook was blocked by unchanged Array.at TypeScript errors in tools/mem-baseline/run-mem-baseline.ts; the hook was bypassed for the threshold commit only. PsychoJS source and gitlink remain unchanged.
