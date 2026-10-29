@@ -4,6 +4,18 @@ Node.js 24.22.1 is selected in `.nvmrc` and `engines.node`. This includes the Oc
 
 Source: [Node.js October security releases](https://nodejs.org/en/blog/vulnerability/october-2026-security-releases).
 
+## Merge-readiness refresh: 2026-10-29
+
+The current main/new-main/threshold-prod bases are integrated into the existing security branches. Conflicting submodule pointers are replaced child-first with the tested security commits. Obsolete task files follow their deletion on current main. No pull request has been merged.
+
+- PsychoJS: 95 tests pass; complete standalone JS (ESM/IIFE), CSS, and docs build passes. An explicit host context replaces imports that dragged the participant app into standalone bundles. A real Chromium smoke rendered text at custom display resolution and downloaded JSON after updating calibration time, without page exceptions.
+- Participant: 4169 tests pass in CI mode, zero failures, 134 unchanged snapshots pass without obsolete entries. Existing 115 skipped tests remain skipped. Missing CSV scenarios, study corpora, and WOFF2 fixtures are now checked in; tests initialize the committed browser WASM. TypeScript, production Vite build, and upload-manifest checks pass.
+- Authoring: 561 tests pass. Fixed the removed Firebase uuidv4 export, preserved numeric defaults for blank table cells, and repaired timezone/mock expectations. Production build passes with demo Firebase metadata; Chromium desktop/mobile warning integration and manifest regression pass.
+- Website: compiler-cache/navbar, catalog-audit, catalog-report, and four modern function-runtime tests pass. All 29 Git-script regressions pass after making optional terminal colors safe when tput is unavailable. Independent real function suites pass, including the newly present speech-token and media-auth packages. External provider boundaries are mocked.
+- Independent PRs: fresh npm installs and audits complete with zero critical findings. Builds pass for ConnectAPeer, nodejs-server, virtual-keypad, speaker-calibration, and compatibility-check. cors-anywhere passes all 113 tests and lint. TestListenerPage has no real test/build script. remote-calibrator passes all 143 tests and production build using Bun 1.4.4; WebGazer4RC has no audit advisories. Generated build files are not committed.
+
+Native website npm audit now reports zero critical findings. High/low/moderate findings remain and are not claimed harmless. Physical calibration, live-provider authentication, production runtime overrides, and a complete signed-in participant study are not covered by these checks. No production deploy or PR merge was performed. Existing Deploy Preview checks must pass on the pushed heads before merging. The historical October 23 tables below are retained as historical findings.
+
 ## Verification and limitations
 
 Compiler cache, modern function runtime, catalog audit and catalog report suites pass on Node 24. Function package suites pass except prolific, whose test script is a placeholder. No deployment was requested.
