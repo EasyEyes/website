@@ -2,10 +2,10 @@
 
 set -e
 
-DEFAULT=$(tput setaf 7)
-RED=$(tput setaf 1)
-GREEN=$(tput setaf 2)
-YELLOW=$(tput setaf 3)
+DEFAULT=$(tput setaf 7 2>/dev/null) || DEFAULT=""
+RED=$(tput setaf 1 2>/dev/null) || RED=""
+GREEN=$(tput setaf 2 2>/dev/null) || GREEN=""
+YELLOW=$(tput setaf 3 2>/dev/null) || YELLOW=""
 
 # $1
 

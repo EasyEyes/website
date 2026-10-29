@@ -2,9 +2,9 @@
 
 set -e
 
-DEFAULT=$(tput setaf 7)
-RED=$(tput setaf 1)
-YELLOW=$(tput setaf 3)
+DEFAULT=$(tput setaf 7 2>/dev/null) || DEFAULT=""
+RED=$(tput setaf 1 2>/dev/null) || RED=""
+YELLOW=$(tput setaf 3 2>/dev/null) || YELLOW=""
 
 REPOS="docs/experiment/threshold/psychojs docs/experiment/threshold docs/experiment ."
 
