@@ -72,21 +72,34 @@ export interface AssistantHandlerDependencies {
 }
 
 export const ASSISTANT_PROTOCOL_VERSION = 1;
-export const DEFAULT_MODEL = "claude-sonnet-5";
+export const DEFAULT_MODEL = "claude-opus-5-5";
 /**
- * Sonnet 5 thinks adaptively at "high" effort unless told otherwise. When
- * the model had to type whole tables that meant 30–40 s a round and, on a
- * full study, the function's 60 s limit. The Studio's tools now take a
- * compact spec or a list of knobs (source/studio/builder) — a study is ~150
- * output tokens — so the model can be allowed to think about the ask, at
- * medium effort, and still answer in seconds. Set STUDIO_ASSISTANT_THINKING
- * to "off" (and effort "low") for the fastest, thought-free rounds.
+ * Opus 5.5 is the default model. Its thinking is always on and effort is
+ * the one control for how much it thinks (its own default is medium, which
+ * we send explicitly). When the model had to type whole tables a round took
+ * 30–40 s and a full study hit the function's 60 s limit; the Studio's tools
+ * now take a compact spec or a list of knobs (source/studio/builder) — a
+ * study is ~150 output tokens — so the model can think about the ask at
+ * medium effort and still answer in seconds.
+ *
+ * Thinking is never switched off in the request: `thinking: {type:
+ * "disabled"}` is a 400 on Opus 5.5 (and Sonnet 5.5). STUDIO_ASSISTANT_THINKING
+ * =off and mode "fast" both mean the lowest effort the site allows, with the
+ * model deciding how much to think at that level.
+ *
+ * `fallbacks: "default"` (beta server-side-fallback-2026-07-01): when the
+ * model's safety classifiers decline a request, the API re-runs it on
+ * Anthropic's recommended substitute for that refusal category instead of
+ * returning the refusal; the client still handles stop_reason "refusal" for
+ * the cases that remain.
  */
 export const DEFAULT_EFFORT = "medium";
 export const EFFORT_LEVELS = ["low", "medium", "high", "xhigh", "max"] as const;
 export const DEFAULT_THINKING = "adaptive";
 const ANTHROPIC_MESSAGES_ENDPOINT = "https://api.anthropic.com/v1/messages";
 const ANTHROPIC_VERSION = "2023-06-01";
+/** Server-side fallback on a classifier refusal (see the note above). */
+const ANTHROPIC_BETAS = "server-side-fallback-2026-07-01";
 const PAVLOVIA_GITLAB_USER_ENDPOINT = "https://gitlab.pavlovia.org/api/v4/user";
 
 /** Netlify's synchronous limit is 60 s; leave room to answer. */
@@ -194,7 +207,11 @@ export const effortSetting = (
     : DEFAULT_EFFORT;
 };
 
-/** True when the model may think ("adaptive"); anything else means off. */
+/**
+ * True when the site leaves thinking adaptive (the default); "off" asks for
+ * the quickest rounds, which the request expresses as effort "low" — the
+ * `thinking` parameter itself is never sent (see the note above).
+ */
 export const thinkingEnabled = (raw: string | undefined): boolean =>
   ((raw ?? "").trim().toLowerCase() || DEFAULT_THINKING) === "adaptive";
 
@@ -421,10 +438,11 @@ export const createAssistantHandler = (
     try {
       const fast = request.mode === "fast";
       const siteEffort = effortSetting(effort());
-      // Fast rounds: lowest effort (or none, if the site sends none) and no
-      // thinking — whichever is less than the site's setting.
-      const effortLevel = fast && siteEffort ? "low" : siteEffort;
-      const think = thinkingEnabled(thinking()) && !fast;
+      // Quick rounds — mode "fast", or a site with thinking "off" — send the
+      // lowest effort (or none, if the site sends none); never more than the
+      // site's setting, and never a `thinking` parameter.
+      const quick = fast || !thinkingEnabled(thinking());
+      const effortLevel = quick && siteEffort ? "low" : siteEffort;
       const upstream = await withTimeout(
         fetchImpl,
         ANTHROPIC_MESSAGES_ENDPOINT,
@@ -434,12 +452,13 @@ export const createAssistantHandler = (
             "Content-Type": "application/json",
             "x-api-key": key,
             "anthropic-version": ANTHROPIC_VERSION,
+            "anthropic-beta": ANTHROPIC_BETAS,
           },
           body: JSON.stringify({
             model: model()?.trim() || DEFAULT_MODEL,
+            fallbacks: "default",
             max_tokens: request.maxTokens,
             ...(effortLevel ? { output_config: { effort: effortLevel } } : {}),
-            ...(think ? {} : { thinking: { type: "disabled" } }),
             system: request.system,
             messages: request.messages,
             tools: request.tools,

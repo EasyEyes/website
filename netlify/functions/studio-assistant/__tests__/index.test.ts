@@ -97,26 +97,30 @@ describe("studio-assistant Netlify function", () => {
     expect(init.headers).toMatchObject({
       "x-api-key": API_KEY,
       "anthropic-version": "2023-06-01",
+      // A refused request is re-run server-side on the recommended
+      // substitute for that refusal category.
+      "anthropic-beta": "server-side-fallback-2026-07-01",
     });
     const sent = JSON.parse(init.body as string);
     expect(sent).toMatchObject({
       model: DEFAULT_MODEL,
+      fallbacks: "default",
       max_tokens: 4096,
-      // Sonnet 5 would otherwise think at "high" effort — 30 s a round.
-      // Adaptive thinking stays on (the default): the Studio's spec-based
-      // tools keep the output small, so thinking costs seconds, not tens.
+      // Opus 5.5 always thinks; effort is the control and medium keeps a
+      // round to seconds, since the spec-based tools keep the output small.
       output_config: { effort: DEFAULT_EFFORT },
       system: validBody().system,
       messages: validBody().messages,
       tools: validBody().tools,
     });
+    expect(DEFAULT_MODEL).toBe("claude-opus-5-5");
     expect(DEFAULT_EFFORT).toBe("medium");
     expect(sent.thinking).toBeUndefined();
     // The account token never travels upstream.
     expect(JSON.stringify(sent)).not.toContain("gitlab-oauth-token");
   });
 
-  it("lets the site change the effort, send none for models without it, or turn thinking off", async () => {
+  it("lets the site change the effort, send none for models without it; thinking 'off' means low effort, never a thinking parameter", async () => {
     expect(effortSetting(undefined)).toBe(DEFAULT_EFFORT);
     expect(effortSetting(" Low ")).toBe("low");
     expect(effortSetting("nonsense")).toBe(DEFAULT_EFFORT);
@@ -136,10 +140,26 @@ describe("studio-assistant Netlify function", () => {
         .body as string,
     );
     expect(sent.output_config).toBeUndefined();
-    expect(sent.thinking).toEqual({ type: "disabled" });
+    // `thinking: {type: "disabled"}` is a 400 on Opus 5.5 (and Sonnet 5.5),
+    // so it is never sent; "off" lowers effort instead.
+    expect(sent.thinking).toBeUndefined();
+
+    const withEffort = upstreamOk();
+    await createAssistantHandler({
+      fetchImpl: withEffort as unknown as typeof fetch,
+      apiKey: () => API_KEY,
+      verifyPavloviaToken: tokenAccepted,
+      thinking: () => "off",
+    })(event());
+    const quick = JSON.parse(
+      (withEffort.mock.calls[0] as unknown as [string, RequestInit])[1]
+        .body as string,
+    );
+    expect(quick.output_config).toEqual({ effort: "low" });
+    expect(quick.thinking).toBeUndefined();
   });
 
-  it("mode 'fast' asks for a thought-free, low-effort round — never more than the site's setting", async () => {
+  it("mode 'fast' asks for a low-effort round — never more than the site's setting, never a thinking parameter", async () => {
     const fetchImpl = upstreamOk();
     const handler = createAssistantHandler({
       fetchImpl: fetchImpl as unknown as typeof fetch,
@@ -153,7 +173,7 @@ describe("studio-assistant Netlify function", () => {
         .body as string,
     );
     expect(sent.output_config).toEqual({ effort: "low" });
-    expect(sent.thinking).toEqual({ type: "disabled" });
+    expect(sent.thinking).toBeUndefined();
 
     // A site that sends no effort setting keeps sending none.
     const noEffort = upstreamOk();
@@ -168,7 +188,7 @@ describe("studio-assistant Netlify function", () => {
         .body as string,
     );
     expect(sent.output_config).toBeUndefined();
-    expect(sent.thinking).toEqual({ type: "disabled" });
+    expect(sent.thinking).toBeUndefined();
 
     // Only "fast" is a mode; a client cannot ask for more.
     expect((await handler(event({ mode: "max" }))).statusCode).toBe(400);
