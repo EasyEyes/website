@@ -121,3 +121,6 @@ glossary_local.js
 
 # Build-specific phrase source index, generated before the compiler bundle.
 netlify/functions/study-phrase-analysis/source-index.json
+
+# Local agent plans and task notes
+/tasks/
