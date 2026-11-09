@@ -1,5 +1,5 @@
 /**
- * Minimal local host for the studio-assistant function — no Netlify CLI.
+ * Minimal local gateway for studio-assistant and study-phrase-analysis — no Netlify CLI.
  *
  *   cd website/netlify/functions/studio-assistant && npm run dev
  *
@@ -19,6 +19,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from "http";
 import { readFileSync } from "fs";
 import { resolve } from "path";
 import { legacyHandler, config } from "./index";
+import studyPhraseAnalysisHandler from "../study-phrase-analysis/index.mts";
 
 const PORT = Number(process.env.PORT) || 8888;
 const UPSTREAM = process.env.UPSTREAM || "https://easyeyes.app";
@@ -104,6 +105,29 @@ const server = createServer((req, res) => {
       res.writeHead(200).end();
       return;
     }
+    if (url.pathname === "/.netlify/functions/study-phrase-analysis") {
+      const request = new Request(url, {
+        method: req.method,
+        headers: req.headers,
+        body:
+          body && req.method !== "GET" && req.method !== "HEAD"
+            ? new Uint8Array(body)
+            : undefined,
+      });
+      const response = await studyPhraseAnalysisHandler(request);
+      const headers: Record<string, string> = {};
+      response.headers.forEach((value, key) => {
+        if (!SKIP_RESPONSE_HEADERS.has(key)) headers[key] = value;
+      });
+      console.log(
+        `${req.method} ${url.pathname} → ${response.status} (local index)`,
+      );
+      res
+        .writeHead(response.status, headers)
+        .end(Buffer.from(await response.arrayBuffer()));
+      return;
+    }
+
     if (url.pathname !== config.path) {
       await forward(req, res, url, body);
       return;

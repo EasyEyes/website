@@ -97,7 +97,7 @@ force = true
 # package = "@netlify/plugin-lighthouse"
 
 [dev]
-command = "npm start"
+command = "npm run start:compiler"
 port = 8888
 targetPort= 5500
 publish = "docs/"
