@@ -26,7 +26,10 @@
     "test:catalog-audit": "node --test scripts/catalog-audit/*.test.mjs",
     "test:catalog-report": "node --test netlify/functions/catalog-usage-report/__tests__/*.test.mjs",
     "test:git-scripts": "sh tests/git-scripts.test.sh",
-    "phrase-analysis:build": "node scripts/phrase-analysis/build.mjs"
+    "phrase-analysis:build": "node scripts/phrase-analysis/build.mjs",
+    "dead-code": "node scripts/deadCode.mjs",
+    "dead-code:purge": "node scripts/deadCode.mjs --purge",
+    "test:dead-code": "node --test scripts/deadCode.test.mjs"
   },
   "repository": {
     "type": "git",
