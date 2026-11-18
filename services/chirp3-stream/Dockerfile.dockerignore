@@ -1,0 +1,11 @@
+**
+!services/
+!services/chirp3-stream/
+!services/chirp3-stream/package.json
+!services/chirp3-stream/package-lock.json
+!services/chirp3-stream/*.mjs
+!netlify/
+!netlify/functions/
+!netlify/functions/shared/
+!netlify/functions/shared/chirp3Ticket.ts
+!netlify/functions/shared/cors.ts

@@ -1,0 +1,16 @@
+{
+  "name": "easyeyes-chirp3-stream",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node start.mjs",
+    "test": "node --test test/*.test.mjs"
+  },
+  "engines": {
+    "node": ">=24.22.1 <25"
+  },
+  "dependencies": {
+    "@google-cloud/speech": "8.2.1",
+    "ws": "8.23.0"
+  }
+}

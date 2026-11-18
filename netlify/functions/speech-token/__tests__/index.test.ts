@@ -1,11 +1,12 @@
 import { config, createSpeechTokenHandler } from "../index";
+import { verifyChirp3Ticket } from "../../shared/chirp3Ticket";
 
 const ORIGIN = "https://run.pavlovia.org";
 const ELEVENLABS_API_KEY = "server-only-elevenlabs-key";
 const DEEPGRAM_API_KEY = "server-only-deepgram-key";
 
 const event = (
-  provider: "elevenlabs" | "deepgram" = "elevenlabs",
+  provider: "elevenlabs" | "deepgram" | "chirp3" = "elevenlabs",
   httpMethod = "POST",
   headers: Record<string, string | undefined> = {},
   bodyOverrides: Partial<{
@@ -41,6 +42,46 @@ const successfulElevenLabsFetch = jest.fn(
 const contextAccepted = jest.fn(async () => true);
 
 describe("speech-token Netlify function", () => {
+  it("issues a scoped Chirp 3 relay ticket without exposing Pavlovia or Google credentials", async () => {
+    const secret = "test-secret-with-at-least-32-characters";
+    const relay = "wss://relay.run.app/v1/stream";
+    const fetchImpl = jest.fn();
+    const handler = createSpeechTokenHandler({
+      fetchImpl: fetchImpl as typeof fetch,
+      now: () => 100000,
+      verifyExperimentContext: contextAccepted,
+      chirp3RelayUrl: () => relay,
+      chirp3TicketSecret: () => secret,
+    });
+    const response = await handler(event("chirp3"));
+    expect(response.statusCode).toBe(200);
+    const body = JSON.parse(response.body);
+    expect(body).toMatchObject({ websocketUrl: relay, expiresInSeconds: 60 });
+    const claims = verifyChirp3Ticket(
+      body.token,
+      secret,
+      relay,
+      ORIGIN,
+      100001,
+    );
+    expect(claims.session).toMatch(/^[a-f0-9]{64}$/);
+    expect(response.body).not.toContain(secret);
+    expect(JSON.stringify(claims)).not.toContain("pavlovia-session-token");
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it("does not issue Chirp 3 tickets without a valid session or server setup", async () => {
+    const denied = createSpeechTokenHandler({
+      verifyExperimentContext: async () => false,
+    });
+    expect((await denied(event("chirp3"))).statusCode).toBe(401);
+    const disabled = createSpeechTokenHandler({
+      verifyExperimentContext: async () => true,
+      chirp3RelayUrl: () => undefined,
+      chirp3TicketSecret: () => undefined,
+    });
+    expect((await disabled(event("chirp3"))).statusCode).toBe(503);
+  });
   beforeEach(() => {
     successfulElevenLabsFetch.mockClear();
     contextAccepted.mockClear();
@@ -203,7 +244,12 @@ describe("speech-token Netlify function", () => {
     });
 
     const response = await handler(
-      event("elevenlabs", "POST", {}, { experimentFullPath: "scientist/study" }),
+      event(
+        "elevenlabs",
+        "POST",
+        {},
+        { experimentFullPath: "scientist/study" },
+      ),
     );
 
     expect(response.statusCode).toBe(200);
