@@ -1,6 +1,7 @@
 import { createHash } from "crypto";
 import { corsHeaders, isAllowedOrigin } from "../shared/cors";
 import { nativeHandler } from "../shared/nativeHandler";
+import { chirp3StreamUrl, issueChirp3Ticket } from "../shared/chirp3Ticket";
 
 type NetlifyEvent = {
   httpMethod: string;
@@ -15,7 +16,7 @@ type NetlifyResponse = {
 };
 
 type FetchLike = typeof fetch;
-type SpeechProvider = "elevenlabs" | "deepgram";
+type SpeechProvider = "elevenlabs" | "deepgram" | "chirp3";
 
 interface SpeechTokenRequest {
   readonly protocolVersion: 1;
@@ -29,6 +30,8 @@ export interface SpeechTokenHandlerDependencies {
   readonly now?: () => number;
   readonly elevenLabsApiKey?: () => string | undefined;
   readonly deepgramApiKey?: () => string | undefined;
+  readonly chirp3RelayUrl?: () => string | undefined;
+  readonly chirp3TicketSecret?: () => string | undefined;
   readonly verifyExperimentContext?: (
     request: SpeechTokenRequest,
   ) => Promise<boolean>;
@@ -133,7 +136,11 @@ const parseRequest = (body: string | null): SpeechTokenRequest | undefined => {
     if (parsed.protocolVersion !== SPEECH_TOKEN_PROTOCOL_VERSION) {
       return undefined;
     }
-    if (parsed.provider !== "elevenlabs" && parsed.provider !== "deepgram") {
+    if (
+      parsed.provider !== "elevenlabs" &&
+      parsed.provider !== "deepgram" &&
+      parsed.provider !== "chirp3"
+    ) {
       return undefined;
     }
     if (
@@ -214,6 +221,10 @@ export const createSpeechTokenHandler = (
     dependencies.elevenLabsApiKey ?? (() => process.env.ELEVENLABS_API_KEY);
   const deepgramApiKey =
     dependencies.deepgramApiKey ?? (() => process.env.DEEPGRAM_API_KEY);
+  const chirp3RelayUrl =
+    dependencies.chirp3RelayUrl ?? (() => process.env.CHIRP3_RELAY_URL);
+  const chirp3TicketSecret =
+    dependencies.chirp3TicketSecret ?? (() => process.env.CHIRP3_TICKET_SECRET);
   const upstreamTimeoutMs = validatePositive(
     dependencies.upstreamTimeoutMs ?? DEFAULT_UPSTREAM_TIMEOUT_MS,
     "upstreamTimeoutMs",
@@ -299,6 +310,35 @@ export const createSpeechTokenHandler = (
     }
     if (!(await verifyExperimentContext(request))) {
       return jsonResponse(401, { error: "Invalid experiment session" }, origin);
+    }
+    if (request.provider === "chirp3") {
+      try {
+        const websocketUrl = chirp3StreamUrl(chirp3RelayUrl() ?? "");
+        const token = issueChirp3Ticket(
+          {
+            audience: websocketUrl,
+            origin: origin!,
+            session: createHash("sha256")
+              .update(
+                `${request.experimentFullPath}:${request.pavloviaSessionToken}`,
+              )
+              .digest("hex"),
+          },
+          chirp3TicketSecret() ?? "",
+          requestTime,
+        );
+        return jsonResponse(
+          200,
+          { token, expiresInSeconds: 60, websocketUrl },
+          origin,
+        );
+      } catch {
+        return jsonResponse(
+          503,
+          { error: "Realtime transcription is not configured" },
+          origin,
+        );
+      }
     }
     if (typeof fetchImpl !== "function") {
       return jsonResponse(
