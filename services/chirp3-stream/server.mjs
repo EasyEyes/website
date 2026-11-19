@@ -9,6 +9,7 @@ import { buildRecognitionRequest } from "./config.mjs";
 
 const MAX_AUDIO_MESSAGE = 24000;
 const MAX_BUFFER = 256 * 1024;
+const MAX_PENDING_AUDIO_WRITES = 16;
 
 export function createChirp3Server({
   project,
@@ -65,8 +66,9 @@ export function createChirp3Server({
     );
   });
   sockets.on("connection", (ws, request) => {
-    let stream, utteranceId;
+    let stream, recognitionRequest, utteranceId;
     let phase = "authenticating";
+    let pendingAudioWrites = 0;
     let totalAudioBytes = 0,
       audioStartedAt,
       lastAudioAt;
@@ -103,6 +105,49 @@ export function createChirp3Server({
       cleanup();
       ws.close(1000, "speech-complete");
     };
+    const openGoogleStream = () => {
+      stream = createStream();
+      stream.on("error", (error) =>
+        fail(
+          error?.code === 8
+            ? "quotaExceeded"
+            : error?.code === 7 || error?.code === 16
+            ? "authenticationFailure"
+            : "providerUnavailable",
+        ),
+      );
+      stream.on("data", (response) => {
+        if (phase !== "listening" && phase !== "finalizing") return;
+        const interim = [];
+        for (const result of response.results ?? []) {
+          const text = result.alternatives?.[0]?.transcript;
+          if (typeof text !== "string") continue;
+          if (result.isFinal) send({ type: "segment", utteranceId, text });
+          else if (text.trim()) interim.push(text);
+        }
+        if (interim.length)
+          send({ type: "partial", utteranceId, text: interim.join(" ") });
+      });
+      stream.on("status", (status) => {
+        if (status.code !== 0) {
+          fail("providerUnavailable");
+          return;
+        }
+        statusOk = true;
+        complete();
+      });
+      stream.on("end", () => {
+        ended = true;
+        if (phase !== "finalizing") {
+          fail("providerUnavailable");
+          return;
+        }
+        complete();
+      });
+      stream.write(recognitionRequest, (error) => {
+        if (error) fail("providerUnavailable");
+      });
+    };
     authTimer = setTimeout(() => fail("authenticationFailure"), 5000);
     durationTimer = setTimeout(() => fail("sessionLimit"), maxStreamMs);
     heartbeat = setInterval(() => {
@@ -131,8 +176,7 @@ export function createChirp3Server({
       try {
         if (isBinary) {
           if (
-            phase !== "listening" ||
-            !stream ||
+            (phase !== "awaitingAudio" && phase !== "listening") ||
             !data.length ||
             data.length % 2 ||
             data.length > MAX_AUDIO_MESSAGE
@@ -144,11 +188,29 @@ export function createChirp3Server({
           totalAudioBytes += data.length;
           if (
             totalAudioBytes > 32000 * 285 ||
-            totalAudioBytes > (now - audioStartedAt + 2000) * 32 ||
-            stream.writableLength > 16
+            totalAudioBytes > (now - audioStartedAt + 2000) * 32
           )
             throw new Error("Audio backlog exceeded.");
-          stream.write({ audio: Buffer.from(data) });
+          if (pendingAudioWrites >= MAX_PENDING_AUDIO_WRITES) {
+            fail("providerUnavailable");
+            return;
+          }
+          try {
+            if (phase === "awaitingAudio") {
+              phase = "listening";
+              openGoogleStream();
+              if (phase !== "listening") return;
+            }
+            // The writable stream queues audio behind the recognition config.
+            // Count outstanding writes even when the SDK stream is not writable yet.
+            pendingAudioWrites++;
+            stream.write({ audio: Buffer.from(data) }, (error) => {
+              pendingAudioWrites--;
+              if (error) fail("providerUnavailable");
+            });
+          } catch {
+            fail("providerUnavailable");
+          }
           return;
         }
         const message = JSON.parse(data.toString());
@@ -163,71 +225,30 @@ export function createChirp3Server({
           for (const [id, expiry] of usedTickets)
             if (expiry <= now) usedTickets.delete(id);
           if (usedTickets.has(claims.id)) throw new Error("Reused ticket.");
-          const config = buildRecognitionRequest(project, location, message);
+          recognitionRequest = buildRecognitionRequest(
+            project,
+            location,
+            message,
+          );
           usedTickets.set(claims.id, claims.expiresAt);
           utteranceId = message.utteranceId;
           clearTimeout(authTimer);
-          phase = "preparing";
-          stream = createStream();
-          stream.on("error", (error) =>
-            fail(
-              error?.code === 8
-                ? "quotaExceeded"
-                : error?.code === 7 || error?.code === 16
-                ? "authenticationFailure"
-                : "providerUnavailable",
-            ),
-          );
-          stream.on("data", (response) => {
-            if (phase !== "listening" && phase !== "finalizing") return;
-            const interim = [];
-            for (const result of response.results ?? []) {
-              const text = result.alternatives?.[0]?.transcript;
-              if (typeof text !== "string") continue;
-              if (result.isFinal) send({ type: "segment", utteranceId, text });
-              else if (text.trim()) interim.push(text);
-            }
-            if (interim.length)
-              send({ type: "partial", utteranceId, text: interim.join(" ") });
-          });
-          stream.on("status", (status) => {
-            if (status.code !== 0) {
-              fail("providerUnavailable");
-              return;
-            }
-            statusOk = true;
-            complete();
-          });
-          stream.on("end", () => {
-            ended = true;
-            if (phase !== "finalizing") {
-              fail("providerUnavailable");
-              return;
-            }
-            complete();
-          });
-          stream.write(config, (error) => {
-            if (error) {
-              fail("providerUnavailable");
-              return;
-            }
-            if (phase !== "preparing") return;
-            phase = "listening";
-            send({
-              type: "ready",
-              utteranceId,
-              provider: "chirp3",
-              model: "chirp_3",
-              languageCode: message.languageCode,
-              sampleRate: 16000,
-            });
+          // Ready means the relay can accept PCM, not that Google is connected.
+          phase = "awaitingAudio";
+          send({
+            type: "ready",
+            utteranceId,
+            provider: "chirp3",
+            model: "chirp_3",
+            languageCode: message.languageCode,
+            sampleRate: 16000,
           });
           return;
         }
         if (
           message.type === "finish" &&
           message.utteranceId === utteranceId &&
-          phase === "listening"
+          (phase === "awaitingAudio" || phase === "listening")
         ) {
           if (!totalAudioBytes) {
             fail("invalidAudio");
