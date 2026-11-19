@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createBenchmarkHandler } from "./functions/rsvp-benchmark-ticket.ts";
+import deployedHandler, {
+  createBenchmarkHandler,
+} from "./functions/rsvp-benchmark-ticket.mts";
 import { verifyChirp3Ticket } from "../../netlify/functions/shared/chirp3Ticket.ts";
 
 const RSVP_BENCH_ORIGIN = "https://deploy-preview-42--easyeyes.netlify.app";
@@ -14,16 +16,30 @@ const env = {
   CHIRP3_TICKET_SECRET,
 };
 const now = () => 1_234_500;
-const event = {
-  httpMethod: "POST",
-  headers: { origin: RSVP_BENCH_ORIGIN, "sec-fetch-site": "same-origin" },
-  body: JSON.stringify({ accessCode: RSVP_BENCH_ACCESS_CODE }),
-};
+const request = ({
+  hostname = RSVP_BENCH_ORIGIN,
+  origin = RSVP_BENCH_ORIGIN,
+  method = "POST",
+  body = JSON.stringify({ accessCode: RSVP_BENCH_ACCESS_CODE }),
+} = {}) =>
+  new Request(`${hostname}/.netlify/functions/rsvp-benchmark-ticket`, {
+    method,
+    headers: {
+      origin,
+      "sec-fetch-site": "same-origin",
+      "Content-Type": "application/json",
+    },
+    body: method === "POST" ? body : undefined,
+  });
 
 test("valid preview request mints a short-lived origin-bound relay ticket", async () => {
-  const result = await createBenchmarkHandler(env, now)(event);
-  assert.equal(result.statusCode, 200);
-  const { token, websocketUrl } = JSON.parse(result.body);
+  assert.equal(typeof deployedHandler, "function");
+  const result = await createBenchmarkHandler(env, now)(request());
+  assert.ok(result instanceof Response);
+  assert.equal(result.status, 200);
+  assert.equal(result.headers.get("cache-control"), "no-store");
+  const body = await result.text();
+  const { token, websocketUrl } = JSON.parse(body);
   assert.equal(websocketUrl, CHIRP3_RELAY_URL);
   assert.equal(
     verifyChirp3Ticket(
@@ -44,8 +60,8 @@ test("valid preview request mints a short-lived origin-bound relay ticket", asyn
       now(),
     ),
   );
-  assert(!result.body.includes(RSVP_BENCH_ACCESS_CODE));
-  assert(!result.body.includes(CHIRP3_TICKET_SECRET));
+  assert(!body.includes(RSVP_BENCH_ACCESS_CODE));
+  assert(!body.includes(CHIRP3_TICKET_SECRET));
 });
 
 test("production, another preview, and invalid access codes cannot mint tickets", async () => {
@@ -55,37 +71,41 @@ test("production, another preview, and invalid access codes cannot mint tickets"
       await createBenchmarkHandler(
         { ...env, RSVP_BENCH_ORIGIN: "https://easyeyes.app" },
         now,
-      )(event)
-    ).statusCode,
+      )(request())
+    ).status,
     503,
   );
   assert.equal(
     (
-      await handle({
-        ...event,
-        headers: {
-          ...event.headers,
+      await handle(
+        request({
           origin: "https://deploy-preview-43--easyeyes.netlify.app",
-        },
-      })
-    ).statusCode,
+        }),
+      )
+    ).status,
     403,
   );
   assert.equal(
     (
-      await handle({
-        ...event,
-        body: JSON.stringify({ accessCode: "b".repeat(64) }),
-      })
-    ).statusCode,
+      await handle(
+        request({
+          body: JSON.stringify({ accessCode: "b".repeat(64) }),
+        }),
+      )
+    ).status,
     401,
+  );
+  assert.equal(
+    (await handle(request({ hostname: "https://easyeyes.app" }))).status,
+    403,
   );
 });
 
 test("per-instance warm rate window limits successful requests", async () => {
   const handle = createBenchmarkHandler(env, now);
-  assert.equal((await handle({ ...event, httpMethod: "GET" })).statusCode, 405);
+  assert.equal((await handle(request({ method: "GET" }))).status, 405);
+  assert.equal((await handle(request({ body: "x".repeat(300) }))).status, 400);
   for (let i = 0; i < 30; i++)
-    assert.equal((await handle(event)).statusCode, 200);
-  assert.equal((await handle(event)).statusCode, 429);
+    assert.equal((await handle(request())).status, 200);
+  assert.equal((await handle(request())).status, 429);
 });
