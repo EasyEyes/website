@@ -15,7 +15,7 @@ const require = createRequire(
 const { chromium } = require("playwright");
 const server = createServer(async (req, res) => {
   const path = req.url === "/" ? "/index.html" : req.url;
-  if (!/^\/(?:index\.html|assets\/[a-z0-9_-]+\.(?:js|css|wasm))$/i.test(path))
+  if (!/^\/(?:index\.html|main\.js|style\.css)$/i.test(path))
     return res.writeHead(404).end();
   try {
     const contents = await readFile(new URL(`./dist${path}`, import.meta.url));
