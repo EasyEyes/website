@@ -104,3 +104,17 @@ publish = "docs/"
 
 [functions]
 node_bundler = "esbuild"
+
+[context.deploy-preview]
+publish = "benchmarks/chirp3-rsvp/dist"
+command = "git submodule update --init --recursive docs/experiment && npm ci --prefix docs/experiment/threshold --ignore-scripts && node benchmarks/chirp3-rsvp/build.mjs"
+
+[context.deploy-preview.functions]
+directory = "benchmarks/chirp3-rsvp/functions"
+
+[context.branch-deploy]
+publish = "benchmarks/chirp3-rsvp/dist"
+command = "git submodule update --init --recursive docs/experiment && npm ci --prefix docs/experiment/threshold --ignore-scripts && node benchmarks/chirp3-rsvp/build.mjs"
+
+[context.branch-deploy.functions]
+directory = "benchmarks/chirp3-rsvp/functions"
