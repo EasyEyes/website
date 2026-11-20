@@ -1,0 +1,48 @@
+diff --git a/components/rsvpSpeech/rsvpSpeechFinish.ts b/components/rsvpSpeech/rsvpSpeechFinish.ts
+--- a/components/rsvpSpeech/rsvpSpeechFinish.ts
++++ b/components/rsvpSpeech/rsvpSpeechFinish.ts
+@@ -24,24 +24,25 @@ export const stripRsvpSpeechFinishPhrase = (
+   ) {
+     variants.push(["do", "not", "know"], ["dont", "no"], ["dunno"]);
+   }
+-  for (const variant of variants) {
+-    if (!variant.length || variant.length > keys.length) continue;
+-    const offset = keys.length - variant.length;
+-    if (!variant.every((key, index) => keys[offset + index] === key)) continue;
+-    // "I" belongs to the English command, not to the preceding answer.
+-    const start =
+-      languageCode.toLowerCase().startsWith("en") &&
+-      offset > 0 &&
+-      keys[offset - 1] === "i"
+-        ? offset - 1
+-        : offset;
+-    return {
+-      text: tokens
+-        .slice(0, start)
+-        .map((token) => token.original)
+-        .join(" "),
+-      finished: true,
+-    };
++  const isEnglish = languageCode.toLowerCase().startsWith("en");
++  let end = keys.length;
++  while (end > 0) {
++    const match = variants.find(
++      (variant) =>
++        variant.length > 0 &&
++        variant.length <= end &&
++        variant.every((key, index) => keys[end - variant.length + index] === key),
++    );
++    if (!match) break;
++    end -= match.length;
++    if (isEnglish && end > 0 && keys[end - 1] === "i") end--;
+   }
+-  return { text, finished: false };
++  if (end === keys.length) return { text, finished: false };
++  return {
++    text: tokens
++      .slice(0, end)
++      .map((token) => token.original)
++      .join(" "),
++    finished: true,
++  };
+ };

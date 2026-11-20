@@ -142,6 +142,8 @@ function instrument(transcriber, mark) {
     if (event.type === "commit") {
       if (event.finalAcknowledgement === true) mark("provider-complete");
       else mark("segment", { text: event.text });
+    } else if (event.type === "partial") {
+      mark("provider-interim", { text: event.text });
     } else if (event.type === "error")
       mark("provider-error", { code: event.error.code });
   });
@@ -453,6 +455,7 @@ $("settings").addEventListener("submit", async (event) => {
         ? scenario.expected(settings.ignoreOrder)
         : scenario.expected,
     events: [],
+    interimTranscripts: [],
     actuallySaid: null,
     error: null,
     score: null,
@@ -462,6 +465,14 @@ $("settings").addEventListener("submit", async (event) => {
   active = abort;
   const start = performance.now();
   const mark = (name, extra) => {
+    if (name === "provider-interim") {
+      const text = extra.text.slice(-512);
+      if (run.interimTranscripts.at(-1)?.text !== text) {
+        run.interimTranscripts.push({ ms: performance.now() - start, text });
+        if (run.interimTranscripts.length > 60) run.interimTranscripts.shift();
+      }
+      return;
+    }
     const row = { name, ms: performance.now() - start, ...extra };
     run.events.push(row);
     if (name === "finish")
@@ -731,6 +742,7 @@ function addReport(run) {
           settings: run.settings,
           timingMs: run.timing,
           events: run.events,
+          interimTranscripts: run.interimTranscripts,
           alignment: run.score?.alignmentEvents,
         },
         null,

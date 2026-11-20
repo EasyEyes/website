@@ -35,6 +35,10 @@ Use developer test speech only. Exports may contain test transcripts, but
 never audio, tickets, or credentials. Nothing is kept by the page after
 reload unless it is exported.
 
+The preview build applies the repeated finish-phrase patch to a temporary copy
+of the pinned Threshold source. JSON exports keep the raw final transcript
+and a bounded interim transcript history for diagnosis.
+
 The timeline separates permission/device open, capture start, first outgoing
 audio, DOM display, capture stop, commit, final result, and teardown. The DOM
 display timestamp is not a physical pixel measurement. Relay readiness does
