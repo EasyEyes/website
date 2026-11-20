@@ -39,20 +39,22 @@ reload unless it is exported.
 
 ## Same-audio provider comparison
 
-In **Compare with**, choose ElevenLabs or Deepgram. Select **Provider comparison: all three
+In **Compare with**, choose **Both** to test all three engines together, or
+pick a single comparison provider. Select **Provider comparison: all three
 correct**, and read the three words. Select **Provider comparison: only word 1
 wrong**, keep the same targets and settings, and use the displayed replacement
 (for example, say **cold, ducks, stone** for **coat, ducks, stone**). Confirm
 what you said on each report. Repeat on more target sets and, if needed, with
 keyterms off. Durations are fixed in these scenarios.
 
-Both providers receive the same microphone PCM chunks. Chirp 3 still controls
-the recording window; the comparison provider finalizes at the same finish
+All selected providers receive the same microphone PCM chunks. Chirp 3 still
+controls the recording window; comparison providers finalize at the same finish
 request and never feeds QUEST. ElevenLabs uses one explicit commit in this
 benchmark. The paired summary counts correct targets on the all-correct
 runs, false credit on word 1, and missed correct words at positions 2–3.
-Runs without both results and matching audio counts are excluded from paired
-metrics. No audio is saved or exported by this harness. Deepgram requests opt
+Runs without all selected results and matching audio counts are excluded from
+combined metrics, but their available individual results are still shown.
+No audio is saved or exported by this harness. Deepgram requests opt
 out of model improvement. ElevenLabs requests logging off; if ElevenLabs
 reports that zero retention was not applied, the comparison stops and is
 excluded. Use only consenting developer test speech.

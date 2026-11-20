@@ -153,3 +153,15 @@ test("ElevenLabs returns only a capped single-use Scribe token", async () => {
   assert.deepEqual(await result.json(), { token: "single-use" });
   assert.equal(calls, 1);
 });
+
+test("reports rejected Deepgram grants without returning provider bodies or credentials", async () => {
+  const body = JSON.stringify({ accessCode: RSVP_BENCH_ACCESS_CODE, provider: "deepgram" });
+  const handler = createBenchmarkHandler(
+    { ...env, RSVP_BENCH_DEEPGRAM_API_KEY: "secret-deepgram-key" },
+    now,
+    async () => Response.json({ message: "upstream sensitive error" }, { status: 403 }),
+  );
+  const result = await handler(request({ body }));
+  assert.equal(result.status, 502);
+  assert.deepEqual(await result.json(), { error: "deepgramGrantRejected", upstreamStatus: 403 });
+});

@@ -47,7 +47,10 @@ const providerSettings = () => ({
     }),
   ),
   provider: "chirp3",
-  comparisonProvider: $("comparison-provider").value || null,
+  comparisonProviders:
+    $("comparison-provider").value === "both"
+      ? Object.keys(comparisonProviders)
+      : [$("comparison-provider").value].filter(Boolean),
   adaptive: $("adaptive").value === "TRUE",
   guess: $("quest-guess").valueAsNumber,
 });
@@ -144,7 +147,7 @@ const pause = (ms, signal) =>
     signal.addEventListener("abort", end, { once: true });
   });
 
-function instrument(transcriber, mark, comparison, audioCounts) {
+function instrument(transcriber, mark, comparisons, audioCounts) {
   let firstAudio = true;
   transcriber.subscribe((event) => {
     if (event.type === "commit") {
@@ -169,7 +172,7 @@ function instrument(transcriber, mark, comparison, audioCounts) {
           target.sendAudio(id, chunk);
           audioCounts.chunks++;
           audioCounts.samples += chunk.samples.length;
-          comparison?.send(chunk);
+          for (const comparison of comparisons) comparison.send(chunk);
           if (firstAudio) {
             firstAudio = false;
             mark("first-audio");
@@ -178,13 +181,13 @@ function instrument(transcriber, mark, comparison, audioCounts) {
       if (key === "beginUtterance")
         return (id) => {
           target.beginUtterance(id);
-          comparison?.begin(id);
+          for (const comparison of comparisons) comparison.begin(id);
         };
       if (key === "requestCommit")
         return (...args) => {
           mark("finish");
           const result = target.requestCommit(...args);
-          comparison?.finish();
+          for (const comparison of comparisons) comparison.finish();
           return result;
         };
       const value = Reflect.get(target, key, target);
@@ -317,19 +320,26 @@ async function play(run, signal, mark, elapsed) {
     if (provider === "chirp3") mark("ticket", { status: response.status });
     if (!response.ok) {
       if (provider === "chirp3") run.ticketStatus = response.status;
-      else run.comparison.ticketStatus = response.status;
+      else {
+        const result = run.comparisons[provider];
+        result.ticketStatus = response.status;
+        const data = await response.json().catch(() => null);
+        if (/^(previewNotConfigured|(deepgram|elevenlabs)(NotConfigured|Grant(Rejected|InvalidResponse|Timeout|Failed)))$/.test(data?.error ?? ""))
+          result.ticketError = data.error;
+        if (Number.isInteger(data?.upstreamStatus) && data.upstreamStatus >= 400 && data.upstreamStatus <= 599)
+          result.upstreamStatus = data.upstreamStatus;
+      }
       throw new Error("Could not get a Preview credential.");
     }
     return response.json();
   };
-  const provider = run.settings.comparisonProvider;
-  let comparison;
-  if (provider) {
+  const comparisons = [];
+  for (const provider of run.settings.comparisonProviders) {
     try {
-      comparison = createComparison(run, async () => (await credentials(provider)).token, elapsed);
+      comparisons.push(createComparison(run, provider, async () => (await credentials(provider)).token, elapsed));
     } catch (error) {
-      if (!run.comparison) throw error;
-      run.comparison.error = error?.code ?? "comparisonFailed";
+      run.comparisons[provider] ??= { provider, score: null };
+      run.comparisons[provider].error = error?.code ?? "comparisonFailed";
     }
   }
   const audioCounts = (run.audioSent = { chunks: 0, samples: 0 });
@@ -365,7 +375,7 @@ async function play(run, signal, mark, elapsed) {
             mark("capture-stop");
         }
       })(microphone),
-    createTranscriber: () => instrument(transcriber, mark, comparison, audioCounts),
+    createTranscriber: () => instrument(transcriber, mark, comparisons, audioCounts),
     createSession: (observed, config) => {
       const session = new SpeechSession(observed, {
         maximumUtteranceDurationMs: config.maximumResponseDurationMs,
@@ -391,14 +401,14 @@ async function play(run, signal, mark, elapsed) {
   window.addEventListener("keydown", space, true);
   const cancel = () => {
     void controller.close();
-    void comparison?.close();
+    for (const comparison of comparisons) void comparison.close();
   };
   signal.addEventListener("abort", cancel, { once: true });
   let result;
   try {
     mark("prepare");
     $("stage").textContent = "Preparing microphone and transcriber…";
-    await Promise.all([controller.prepare(), comparison?.connect()]);
+    await Promise.all([controller.prepare(), ...comparisons.map((comparison) => comparison.connect())]);
     if (signal.aborted) return;
     mark("cross-ready");
     if (!(await clickCross(run, signal, mark))) return;
@@ -427,11 +437,11 @@ async function play(run, signal, mark, elapsed) {
     if (signal.aborted) return;
     if (outcome.error) throw outcome.error;
     run.score = analyze(run.targets, outcome.value.text, run.settings);
-    if (comparison) {
+    if (comparisons.length) {
       await controller.close();
       if (!signal.aborted) {
-        $("stage").textContent = `Checking the ${comparisonProviders[provider].label} result…`;
-        await comparison.settle();
+        $("stage").textContent = "Checking the comparison results…";
+        await Promise.all(comparisons.map((comparison) => comparison.settle()));
       }
     }
   } catch (error) {
@@ -443,12 +453,12 @@ async function play(run, signal, mark, elapsed) {
   } finally {
     signal.removeEventListener("abort", cancel);
     window.removeEventListener("keydown", space, true);
-    await Promise.all([controller.close(), comparison?.close()]);
-    if (run.comparison)
-      run.comparison.sameInput =
+    await Promise.all([controller.close(), ...comparisons.map((comparison) => comparison.close())]);
+    for (const result of Object.values(run.comparisons))
+      result.sameInput =
         audioCounts.chunks > 0 &&
-        audioCounts.chunks === run.comparison.chunks &&
-        audioCounts.samples === run.comparison.samples;
+        audioCounts.chunks === result.chunks &&
+        audioCounts.samples === result.samples;
   }
 }
 
@@ -460,7 +470,7 @@ $("settings").addEventListener("submit", async (event) => {
   const settings = providerSettings();
   const targets = targetsFromInput();
   const replacement = $("wrong-word").value.trim();
-  if (["pairedCorrect", "pairedWrongFirst"].includes(key) && !settings.comparisonProvider) {
+  if (["pairedCorrect", "pairedWrongFirst"].includes(key) && !settings.comparisonProviders.length) {
     $("stage").textContent = "Select a comparison provider to run a paired comparison.";
     return;
   }
@@ -514,6 +524,7 @@ $("settings").addEventListener("submit", async (event) => {
     actuallySaid: null,
     error: null,
     score: null,
+    comparisons: {},
     durationSec: track?.next ?? settings.word,
   };
   const abort = new AbortController();
@@ -685,8 +696,10 @@ function updateAggregate() {
       header.append(element("th", title));
     const fraction = (value, total) => total ? `${value}/${total} (${pct(value, total)})` : "—";
     const body = table.createTBody();
-    const provider = group.comparisonProvider;
-    for (const [title, count] of [["Chirp 3", group.chirp3], [comparisonProviders[provider].label, group[provider]]]) {
+    for (const [title, count] of [
+      ["Chirp 3", group.chirp3],
+      ...group.comparisonProviders.map((provider) => [comparisonProviders[provider].label, group[provider]]),
+    ]) {
       const row = body.insertRow();
       for (const value of [
         title,
@@ -700,37 +713,62 @@ function updateAggregate() {
   }
 }
 
-function addComparisonReport(card, run) {
-  const result = run.comparison;
-  if (!result) return;
+function comparisonIssue(result) {
+  if (result.error === "elevenlabsRetentionWarning")
+    return "ElevenLabs reported that zero retention was not applied. Its comparison was stopped and excluded.";
   const { label, env } = comparisonProviders[result.provider];
+  if (result.ticketError === "previewNotConfigured")
+    return "The benchmark Preview ticket service is not configured.";
+  if (result.ticketStatus === 503)
+    return `${label} is not configured. Add ${env} to this Preview’s Functions environment and redeploy.`;
+  const status = result.upstreamStatus;
+  if (status) {
+    const hints = {
+      400: "The provider rejected the token request.",
+      401: "Check the API key value and whether it was revoked.",
+      402: "Check the provider project's credits or billing.",
+      403: result.provider === "deepgram"
+        ? "Check that the API key has at least the Member role in the Deepgram project."
+        : "Check that the key has Speech-to-Text access.",
+      422: "The provider rejected the token request parameters.",
+      429: "The provider rate-limited the token request.",
+    };
+    return `${label} rejected the token request (provider HTTP ${status}). ${hints[status] ?? "Retry or check the provider status."}`;
+  }
+  if (result.ticketError?.endsWith("GrantTimeout"))
+    return `${label} timed out while issuing a token.`;
+  if (result.ticketError?.endsWith("GrantInvalidResponse"))
+    return `${label} returned a response without a usable token.`;
+  return `${label} comparison unavailable: ${result.error ?? "no result"}${result.ticketStatus ? ` (ticket HTTP ${result.ticketStatus})` : ""}.`;
+}
+
+function addComparisonReport(card, run) {
+  const results = Object.values(run.comparisons);
+  if (!results.length) return;
   const panel = element("section");
   panel.className = "paired-results";
-  panel.append(element("h4", `Same audio: Chirp 3 vs ${label}`));
-  if (result.error || !result.score) {
-    const detail = result.error === "elevenlabsRetentionWarning"
-      ? "ElevenLabs reported that zero retention was not applied. Its comparison was stopped and excluded."
-      : result.ticketStatus === 503
-        ? `${label} is not configured. Add ${env} to this Preview’s Functions environment and redeploy.`
-        : `${label} comparison unavailable: ${result.error ?? "no result"}${result.ticketStatus ? ` (ticket HTTP ${result.ticketStatus})` : ""}.`;
-    panel.append(element("p", detail));
-  }
-  panel.append(element("p", result.sameInput
-    ? `Both clients sent ${result.samples} PCM samples in ${result.chunks} chunks.`
-    : "Matching audio delivery could not be verified. This run is not included in the comparison summary."));
+  panel.append(element("h4", "Same-audio provider comparison"));
+  for (const result of results)
+    if (result.error || !result.score)
+      panel.append(element("p", comparisonIssue(result)));
+  const allSentSame = results.every((result) => result.sameInput);
+  if (allSentSame)
+    panel.append(element("p", `All ${results.length + 1} clients sent ${run.audioSent.samples} PCM samples in ${run.audioSent.chunks} chunks.`));
+  if (!allSentSame || !run.score || results.some((result) => !result.score || result.error))
+    panel.append(element("p", "This run is excluded from the combined summary because at least one provider did not return a result or send matching audio."));
   const table = element("table");
   const header = table.createTHead().insertRow();
-  for (const title of ["Evidence", "Chirp 3", label])
+  for (const title of ["Evidence", "Chirp 3", ...results.map(({ provider }) => comparisonProviders[provider].label)])
     header.append(element("th", title));
   const body = table.createTBody();
-  for (const [title, google, other] of [
-    ["Provider final", run.score?.raw, result.score?.raw],
-    ["Normalized", run.score?.normalized, result.score?.normalized],
-    ["Score by target", run.score?.vector.join(""), result.score?.vector.join("")],
-    ["Finish to final (ms)", run.timing.finishToAckMs, result.finishToFinalMs],
+  for (const [title, google, valueFor] of [
+    ["Provider final", run.score?.raw, (result) => result.score?.raw],
+    ["Normalized", run.score?.normalized, (result) => result.score?.normalized],
+    ["Score by target", run.score?.vector.join(""), (result) => result.score?.vector.join("")],
+    ["Finish to final (ms)", run.timing.finishToAckMs, (result) => result.finishToFinalMs],
   ]) {
     const row = body.insertRow();
-    for (const value of [title, google, other])
+    for (const value of [title, google, ...results.map(valueFor)])
       row.append(element("td", value === "" ? "(empty)" : value ?? "—"));
   }
   panel.append(table);
@@ -864,7 +902,9 @@ function addReport(run) {
           timingMs: run.timing,
           events: run.events,
           interimTranscripts: run.interimTranscripts,
-          comparisonInterimTranscripts: run.comparison?.interimTranscripts,
+          comparisons: Object.fromEntries(Object.entries(run.comparisons).map(([provider, result]) => [
+            provider, { ...result, score: result.score?.alignmentEvents },
+          ])),
           alignment: run.score?.alignmentEvents,
         },
         null,
@@ -918,13 +958,9 @@ $("export-csv").onclick = () => {
     "timing",
     "quest",
     "expectedVector",
-    "comparisonProvider",
-    "sameInput",
-    "comparisonRaw",
-    "comparisonNormalized",
-    "comparisonVector",
-    "comparisonFinishToFinalMs",
-    "comparisonError",
+    ...Object.keys(comparisonProviders).flatMap((provider) =>
+      ["SameInput", "Raw", "Normalized", "Vector", "FinishToFinalMs", "Error", "TicketStatus", "UpstreamStatus"]
+        .map((column) => `${provider}${column}`)),
   ];
   const rows = memory.map((r) => [
     r.scenario,
@@ -943,13 +979,14 @@ $("export-csv").onclick = () => {
     JSON.stringify(r.timing),
     JSON.stringify(r.quest),
     r.expected,
-    r.comparison?.provider,
-    r.comparison?.sameInput,
-    r.comparison?.score?.raw,
-    r.comparison?.score?.normalized,
-    r.comparison?.score?.vector.join(""),
-    r.comparison?.finishToFinalMs,
-    r.comparison?.error,
+    ...Object.keys(comparisonProviders).flatMap((provider) => {
+      const result = r.comparisons[provider];
+      return [
+        result?.sameInput, result?.score?.raw, result?.score?.normalized,
+        result?.score?.vector.join(""), result?.finishToFinalMs,
+        result?.ticketError ?? result?.error, result?.ticketStatus, result?.upstreamStatus,
+      ];
+    }),
   ]);
   download(
     "rsvp-benchmark.csv",

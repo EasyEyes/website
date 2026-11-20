@@ -49,10 +49,9 @@ function comparisonSocket(url, protocols, onRetentionWarning) {
   };
 }
 
-export function createComparison(run, tokenProvider, elapsed) {
-  const provider = run.settings.comparisonProvider;
+export function createComparison(run, provider, tokenProvider, elapsed) {
   const eleven = provider === "elevenlabs";
-  const report = (run.comparison = {
+  const report = (run.comparisons[provider] = {
     provider,
     ...(eleven
       ? { model: "scribe_v2_realtime", commitStrategy: "manual", enableLogging: false }

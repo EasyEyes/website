@@ -11,7 +11,7 @@ const makeRun = (scenario, google, deepgram, options = {}) => {
     durationSec: 0.7,
     settings: { keyterms: true, ignoreOrder: true },
     score: google && { vector: google },
-    comparison: { provider: "deepgram", score: deepgram && { vector: deepgram }, sameInput: true },
+    comparisons: { deepgram: { score: deepgram && { vector: deepgram }, sameInput: true } },
     ...options,
   };
 };
@@ -32,7 +32,7 @@ test("requires self-confirmation and matched successful results", () => {
     makeRun("pairedCorrect", [1, 1, 1], [1, 1, 1], { actuallySaid: null }),
     makeRun("pairedCorrect", [1, 1, 1], [1, 1, 1], { actuallySaid: "coat stone" }),
     makeRun("pairedWrongFirst", [0, 1, 1], null),
-    makeRun("pairedWrongFirst", [0, 1, 1], null, { comparison: { provider: "deepgram", score: { vector: [0, 1, 1] }, sameInput: false } }),
+    makeRun("pairedWrongFirst", [0, 1, 1], null, { comparisons: { deepgram: { score: { vector: [0, 1, 1] }, sameInput: false } } }),
   ]);
   assert.equal(groups.length, 1);
   assert.equal(groups[0].excluded, 2);
@@ -41,8 +41,24 @@ test("requires self-confirmation and matched successful results", () => {
 
 test("groups results by comparison provider", () => {
   const elevenlabs = makeRun("pairedCorrect", [1, 1, 1], [1, 1, 1]);
-  elevenlabs.comparison.provider = "elevenlabs";
+  elevenlabs.comparisons = { elevenlabs: elevenlabs.comparisons.deepgram };
   const [a, b] = summarizePairs([elevenlabs, makeRun("pairedCorrect", [1, 1, 1], [0, 1, 1])]);
   assert.equal(a.elevenlabs.correctWords, 3);
   assert.equal(b.deepgram.correctWords, 2);
+});
+
+test("three-way rates use the exact same complete trials for all engines", () => {
+  const complete = makeRun("pairedWrongFirst", [0, 0, 1], [1, 1, 1]);
+  complete.comparisons.elevenlabs = { score: { vector: [0, 1, 1] }, sameInput: true };
+  const failed = {
+    ...complete,
+    comparisons: { ...complete.comparisons, deepgram: { score: null, sameInput: false } },
+  };
+  const [group] = summarizePairs([complete, failed]);
+  assert.deepEqual(group.comparisonProviders, ["deepgram", "elevenlabs"]);
+  assert.equal(group.excluded, 1);
+  assert.equal(group.wrongFirstRuns, 1);
+  assert.equal(group.chirp3.laterMisses, 1);
+  assert.equal(group.deepgram.falseFirstCredit, 1);
+  assert.equal(group.elevenlabs.falseFirstCredit + group.elevenlabs.laterMisses, 0);
 });

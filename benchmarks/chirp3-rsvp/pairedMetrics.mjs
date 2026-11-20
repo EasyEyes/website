@@ -1,13 +1,14 @@
 export function summarizePairs(runs) {
   const groups = new Map();
   for (const run of runs) {
-    if (!run.comparison || !["pairedCorrect", "pairedWrongFirst"].includes(run.scenario))
+    const providers = Object.keys(run.comparisons ?? {}).sort();
+    if (!providers.length || !["pairedCorrect", "pairedWrongFirst"].includes(run.scenario))
       continue;
     if (run.actuallySaid?.trim().toLowerCase().replace(/\s+/g, " ") !==
         run.intended.toLowerCase())
       continue;
     const condition = {
-      comparisonProvider: run.comparison.provider,
+      comparisonProviders: providers,
       keyterms: run.settings.keyterms,
       ignoreOrder: run.settings.ignoreOrder,
       durationSec: run.durationSec,
@@ -22,10 +23,16 @@ export function summarizePairs(runs) {
       wrongFirstRuns: 0,
       excluded: 0,
       chirp3: { correctWords: 0, falseFirstCredit: 0, laterMisses: 0 },
-      [condition.comparisonProvider]: { correctWords: 0, falseFirstCredit: 0, laterMisses: 0 },
+      ...Object.fromEntries(providers.map((provider) => [
+        provider,
+        { correctWords: 0, falseFirstCredit: 0, laterMisses: 0 },
+      ])),
     };
     groups.set(key, group);
-    if (!run.score || !run.comparison.score || !run.comparison.sameInput) {
+    if (!run.score || providers.some((provider) => {
+      const result = run.comparisons[provider];
+      return !result.score || !result.sameInput || result.error;
+    })) {
       group.excluded++;
       continue;
     }
@@ -34,7 +41,7 @@ export function summarizePairs(runs) {
     else group.wrongFirstRuns++;
     for (const [provider, { vector }] of [
       ["chirp3", run.score],
-      [condition.comparisonProvider, run.comparison.score],
+      ...providers.map((provider) => [provider, run.comparisons[provider].score]),
     ]) {
       const counts = group[provider];
       if (correctRun) counts.correctWords += vector.reduce((sum, bit) => sum + bit, 0);

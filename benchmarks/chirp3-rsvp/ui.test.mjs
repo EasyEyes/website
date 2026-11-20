@@ -84,11 +84,14 @@ try {
     "kitten, tiger, apple",
   );
   let deepgramConfigured = true;
+  let deepgramRejected = false;
   let elevenRetentionWarning = false;
   await page.route("**/.netlify/functions/rsvp-benchmark-ticket", (route) => {
     const { provider } = route.request().postDataJSON();
     if (provider === "deepgram")
-      return route.fulfill(deepgramConfigured
+      return route.fulfill(deepgramRejected
+        ? { status: 502, json: { error: "deepgramGrantRejected", upstreamStatus: 403 } }
+        : deepgramConfigured
         ? { json: { token: "test-token" } }
         : { status: 503, json: { error: "deepgramNotConfigured" } });
     if (provider === "elevenlabs")
@@ -186,7 +189,7 @@ try {
   };
   await runPaired();
   const first = page.locator("#report article").first();
-  assert.match(await first.innerText(), /Both clients sent [1-9]/);
+  assert.match(await first.innerText(), /All 2 clients sent [1-9]/);
   assert.match(await first.innerText(), /Call my stone/);
   assert.match(await first.innerText(), /Cold ducks stone/);
   const audio = await page.evaluate(() => window.testAudio);
@@ -214,6 +217,25 @@ try {
   assert.match(await first.innerText(), /zero retention was not applied/);
   assert.match(await first.innerText(), /Call my stone/);
   assert.equal(await page.evaluate(() => window.testAudio.elevenlabs.length), elevenAudio.elevenlabs.length);
+  elevenRetentionWarning = false;
+  deepgramConfigured = true;
+  await page.locator("#comparison-provider").selectOption("both");
+  await page.evaluate(() => {
+    window.testAudio = { chirp3: [], deepgram: [], elevenlabs: [] };
+  });
+  await runPaired();
+  assert.match(await first.innerText(), /All 3 clients sent [1-9]/);
+  const three = await page.evaluate(() => window.testAudio);
+  assert(three.chirp3.length > 0);
+  assert.deepEqual(three.chirp3, three.deepgram);
+  assert.deepEqual(three.chirp3, three.elevenlabs);
+  await first.getByRole("button", { name: "I said exactly what was planned" }).click();
+  deepgramRejected = true;
+  await runPaired();
+  assert.match(await first.innerText(), /provider HTTP 403.*Member role/);
+  assert.match(await first.innerText(), /Call my stone/);
+  assert.match(await first.innerText(), /Cold ducks stone/);
+  assert.match(await first.innerText(), /excluded from the combined summary/);
   assert.deepEqual(errors, []);
   console.log(
     "Built Preview UI passed. Chirp 3 and each comparison adapter sent byte-identical PCM; the ElevenLabs retention warning stopped comparison.",

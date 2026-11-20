@@ -108,12 +108,16 @@ export function createBenchmarkHandler(
             headers: { "xi-api-key": key },
           },
         );
-        if (!grant.ok) throw Error();
-        const { token } = await grant.json();
-        if (typeof token !== "string" || !token.trim()) throw Error();
+        if (!grant.ok)
+          return response(502, { error: "elevenlabsGrantRejected", upstreamStatus: grant.status });
+        const data = await grant.json().catch(() => null);
+        const token = data?.token;
+        if (typeof token !== "string" || !token.trim())
+          return response(502, { error: "elevenlabsGrantInvalidResponse" });
         return response(200, { token });
-      } catch {
-        return response(502, { error: "elevenlabsGrantFailed" });
+      } catch (error) {
+        return response(502, { error: error instanceof Error && error.name === "TimeoutError"
+          ? "elevenlabsGrantTimeout" : "elevenlabsGrantFailed" });
       }
     }
     if (provider === "deepgram") {
@@ -130,12 +134,16 @@ export function createBenchmarkHandler(
           },
           body: JSON.stringify({ ttl_seconds: 30 }),
         });
-        if (!grant.ok) throw Error();
-        const { access_token: token } = await grant.json();
-        if (typeof token !== "string" || !token.trim()) throw Error();
+        if (!grant.ok)
+          return response(502, { error: "deepgramGrantRejected", upstreamStatus: grant.status });
+        const data = await grant.json().catch(() => null);
+        const token = data?.access_token;
+        if (typeof token !== "string" || !token.trim())
+          return response(502, { error: "deepgramGrantInvalidResponse" });
         return response(200, { token });
-      } catch {
-        return response(502, { error: "deepgramGrantFailed" });
+      } catch (error) {
+        return response(502, { error: error instanceof Error && error.name === "TimeoutError"
+          ? "deepgramGrantTimeout" : "deepgramGrantFailed" });
       }
     }
     try {
