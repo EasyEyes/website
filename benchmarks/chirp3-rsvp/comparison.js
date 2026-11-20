@@ -1,23 +1,44 @@
 import { DeepgramRealtimeTranscriber } from "@threshold/components/speech/deepgramRealtimeTranscriber";
+import { ElevenLabsRealtimeTranscriber } from "@threshold/components/speech/elevenLabsRealtimeTranscriber";
 import { SpeechSession } from "@threshold/components/speech/speechSession";
 import { analyze } from "./evidence.js";
 
-function comparisonSocket(url, protocols) {
+export const comparisonProviders = {
+  deepgram: { label: "Deepgram Nova-3", env: "RSVP_BENCH_DEEPGRAM_API_KEY" },
+  elevenlabs: { label: "ElevenLabs Scribe v2 Realtime", env: "RSVP_BENCH_ELEVENLABS_API_KEY" },
+};
+
+function comparisonSocket(url, protocols, onRetentionWarning) {
   const socket = new WebSocket(url, protocols);
   let keepAlive;
-  socket.addEventListener("open", () => {
-    keepAlive = setInterval(() => {
-      if (socket.readyState === WebSocket.OPEN)
-        socket.send('{"type":"KeepAlive"}');
-    }, 3000);
-  }, { once: true });
+  if (protocols) {
+    socket.addEventListener("open", () => {
+      keepAlive = setInterval(() => {
+        if (socket.readyState === WebSocket.OPEN)
+          socket.send('{"type":"KeepAlive"}');
+      }, 3000);
+    }, { once: true });
+  }
+  if (onRetentionWarning) {
+    socket.addEventListener("message", (event) => {
+      if (typeof event.data !== "string") return;
+      try {
+        const message = JSON.parse(event.data);
+        if (message?.message_type === "warning" &&
+            /zero retention|being logged|still logged/i.test(message.warning ?? ""))
+          onRetentionWarning();
+      } catch {
+        // The adapter handles malformed messages.
+      }
+    });
+  }
   socket.addEventListener("close", () => clearInterval(keepAlive), { once: true });
   return {
     get readyState() { return socket.readyState; },
     addEventListener: socket.addEventListener.bind(socket),
     send(data) {
-      if (typeof data !== "string" && socket.bufferedAmount > 256 * 1024)
-        throw new Error("The Deepgram audio connection is congested.");
+      if ((onRetentionWarning || typeof data !== "string") && socket.bufferedAmount > 256 * 1024)
+        throw new Error("The comparison connection is congested.");
       socket.send(data);
     },
     close(code, reason) {
@@ -29,24 +50,46 @@ function comparisonSocket(url, protocols) {
 }
 
 export function createComparison(run, tokenProvider, elapsed) {
+  const provider = run.settings.comparisonProvider;
+  const eleven = provider === "elevenlabs";
   const report = (run.comparison = {
-    provider: "deepgram",
-    model: "nova-3",
-    endpointingMs: 1500,
+    provider,
+    ...(eleven
+      ? { model: "scribe_v2_realtime", commitStrategy: "manual", enableLogging: false }
+      : { model: "nova-3", endpointingMs: 1500 }),
     chunks: 0,
     samples: 0,
     score: null,
     error: null,
     interimTranscripts: [],
   });
-  const transcriber = new DeepgramRealtimeTranscriber({
+  const common = {
     tokenProvider,
-    languageCode: "en-US",
+    languageCode: eleven ? "en" : "en-US",
     keyterms: run.targets,
     targetKeytermBiasEnabled: run.settings.keyterms,
-    endpointingMs: report.endpointingMs,
-    webSocketFactory: comparisonSocket,
-  });
+  };
+  const transcriber = eleven
+    ? new ElevenLabsRealtimeTranscriber({
+        ...common,
+        webSocketFactory(url) {
+          const manual = new URL(url);
+          // Only Chirp controls the trial; avoid mistaking an automatic commit for the final flush.
+          manual.searchParams.set("commit_strategy", "manual");
+          for (const key of ["vad_silence_threshold_secs", "vad_threshold", "min_speech_duration_ms", "min_silence_duration_ms"])
+            manual.searchParams.delete(key);
+          return comparisonSocket(manual, undefined, () => {
+            report.error = "elevenlabsRetentionWarning";
+            report.score = null;
+            void session.close().catch(fail);
+          });
+        },
+      })
+    : new DeepgramRealtimeTranscriber({
+        ...common,
+        endpointingMs: report.endpointingMs,
+        webSocketFactory: comparisonSocket,
+      });
   const session = new SpeechSession(transcriber, {
     maximumUtteranceDurationMs: run.settings.cap * 1000,
     finalizationTimeoutMs: run.settings.stt * 1000,
@@ -87,6 +130,7 @@ export function createComparison(run, tokenProvider, elapsed) {
     begin(id) {
       attempt(() => {
         outcome = session.beginUtterance(id).then(({ text }) => {
+          if (report.error) return;
           report.score = analyze(run.targets, text, run.settings);
           report.finishToFinalMs = Math.round(elapsed() - report.finishMs);
         }).catch(fail);

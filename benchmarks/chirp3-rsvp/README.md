@@ -17,6 +17,7 @@ branch or preview. Do not change the values for Production.
 | `CHIRP3_RELAY_URL`       | Existing `wss://…/v1/stream` endpoint                      |
 | `CHIRP3_TICKET_SECRET`   | Same ticket signing secret as the existing Chirp 3 relay   |
 | `RSVP_BENCH_DEEPGRAM_API_KEY` | Optional for paired trials; dedicated Deepgram key with permission to mint temporary tokens |
+| `RSVP_BENCH_ELEVENLABS_API_KEY` | Optional for paired trials; ElevenLabs key with Speech-to-Text access |
 
 Treat the access code and signing secret as Netlify secrets. Access code example:
 `node -e "process.stdout.write(require('node:crypto').randomBytes(32).toString('hex'))"`.
@@ -38,7 +39,7 @@ reload unless it is exported.
 
 ## Same-audio provider comparison
 
-Enable the Deepgram checkbox, select **Provider comparison: all three
+In **Compare with**, choose ElevenLabs or Deepgram. Select **Provider comparison: all three
 correct**, and read the three words. Select **Provider comparison: only word 1
 wrong**, keep the same targets and settings, and use the displayed replacement
 (for example, say **cold, ducks, stone** for **coat, ducks, stone**). Confirm
@@ -46,12 +47,15 @@ what you said on each report. Repeat on more target sets and, if needed, with
 keyterms off. Durations are fixed in these scenarios.
 
 Both providers receive the same microphone PCM chunks. Chirp 3 still controls
-the recording window; Deepgram finalizes at the same finish request and never
-feeds QUEST. The paired summary counts correct targets on the all-correct
+the recording window; the comparison provider finalizes at the same finish
+request and never feeds QUEST. ElevenLabs uses one explicit commit in this
+benchmark. The paired summary counts correct targets on the all-correct
 runs, false credit on word 1, and missed correct words at positions 2–3.
 Runs without both results and matching audio counts are excluded from paired
 metrics. No audio is saved or exported by this harness. Deepgram requests opt
-out of model improvement; use only consenting developer test speech.
+out of model improvement. ElevenLabs requests logging off; if ElevenLabs
+reports that zero retention was not applied, the comparison stops and is
+excluded. Use only consenting developer test speech.
 
 The preview build applies the repeated finish-phrase patch to a temporary copy
 of the pinned Threshold source. JSON exports keep the raw final transcript

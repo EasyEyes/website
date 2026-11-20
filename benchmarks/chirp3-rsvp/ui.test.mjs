@@ -84,19 +84,22 @@ try {
     "kitten, tiger, apple",
   );
   let deepgramConfigured = true;
+  let elevenRetentionWarning = false;
   await page.route("**/.netlify/functions/rsvp-benchmark-ticket", (route) => {
     const { provider } = route.request().postDataJSON();
     if (provider === "deepgram")
       return route.fulfill(deepgramConfigured
         ? { json: { token: "test-token" } }
         : { status: 503, json: { error: "deepgramNotConfigured" } });
+    if (provider === "elevenlabs")
+      return route.fulfill({ json: { token: elevenRetentionWarning ? "warning-token" : "single-use" } });
     return route.fulfill({ json: {
       token: "test-ticket",
       websocketUrl: "wss://relay.example/v1/stream",
     } });
   });
   await page.addInitScript(() => {
-    window.testAudio = { chirp3: [], deepgram: [] };
+    window.testAudio = { chirp3: [], deepgram: [], elevenlabs: [] };
     window.WebSocket = class extends EventTarget {
       static OPEN = 1;
       readyState = 0;
@@ -105,11 +108,22 @@ try {
         super();
         const target = new URL(url);
         this.deepgram = target.hostname === "api.deepgram.com";
+        this.eleven = target.hostname === "api.elevenlabs.io";
         if (this.deepgram && target.searchParams.get("mip_opt_out") !== "true")
           throw new Error("Missing opt out");
+        if (this.eleven &&
+            (target.searchParams.get("enable_logging") !== "false" ||
+             target.searchParams.get("language_code") !== "en" ||
+             target.searchParams.get("commit_strategy") !== "manual"))
+          throw new Error("Unexpected ElevenLabs config");
         setTimeout(() => {
           this.readyState = 1;
           this.dispatchEvent(new Event("open"));
+          if (this.eleven) {
+            this.reply({ message_type: "session_started", session_id: "eleven-test" });
+            if (target.searchParams.get("token") === "warning-token")
+              this.reply({ message_type: "warning", warning: "Zero retention was not applied. This session is still being logged." });
+          }
         });
       }
       reply(message) {
@@ -123,6 +137,13 @@ try {
           return;
         }
         const message = JSON.parse(data);
+        if (this.eleven) {
+          if (message.commit)
+            this.reply({ message_type: "committed_transcript", text: "Cold ducks stone." });
+          else
+            window.testAudio.elevenlabs.push(Array.from(atob(message.audio_base_64), (byte) => byte.charCodeAt(0)));
+          return;
+        }
         if (!this.deepgram && message.type === "start") {
           this.utteranceId = message.utteranceId;
           this.reply({
@@ -154,8 +175,8 @@ try {
   assert(await page.locator("#adaptive").isDisabled());
   const prepare = page.getByRole("button", { name: "Prepare trial" });
   await prepare.click();
-  assert.match(await page.locator("#stage").innerText(), /Enable Deepgram/);
-  await page.locator("#compare-deepgram").check();
+  assert.match(await page.locator("#stage").innerText(), /Select a comparison provider/);
+  await page.locator("#comparison-provider").selectOption("deepgram");
   await page.locator("#word").fill("0.3");
   await page.locator("#cap").fill("1");
   const runPaired = async () => {
@@ -176,13 +197,26 @@ try {
   assert.match(await page.locator("#paired-aggregate").innerText(), /1\/2 \(50.0%\)/);
   deepgramConfigured = false;
   await runPaired();
-  assert.match(await first.innerText(), /Deepgram is not configured/);
+  assert.match(await first.innerText(), /Deepgram Nova-3 is not configured/);
   assert.match(await first.innerText(), /Call my stone/);
   await first.getByRole("button", { name: "I said exactly what was planned" }).click();
   assert.match(await page.locator("#paired-aggregate").innerText(), /1 confirmed trial\(s\) excluded/);
+  await page.locator("#comparison-provider").selectOption("elevenlabs");
+  await page.evaluate(() => { window.testAudio.chirp3 = []; });
+  await runPaired();
+  assert.match(await first.innerText(), /ElevenLabs Scribe v2 Realtime/);
+  assert.match(await first.innerText(), /Cold ducks stone/);
+  const elevenAudio = await page.evaluate(() => window.testAudio);
+  assert(elevenAudio.elevenlabs.length > 0);
+  assert.deepEqual(elevenAudio.chirp3, elevenAudio.elevenlabs);
+  elevenRetentionWarning = true;
+  await runPaired();
+  assert.match(await first.innerText(), /zero retention was not applied/);
+  assert.match(await first.innerText(), /Call my stone/);
+  assert.equal(await page.evaluate(() => window.testAudio.elevenlabs.length), elevenAudio.elevenlabs.length);
   assert.deepEqual(errors, []);
   console.log(
-    "Built Preview UI passed. Both mocked endpoints received byte-identical audio from the browser fake microphone.",
+    "Built Preview UI passed. Chirp 3 and each comparison adapter sent byte-identical PCM; the ElevenLabs retention warning stopped comparison.",
   );
 } finally {
   await browser?.close();

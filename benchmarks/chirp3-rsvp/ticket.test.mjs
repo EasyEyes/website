@@ -132,3 +132,24 @@ test("Deepgram is opt-in, uses a preview-scoped server key, and returns only a s
   assert.deepEqual(await result.json(), { token: "short-lived" });
   assert.equal(calls, 1);
 });
+
+test("ElevenLabs returns only a capped single-use Scribe token", async () => {
+  const body = JSON.stringify({ accessCode: RSVP_BENCH_ACCESS_CODE, provider: "elevenlabs" });
+  assert.equal((await createBenchmarkHandler(env, now)(request({ body }))).status, 503);
+  const mockEnv = { ...env, RSVP_BENCH_ELEVENLABS_API_KEY: "secret-eleven-key" };
+  let calls = 0;
+  const handler = createBenchmarkHandler(mockEnv, now, async (url, options) => {
+    calls++;
+    assert.equal(url, "https://api.elevenlabs.io/v1/single-use-token/realtime_scribe?max_session_duration_seconds=180");
+    assert.equal(options.method, "POST");
+    assert.equal(options.headers["xi-api-key"], "secret-eleven-key");
+    return Response.json({ token: "single-use", other: "not forwarded" });
+  });
+  const denied = await handler(request({ body, origin: "https://example.com" }));
+  assert.equal(denied.status, 403);
+  assert.equal(calls, 0);
+  const result = await handler(request({ body }));
+  assert.equal(result.status, 200);
+  assert.deepEqual(await result.json(), { token: "single-use" });
+  assert.equal(calls, 1);
+});

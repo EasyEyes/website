@@ -47,7 +47,7 @@ export function createBenchmarkHandler(
 ) {
   // Limits accidental bursts on each warm function instance, not a global quota.
   let windowStart = 0;
-  const requests = { chirp3: 0, deepgram: 0 };
+  const requests = { chirp3: 0, deepgram: 0, elevenlabs: 0 };
   return async (request: Request) => {
     const origin = env.RSVP_BENCH_ORIGIN;
     const code = env.RSVP_BENCH_ACCESS_CODE;
@@ -85,16 +85,37 @@ export function createBenchmarkHandler(
     )
       return response(401, { error: "invalidAccessCode" });
     const provider = input?.provider ?? "chirp3";
-    if (provider !== "chirp3" && provider !== "deepgram")
+    if (provider !== "chirp3" && provider !== "deepgram" && provider !== "elevenlabs")
       return response(400, { error: "invalidProvider" });
     const time = clock();
     if (time - windowStart >= 60_000) {
       windowStart = time;
-      requests.chirp3 = requests.deepgram = 0;
+      requests.chirp3 = requests.deepgram = requests.elevenlabs = 0;
     }
     if (requests[provider] >= 30)
       return response(429, { error: "benchmarkTicketLimit" });
     requests[provider]++;
+    if (provider === "elevenlabs") {
+      const key = env.RSVP_BENCH_ELEVENLABS_API_KEY?.trim();
+      if (!key) return response(503, { error: "elevenlabsNotConfigured" });
+      try {
+        const grant = await fetchImpl(
+          "https://api.elevenlabs.io/v1/single-use-token/realtime_scribe?max_session_duration_seconds=180",
+          {
+            method: "POST",
+            redirect: "error",
+            signal: AbortSignal.timeout(5000),
+            headers: { "xi-api-key": key },
+          },
+        );
+        if (!grant.ok) throw Error();
+        const { token } = await grant.json();
+        if (typeof token !== "string" || !token.trim()) throw Error();
+        return response(200, { token });
+      } catch {
+        return response(502, { error: "elevenlabsGrantFailed" });
+      }
+    }
     if (provider === "deepgram") {
       const key = env.RSVP_BENCH_DEEPGRAM_API_KEY?.trim();
       if (!key) return response(503, { error: "deepgramNotConfigured" });

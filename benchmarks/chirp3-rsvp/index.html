@@ -12,8 +12,8 @@
         <span class="eyebrow">EASYEYES · TEST PREVIEW</span>
         <h1>RSVP speech benchmark</h1>
         <p>
-          Test Google Chirp 3 and optionally compare it with Deepgram Nova-3
-          using the same live microphone audio.
+          Compare Google Chirp 3 with ElevenLabs Scribe v2 Realtime or
+          Deepgram Nova-3 using the same live microphone audio.
         </p>
       </header>
       <form id="settings">
@@ -35,9 +35,14 @@
             </select></label
           >
           <label>Scenario<select id="scenario"></select></label>
-          <label class="check">
-            <input id="compare-deepgram" type="checkbox" />
-            Send the same test audio to Deepgram Nova-3 too
+          <label>
+            Compare with
+            <select id="comparison-provider">
+              <option value="">None — only Google Chirp 3</option>
+              <option value="elevenlabs">ElevenLabs Scribe v2 Realtime</option>
+              <option value="deepgram">Deepgram Nova-3</option>
+            </select>
+            <small>The selected provider also receives your test audio.</small>
           </label>
           <label id="wrong-word-field" hidden>
             Intentional replacement for word 1
@@ -141,8 +146,8 @@
           /></label>
         </fieldset>
         <p class="hint" id="availability">
-          Use your own test voice. Google receives audio; Deepgram also receives
-          it if enabled. Exports contain text and measurements, not audio.
+          Use your own test voice, not participant audio. Exports contain text
+          and measurements, not audio.
         </p>
         <aside>
           <strong id="cue"></strong>

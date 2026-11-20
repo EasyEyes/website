@@ -11,7 +11,7 @@ const makeRun = (scenario, google, deepgram, options = {}) => {
     durationSec: 0.7,
     settings: { keyterms: true, ignoreOrder: true },
     score: google && { vector: google },
-    comparison: { score: deepgram && { vector: deepgram }, sameInput: true },
+    comparison: { provider: "deepgram", score: deepgram && { vector: deepgram }, sameInput: true },
     ...options,
   };
 };
@@ -32,9 +32,17 @@ test("requires self-confirmation and matched successful results", () => {
     makeRun("pairedCorrect", [1, 1, 1], [1, 1, 1], { actuallySaid: null }),
     makeRun("pairedCorrect", [1, 1, 1], [1, 1, 1], { actuallySaid: "coat stone" }),
     makeRun("pairedWrongFirst", [0, 1, 1], null),
-    makeRun("pairedWrongFirst", [0, 1, 1], null, { comparison: { score: { vector: [0, 1, 1] }, sameInput: false } }),
+    makeRun("pairedWrongFirst", [0, 1, 1], null, { comparison: { provider: "deepgram", score: { vector: [0, 1, 1] }, sameInput: false } }),
   ]);
   assert.equal(groups.length, 1);
   assert.equal(groups[0].excluded, 2);
   assert.equal(groups[0].correctRuns + groups[0].wrongFirstRuns, 0);
+});
+
+test("groups results by comparison provider", () => {
+  const elevenlabs = makeRun("pairedCorrect", [1, 1, 1], [1, 1, 1]);
+  elevenlabs.comparison.provider = "elevenlabs";
+  const [a, b] = summarizePairs([elevenlabs, makeRun("pairedCorrect", [1, 1, 1], [0, 1, 1])]);
+  assert.equal(a.elevenlabs.correctWords, 3);
+  assert.equal(b.deepgram.correctWords, 2);
 });

@@ -14,7 +14,7 @@ import {
   targetSets,
 } from "./scenarios.mjs";
 import { analyze, measurements, checkRun } from "./evidence.js";
-import { createComparison } from "./comparison.js";
+import { comparisonProviders, createComparison } from "./comparison.js";
 import { summarizePairs } from "./pairedMetrics.mjs";
 
 const scenarios = Object.fromEntries(
@@ -47,7 +47,7 @@ const providerSettings = () => ({
     }),
   ),
   provider: "chirp3",
-  compareDeepgram: $("compare-deepgram").checked,
+  comparisonProvider: $("comparison-provider").value || null,
   adaptive: $("adaptive").value === "TRUE",
   guess: $("quest-guess").valueAsNumber,
 });
@@ -322,9 +322,16 @@ async function play(run, signal, mark, elapsed) {
     }
     return response.json();
   };
-  const comparison = run.settings.compareDeepgram
-    ? createComparison(run, async () => (await credentials("deepgram")).token, elapsed)
-    : null;
+  const provider = run.settings.comparisonProvider;
+  let comparison;
+  if (provider) {
+    try {
+      comparison = createComparison(run, async () => (await credentials(provider)).token, elapsed);
+    } catch (error) {
+      if (!run.comparison) throw error;
+      run.comparison.error = error?.code ?? "comparisonFailed";
+    }
+  }
   const audioCounts = (run.audioSent = { chunks: 0, samples: 0 });
   const transcriber = new GoogleChirp3Transcriber({
     utteranceId: run.id,
@@ -423,7 +430,7 @@ async function play(run, signal, mark, elapsed) {
     if (comparison) {
       await controller.close();
       if (!signal.aborted) {
-        $("stage").textContent = "Checking the Deepgram result…";
+        $("stage").textContent = `Checking the ${comparisonProviders[provider].label} result…`;
         await comparison.settle();
       }
     }
@@ -453,8 +460,8 @@ $("settings").addEventListener("submit", async (event) => {
   const settings = providerSettings();
   const targets = targetsFromInput();
   const replacement = $("wrong-word").value.trim();
-  if (["pairedCorrect", "pairedWrongFirst"].includes(key) && !settings.compareDeepgram) {
-    $("stage").textContent = "Enable Deepgram to run a paired comparison.";
+  if (["pairedCorrect", "pairedWrongFirst"].includes(key) && !settings.comparisonProvider) {
+    $("stage").textContent = "Select a comparison provider to run a paired comparison.";
     return;
   }
   if (key === "pairedWrongFirst" &&
@@ -678,7 +685,8 @@ function updateAggregate() {
       header.append(element("th", title));
     const fraction = (value, total) => total ? `${value}/${total} (${pct(value, total)})` : "—";
     const body = table.createTBody();
-    for (const [title, count] of [["Chirp 3", group.chirp3], ["Deepgram Nova-3", group.deepgram]]) {
+    const provider = group.comparisonProvider;
+    for (const [title, count] of [["Chirp 3", group.chirp3], [comparisonProviders[provider].label, group[provider]]]) {
       const row = body.insertRow();
       for (const value of [
         title,
@@ -693,31 +701,36 @@ function updateAggregate() {
 }
 
 function addComparisonReport(card, run) {
-  const dg = run.comparison;
-  if (!dg) return;
+  const result = run.comparison;
+  if (!result) return;
+  const { label, env } = comparisonProviders[result.provider];
   const panel = element("section");
   panel.className = "paired-results";
-  panel.append(element("h4", "Same audio: Chirp 3 vs Deepgram Nova-3"));
-  if (dg.error || !dg.score)
-    panel.append(element("p", dg.ticketStatus === 503
-      ? "Deepgram is not configured. Add RSVP_BENCH_DEEPGRAM_API_KEY to this Preview’s Functions environment and redeploy."
-      : `Deepgram comparison unavailable: ${dg.error ?? "no result"}${dg.ticketStatus ? ` (ticket HTTP ${dg.ticketStatus})` : ""}.`));
-  panel.append(element("p", dg.sameInput
-    ? `Both clients sent ${dg.samples} PCM samples in ${dg.chunks} chunks.`
+  panel.append(element("h4", `Same audio: Chirp 3 vs ${label}`));
+  if (result.error || !result.score) {
+    const detail = result.error === "elevenlabsRetentionWarning"
+      ? "ElevenLabs reported that zero retention was not applied. Its comparison was stopped and excluded."
+      : result.ticketStatus === 503
+        ? `${label} is not configured. Add ${env} to this Preview’s Functions environment and redeploy.`
+        : `${label} comparison unavailable: ${result.error ?? "no result"}${result.ticketStatus ? ` (ticket HTTP ${result.ticketStatus})` : ""}.`;
+    panel.append(element("p", detail));
+  }
+  panel.append(element("p", result.sameInput
+    ? `Both clients sent ${result.samples} PCM samples in ${result.chunks} chunks.`
     : "Matching audio delivery could not be verified. This run is not included in the comparison summary."));
   const table = element("table");
   const header = table.createTHead().insertRow();
-  for (const title of ["Evidence", "Chirp 3", "Deepgram Nova-3"])
+  for (const title of ["Evidence", "Chirp 3", label])
     header.append(element("th", title));
   const body = table.createTBody();
-  for (const [title, google, deepgram] of [
-    ["Provider final", run.score?.raw, dg.score?.raw],
-    ["Normalized", run.score?.normalized, dg.score?.normalized],
-    ["Score by target", run.score?.vector.join(""), dg.score?.vector.join("")],
-    ["Finish to final (ms)", run.timing.finishToAckMs, dg.finishToFinalMs],
+  for (const [title, google, other] of [
+    ["Provider final", run.score?.raw, result.score?.raw],
+    ["Normalized", run.score?.normalized, result.score?.normalized],
+    ["Score by target", run.score?.vector.join(""), result.score?.vector.join("")],
+    ["Finish to final (ms)", run.timing.finishToAckMs, result.finishToFinalMs],
   ]) {
     const row = body.insertRow();
-    for (const value of [title, google, deepgram])
+    for (const value of [title, google, other])
       row.append(element("td", value === "" ? "(empty)" : value ?? "—"));
   }
   panel.append(table);
@@ -851,7 +864,7 @@ function addReport(run) {
           timingMs: run.timing,
           events: run.events,
           interimTranscripts: run.interimTranscripts,
-          deepgramInterimTranscripts: run.comparison?.interimTranscripts,
+          comparisonInterimTranscripts: run.comparison?.interimTranscripts,
           alignment: run.score?.alignmentEvents,
         },
         null,
@@ -905,12 +918,13 @@ $("export-csv").onclick = () => {
     "timing",
     "quest",
     "expectedVector",
+    "comparisonProvider",
     "sameInput",
-    "deepgramRaw",
-    "deepgramNormalized",
-    "deepgramVector",
-    "deepgramFinishToFinalMs",
-    "deepgramError",
+    "comparisonRaw",
+    "comparisonNormalized",
+    "comparisonVector",
+    "comparisonFinishToFinalMs",
+    "comparisonError",
   ];
   const rows = memory.map((r) => [
     r.scenario,
@@ -929,6 +943,7 @@ $("export-csv").onclick = () => {
     JSON.stringify(r.timing),
     JSON.stringify(r.quest),
     r.expected,
+    r.comparison?.provider,
     r.comparison?.sameInput,
     r.comparison?.score?.raw,
     r.comparison?.score?.normalized,

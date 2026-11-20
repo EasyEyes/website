@@ -7,6 +7,7 @@ export function summarizePairs(runs) {
         run.intended.toLowerCase())
       continue;
     const condition = {
+      comparisonProvider: run.comparison.provider,
       keyterms: run.settings.keyterms,
       ignoreOrder: run.settings.ignoreOrder,
       durationSec: run.durationSec,
@@ -21,7 +22,7 @@ export function summarizePairs(runs) {
       wrongFirstRuns: 0,
       excluded: 0,
       chirp3: { correctWords: 0, falseFirstCredit: 0, laterMisses: 0 },
-      deepgram: { correctWords: 0, falseFirstCredit: 0, laterMisses: 0 },
+      [condition.comparisonProvider]: { correctWords: 0, falseFirstCredit: 0, laterMisses: 0 },
     };
     groups.set(key, group);
     if (!run.score || !run.comparison.score || !run.comparison.sameInput) {
@@ -33,7 +34,7 @@ export function summarizePairs(runs) {
     else group.wrongFirstRuns++;
     for (const [provider, { vector }] of [
       ["chirp3", run.score],
-      ["deepgram", run.comparison.score],
+      [condition.comparisonProvider, run.comparison.score],
     ]) {
       const counts = group[provider];
       if (correctRun) counts.correctWords += vector.reduce((sum, bit) => sum + bit, 0);
