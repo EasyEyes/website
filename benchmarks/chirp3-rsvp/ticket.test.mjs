@@ -109,3 +109,26 @@ test("per-instance warm rate window limits successful requests", async () => {
     assert.equal((await handle(request())).status, 200);
   assert.equal((await handle(request())).status, 429);
 });
+
+test("Deepgram is opt-in, uses a preview-scoped server key, and returns only a short-lived token", async () => {
+  const deepgram = { body: JSON.stringify({ accessCode: RSVP_BENCH_ACCESS_CODE, provider: "deepgram" }) };
+  assert.equal((await createBenchmarkHandler(env, now)(request(deepgram))).status, 503);
+  let calls = 0;
+  const handle = createBenchmarkHandler(
+    { ...env, RSVP_BENCH_DEEPGRAM_API_KEY: "server-only" },
+    now,
+    async (url, options) => {
+      calls++;
+      assert.equal(url, "https://api.deepgram.com/v1/auth/grant");
+      assert.equal(options.headers.Authorization, "Token server-only");
+      assert.deepEqual(JSON.parse(options.body), { ttl_seconds: 30 });
+      return Response.json({ access_token: "short-lived", other: "never forwarded" });
+    },
+  );
+  assert.equal((await handle(request({ ...deepgram, origin: "https://example.com" }))).status, 403);
+  assert.equal(calls, 0);
+  const result = await handle(request(deepgram));
+  assert.equal(result.status, 200);
+  assert.deepEqual(await result.json(), { token: "short-lived" });
+  assert.equal(calls, 1);
+});

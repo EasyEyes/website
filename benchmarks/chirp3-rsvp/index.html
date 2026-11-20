@@ -12,8 +12,8 @@
         <span class="eyebrow">EASYEYES · TEST PREVIEW</span>
         <h1>RSVP speech benchmark</h1>
         <p>
-          Speak into your microphone and compare Google Chirp 3 with EasyEyes
-          scoring. This preview uses real audio, not generated responses.
+          Test Google Chirp 3 and optionally compare it with Deepgram Nova-3
+          using the same live microphone audio.
         </p>
       </header>
       <form id="settings">
@@ -35,6 +35,14 @@
             </select></label
           >
           <label>Scenario<select id="scenario"></select></label>
+          <label class="check">
+            <input id="compare-deepgram" type="checkbox" />
+            Send the same test audio to Deepgram Nova-3 too
+          </label>
+          <label id="wrong-word-field" hidden>
+            Intentional replacement for word 1
+            <input id="wrong-word" value="cold" maxlength="60" />
+          </label>
           <label
             >Target words <small>(exactly three)</small
             ><input id="targets" value="boat, lake, morning" required
@@ -133,8 +141,8 @@
           /></label>
         </fieldset>
         <p class="hint" id="availability">
-          Use your own test voice. Audio is streamed to Google; exported reports
-          contain text and measurements, not audio.
+          Use your own test voice. Google receives audio; Deepgram also receives
+          it if enabled. Exports contain text and measurements, not audio.
         </p>
         <aside>
           <strong id="cue"></strong>
@@ -170,6 +178,7 @@
           </button>
         </div>
         <p id="aggregate" class="hint"></p>
+        <div id="paired-aggregate"></div>
         <div id="report"></div>
         <details>
           <summary>Current relative timeline</summary>

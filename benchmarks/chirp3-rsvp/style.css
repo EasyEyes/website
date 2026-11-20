@@ -62,6 +62,13 @@ label small {
   display: inline;
   font-weight: 400;
 }
+[hidden] {
+  display: none !important;
+}
+.paired-results {
+  overflow-x: auto;
+  margin-block: 0.65rem;
+}
 .check {
   display: flex;
   gap: 0.5rem;

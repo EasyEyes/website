@@ -33,7 +33,7 @@ export function analyze(targets, raw, settings) {
     vector: result.responseVector,
     literalPosition: targets.map((word, i) => Number(word === literalWords[i])),
     normalizedPosition: targets.map((word, i) =>
-      Number(normalizeSpeechToken(word, language) === normalizedWords[i]),
+      Number(normalizeSpeechToken(word, language).normalized === normalizedWords[i]),
     ),
     scoringVersion: result.diagnostics.scoringVersion,
   };

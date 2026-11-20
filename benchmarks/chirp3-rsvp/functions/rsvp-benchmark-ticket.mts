@@ -14,7 +14,10 @@ const response = (status: number, payload: object) =>
   Response.json(payload, { status, headers });
 const digest = (value: string) => createHash("sha256").update(value).digest();
 
-async function readAccessCode(request: Request): Promise<unknown> {
+async function readTicketRequest(request: Request): Promise<{
+  accessCode?: unknown;
+  provider?: unknown;
+} | null> {
   const reader = request.body?.getReader();
   if (!reader) throw Error("Missing body");
   const decoder = new TextDecoder("utf-8", { fatal: true });
@@ -31,16 +34,20 @@ async function readAccessCode(request: Request): Promise<unknown> {
       }
       body += decoder.decode(value, { stream: true });
     }
-    return JSON.parse(body + decoder.decode())?.accessCode;
+    return JSON.parse(body + decoder.decode());
   } finally {
     reader.releaseLock();
   }
 }
 
-export function createBenchmarkHandler(env = process.env, clock = Date.now) {
+export function createBenchmarkHandler(
+  env = process.env,
+  clock = Date.now,
+  fetchImpl = fetch,
+) {
   // Limits accidental bursts on each warm function instance, not a global quota.
   let windowStart = 0;
-  let issued = 0;
+  const requests = { chirp3: 0, deepgram: 0 };
   return async (request: Request) => {
     const origin = env.RSVP_BENCH_ORIGIN;
     const code = env.RSVP_BENCH_ACCESS_CODE;
@@ -64,24 +71,52 @@ export function createBenchmarkHandler(env = process.env, clock = Date.now) {
       request.headers.get("sec-fetch-site") !== "same-origin"
     )
       return response(403, { error: "previewOriginRequired" });
-    let supplied: unknown;
+    let input: { accessCode?: unknown; provider?: unknown } | null;
     try {
-      supplied = await readAccessCode(request);
+      input = await readTicketRequest(request);
     } catch {
       return response(400, { error: "invalidRequest" });
     }
+    const supplied = input?.accessCode;
     if (
       typeof supplied !== "string" ||
       supplied.length !== 64 ||
       !timingSafeEqual(digest(supplied), digest(code))
     )
       return response(401, { error: "invalidAccessCode" });
+    const provider = input?.provider ?? "chirp3";
+    if (provider !== "chirp3" && provider !== "deepgram")
+      return response(400, { error: "invalidProvider" });
     const time = clock();
     if (time - windowStart >= 60_000) {
       windowStart = time;
-      issued = 0;
+      requests.chirp3 = requests.deepgram = 0;
     }
-    if (issued >= 30) return response(429, { error: "benchmarkTicketLimit" });
+    if (requests[provider] >= 30)
+      return response(429, { error: "benchmarkTicketLimit" });
+    requests[provider]++;
+    if (provider === "deepgram") {
+      const key = env.RSVP_BENCH_DEEPGRAM_API_KEY?.trim();
+      if (!key) return response(503, { error: "deepgramNotConfigured" });
+      try {
+        const grant = await fetchImpl("https://api.deepgram.com/v1/auth/grant", {
+          method: "POST",
+          redirect: "error",
+          signal: AbortSignal.timeout(5000),
+          headers: {
+            Authorization: `Token ${key}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ ttl_seconds: 30 }),
+        });
+        if (!grant.ok) throw Error();
+        const { access_token: token } = await grant.json();
+        if (typeof token !== "string" || !token.trim()) throw Error();
+        return response(200, { token });
+      } catch {
+        return response(502, { error: "deepgramGrantFailed" });
+      }
+    }
     try {
       const websocketUrl = chirp3StreamUrl(relay);
       if (new URL(websocketUrl).protocol !== "wss:") throw Error();
@@ -94,7 +129,6 @@ export function createBenchmarkHandler(env = process.env, clock = Date.now) {
         secret,
         time,
       );
-      issued++;
       return response(200, { token: ticket, websocketUrl });
     } catch {
       return response(503, { error: "previewNotConfigured" });

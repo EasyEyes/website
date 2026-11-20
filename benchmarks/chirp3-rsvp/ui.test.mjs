@@ -34,7 +34,10 @@ const server = createServer(async (req, res) => {
 await new Promise((done) => server.listen(0, "127.0.0.1", done));
 let browser;
 try {
-  browser = await chromium.launch({ channel: "chrome" });
+  browser = await chromium.launch({
+    channel: "chrome",
+    args: ["--use-fake-device-for-media-stream", "--use-fake-ui-for-media-stream"],
+  });
   const page = await browser.newPage();
   const errors = [];
   page.setDefaultTimeout(7000);
@@ -80,9 +83,106 @@ try {
     await page.locator("#targets").inputValue(),
     "kitten, tiger, apple",
   );
+  let deepgramConfigured = true;
+  await page.route("**/.netlify/functions/rsvp-benchmark-ticket", (route) => {
+    const { provider } = route.request().postDataJSON();
+    if (provider === "deepgram")
+      return route.fulfill(deepgramConfigured
+        ? { json: { token: "test-token" } }
+        : { status: 503, json: { error: "deepgramNotConfigured" } });
+    return route.fulfill({ json: {
+      token: "test-ticket",
+      websocketUrl: "wss://relay.example/v1/stream",
+    } });
+  });
+  await page.addInitScript(() => {
+    window.testAudio = { chirp3: [], deepgram: [] };
+    window.WebSocket = class extends EventTarget {
+      static OPEN = 1;
+      readyState = 0;
+      bufferedAmount = 0;
+      constructor(url) {
+        super();
+        const target = new URL(url);
+        this.deepgram = target.hostname === "api.deepgram.com";
+        if (this.deepgram && target.searchParams.get("mip_opt_out") !== "true")
+          throw new Error("Missing opt out");
+        setTimeout(() => {
+          this.readyState = 1;
+          this.dispatchEvent(new Event("open"));
+        });
+      }
+      reply(message) {
+        queueMicrotask(() =>
+          this.dispatchEvent(new MessageEvent("message", { data: JSON.stringify(message) })),
+        );
+      }
+      send(data) {
+        if (typeof data !== "string") {
+          window.testAudio[this.deepgram ? "deepgram" : "chirp3"].push(Array.from(new Uint8Array(data)));
+          return;
+        }
+        const message = JSON.parse(data);
+        if (!this.deepgram && message.type === "start") {
+          this.utteranceId = message.utteranceId;
+          this.reply({
+            type: "ready", utteranceId: this.utteranceId, model: "chirp_3",
+            sampleRate: 16000, languageCode: "en-US",
+          });
+        } else if (!this.deepgram && message.type === "finish") {
+          this.reply({ type: "segment", utteranceId: this.utteranceId, text: "Call my stone." });
+          this.reply({ type: "complete", utteranceId: this.utteranceId });
+        } else if (this.deepgram && message.type === "CloseStream") {
+          this.reply({
+            type: "Results", is_final: true, speech_final: false,
+            channel: { alternatives: [{ transcript: "Cold ducks stone." }] },
+          });
+          this.reply({ type: "Metadata", request_id: "dg-test" });
+        }
+      }
+      close(code = 1000) {
+        this.readyState = 3;
+        this.dispatchEvent(new CloseEvent("close", { code }));
+      }
+    };
+  });
+  await page.reload();
+  await page.locator("#access-code").fill("a".repeat(64));
+  await page.locator("#targets").fill("coat, ducks, stone");
+  await page.locator("#scenario").selectOption("pairedWrongFirst");
+  assert.match(await page.locator("#script").innerText(), /cold ducks stone/);
+  assert(await page.locator("#adaptive").isDisabled());
+  const prepare = page.getByRole("button", { name: "Prepare trial" });
+  await prepare.click();
+  assert.match(await page.locator("#stage").innerText(), /Enable Deepgram/);
+  await page.locator("#compare-deepgram").check();
+  await page.locator("#word").fill("0.3");
+  await page.locator("#cap").fill("1");
+  const runPaired = async () => {
+    await prepare.click();
+    await page.getByRole("button", { name: "Start showing words" }).click();
+    await page.waitForFunction(() => !document.getElementById("prepare").disabled);
+  };
+  await runPaired();
+  const first = page.locator("#report article").first();
+  assert.match(await first.innerText(), /Both clients sent [1-9]/);
+  assert.match(await first.innerText(), /Call my stone/);
+  assert.match(await first.innerText(), /Cold ducks stone/);
+  const audio = await page.evaluate(() => window.testAudio);
+  assert.equal(audio.chirp3.length, audio.deepgram.length);
+  assert(audio.chirp3.length > 0);
+  assert.deepEqual(audio.chirp3, audio.deepgram);
+  await first.getByRole("button", { name: "I said exactly what was planned" }).click();
+  assert.match(await page.locator("#paired-aggregate").innerText(), /1\/2 \(50.0%\)/);
+  deepgramConfigured = false;
+  await runPaired();
+  assert.match(await first.innerText(), /Deepgram is not configured/);
+  assert.match(await first.innerText(), /Call my stone/);
+  await first.getByRole("button", { name: "I said exactly what was planned" }).click();
+  assert.match(await page.locator("#paired-aggregate").innerText(), /1 confirmed trial\(s\) excluded/);
   assert.deepEqual(errors, []);
   console.log(
-    "Built Preview UI passed. No audio or provider request was sent.",
+    "Built Preview UI passed. Both mocked endpoints received byte-identical audio from the browser fake microphone.",
   );
 } finally {
   await browser?.close();

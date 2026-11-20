@@ -1,4 +1,20 @@
 export const scenarios = {
+  pairedCorrect: {
+    title: "Provider comparison: all three correct",
+    cue: "Read each word in order as it appears. Use the same target set for the wrong-first trial.",
+    said: (a) => a.join(" "),
+    expected: "111",
+    check: "score",
+    overrides: { adaptive: "FALSE" },
+  },
+  pairedWrongFirst: {
+    title: "Provider comparison: only word 1 wrong",
+    cue: "Instead of word 1, say the replacement below. Read words 2 and 3 correctly in order.",
+    said: ([, b, c], _finishPhrase, replacement) => `${replacement} ${b} ${c}`,
+    expected: "011",
+    check: "score",
+    overrides: { adaptive: "FALSE" },
+  },
   perfect: {
     title: "All three correct · accuracy run",
     cue: "Read every word as soon as it appears, in order. Then wait without pressing a key.",

@@ -14,6 +14,8 @@ import {
   targetSets,
 } from "./scenarios.mjs";
 import { analyze, measurements, checkRun } from "./evidence.js";
+import { createComparison } from "./comparison.js";
+import { summarizePairs } from "./pairedMetrics.mjs";
 
 const scenarios = Object.fromEntries(
   Object.entries(allScenarios).filter(([, value]) => !value.fixtureOnly),
@@ -45,6 +47,7 @@ const providerSettings = () => ({
     }),
   ),
   provider: "chirp3",
+  compareDeepgram: $("compare-deepgram").checked,
   adaptive: $("adaptive").value === "TRUE",
   guess: $("quest-guess").valueAsNumber,
 });
@@ -58,6 +61,7 @@ for (const [key, scenario] of Object.entries(scenarios)) {
   option.value = key;
   $("scenario").append(option);
 }
+$("scenario").value = "perfect";
 function setupScenario() {
   const scenario = scenarios[$("scenario").value];
   for (const [key, { prior, suggested }] of appliedPreset) {
@@ -72,19 +76,23 @@ function setupScenario() {
 }
 function updateCue() {
   const scenario = scenarios[$("scenario").value];
+  $("wrong-word-field").hidden = scenario !== scenarios.pairedWrongFirst;
+  $("adaptive").disabled = scenario === scenarios.pairedCorrect || scenario === scenarios.pairedWrongFirst;
   $("cue").textContent = scenario.cue;
   $("arena-cue").textContent = scenario.cue;
   const targets = targetsFromInput();
   $("script").textContent =
     targets.length === 3
       ? `Planned words to say: ${
-          scenario.said(targets, $("phrase").value) || "(stay quiet)"
+          scenario.said(targets, $("phrase").value, $("wrong-word").value.trim()) ||
+          "(stay quiet)"
         }`
       : "Enter exactly three target words.";
 }
 $("scenario").addEventListener("change", setupScenario);
 $("targets").addEventListener("input", updateCue);
 $("phrase").addEventListener("input", updateCue);
+$("wrong-word").addEventListener("input", updateCue);
 for (const [key, value] of Object.entries(defaults))
   $(key).value =
     typeof value === "boolean" ? String(value).toUpperCase() : value;
@@ -136,7 +144,7 @@ const pause = (ms, signal) =>
     signal.addEventListener("abort", end, { once: true });
   });
 
-function instrument(transcriber, mark) {
+function instrument(transcriber, mark, comparison, audioCounts) {
   let firstAudio = true;
   transcriber.subscribe((event) => {
     if (event.type === "commit") {
@@ -159,15 +167,25 @@ function instrument(transcriber, mark) {
       if (key === "sendAudio")
         return (id, chunk) => {
           target.sendAudio(id, chunk);
+          audioCounts.chunks++;
+          audioCounts.samples += chunk.samples.length;
+          comparison?.send(chunk);
           if (firstAudio) {
             firstAudio = false;
             mark("first-audio");
           }
         };
+      if (key === "beginUtterance")
+        return (id) => {
+          target.beginUtterance(id);
+          comparison?.begin(id);
+        };
       if (key === "requestCommit")
         return (...args) => {
           mark("finish");
-          return target.requestCommit(...args);
+          const result = target.requestCommit(...args);
+          comparison?.finish();
+          return result;
         };
       const value = Reflect.get(target, key, target);
       return typeof value === "function" ? value.bind(target) : value;
@@ -269,7 +287,7 @@ const clickCross = (run, signal, mark) =>
     signal.addEventListener("abort", abort, { once: true });
   });
 
-async function play(run, signal, mark) {
+async function play(run, signal, mark, elapsed) {
   const configuration = {
     provider: "chirp3",
     utteranceId: run.id,
@@ -285,6 +303,29 @@ async function play(run, signal, mark) {
       throw new Error("The benchmark does not use Pavlovia credentials.");
     },
   };
+  const credentials = async (provider) => {
+    const response = await fetch("/.netlify/functions/rsvp-benchmark-ticket", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        accessCode: $("access-code").value.trim(),
+        provider,
+      }),
+      cache: "no-store",
+      signal: AbortSignal.any([signal, AbortSignal.timeout(8000)]),
+    });
+    if (provider === "chirp3") mark("ticket", { status: response.status });
+    if (!response.ok) {
+      if (provider === "chirp3") run.ticketStatus = response.status;
+      else run.comparison.ticketStatus = response.status;
+      throw new Error("Could not get a Preview credential.");
+    }
+    return response.json();
+  };
+  const comparison = run.settings.compareDeepgram
+    ? createComparison(run, async () => (await credentials("deepgram")).token, elapsed)
+    : null;
+  const audioCounts = (run.audioSent = { chunks: 0, samples: 0 });
   const transcriber = new GoogleChirp3Transcriber({
     utteranceId: run.id,
     languageCode: configuration.languageCode,
@@ -302,24 +343,7 @@ async function play(run, signal, mark) {
       );
       return socket;
     },
-    credentialProvider: async () => {
-      const response = await fetch(
-        "/.netlify/functions/rsvp-benchmark-ticket",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ accessCode: $("access-code").value.trim() }),
-          cache: "no-store",
-          signal,
-        },
-      );
-      mark("ticket", { status: response.status });
-      if (!response.ok) {
-        run.ticketStatus = response.status;
-        throw new Error("Could not get a Preview credential.");
-      }
-      return response.json();
-    },
+    credentialProvider: () => credentials("chirp3"),
   });
   const controller = new RsvpSpeechController(configuration, {
     openMicrophone: () => observedMicrophone(mark),
@@ -334,7 +358,7 @@ async function play(run, signal, mark) {
             mark("capture-stop");
         }
       })(microphone),
-    createTranscriber: () => instrument(transcriber, mark),
+    createTranscriber: () => instrument(transcriber, mark, comparison, audioCounts),
     createSession: (observed, config) => {
       const session = new SpeechSession(observed, {
         maximumUtteranceDurationMs: config.maximumResponseDurationMs,
@@ -360,13 +384,14 @@ async function play(run, signal, mark) {
   window.addEventListener("keydown", space, true);
   const cancel = () => {
     void controller.close();
+    void comparison?.close();
   };
   signal.addEventListener("abort", cancel, { once: true });
   let result;
   try {
     mark("prepare");
     $("stage").textContent = "Preparing microphone and transcriber…";
-    await controller.prepare();
+    await Promise.all([controller.prepare(), comparison?.connect()]);
     if (signal.aborted) return;
     mark("cross-ready");
     if (!(await clickCross(run, signal, mark))) return;
@@ -395,6 +420,13 @@ async function play(run, signal, mark) {
     if (signal.aborted) return;
     if (outcome.error) throw outcome.error;
     run.score = analyze(run.targets, outcome.value.text, run.settings);
+    if (comparison) {
+      await controller.close();
+      if (!signal.aborted) {
+        $("stage").textContent = "Checking the Deepgram result…";
+        await comparison.settle();
+      }
+    }
   } catch (error) {
     if (!signal.aborted)
       run.error = {
@@ -404,7 +436,12 @@ async function play(run, signal, mark) {
   } finally {
     signal.removeEventListener("abort", cancel);
     window.removeEventListener("keydown", space, true);
-    await controller.close();
+    await Promise.all([controller.close(), comparison?.close()]);
+    if (run.comparison)
+      run.comparison.sameInput =
+        audioCounts.chunks > 0 &&
+        audioCounts.chunks === run.comparison.chunks &&
+        audioCounts.samples === run.comparison.samples;
   }
 }
 
@@ -415,6 +452,17 @@ $("settings").addEventListener("submit", async (event) => {
   const scenario = scenarios[key];
   const settings = providerSettings();
   const targets = targetsFromInput();
+  const replacement = $("wrong-word").value.trim();
+  if (["pairedCorrect", "pairedWrongFirst"].includes(key) && !settings.compareDeepgram) {
+    $("stage").textContent = "Enable Deepgram to run a paired comparison.";
+    return;
+  }
+  if (key === "pairedWrongFirst" &&
+      (!/^[a-z]+$/i.test(replacement) ||
+       targets.some((word) => word.toLowerCase() === replacement.toLowerCase()))) {
+    $("stage").textContent = "Use a single English replacement word different from all three targets.";
+    return;
+  }
   if (
     targets.length !== 3 ||
     targets.some((word) => !/^[a-z]+$/i.test(word) || word.length > 100)
@@ -449,7 +497,7 @@ $("settings").addEventListener("submit", async (event) => {
     mode: "live",
     targets,
     settings,
-    intended: scenario.said(targets, settings.phrase),
+    intended: scenario.said(targets, settings.phrase, replacement),
     expected:
       typeof scenario.expected === "function"
         ? scenario.expected(settings.ignoreOrder)
@@ -520,7 +568,7 @@ $("settings").addEventListener("submit", async (event) => {
     }`;
   }, 70);
   try {
-    await play(run, abort.signal, mark);
+    await play(run, abort.signal, mark, () => performance.now() - start);
     if (!abort.signal.aborted) {
       updateQuest(track, run);
       run.timing = measurements(run.events);
@@ -615,6 +663,65 @@ function updateAggregate() {
         )
         .join(" | ")
     : "Accuracy summary: run ‘All three correct’, then confirm what you actually said.";
+  const paired = $("paired-aggregate");
+  paired.replaceChildren();
+  for (const group of summarizePairs(memory)) {
+    const box = element("section");
+    box.className = "paired-results";
+    box.append(element("h3", "Same-audio accuracy"));
+    box.append(element("p",
+      `Keyterms ${group.keyterms ? "on" : "off"} · order ${group.ignoreOrder ? "ignored" : "strict"} · ${group.durationSec}s/word · silence/cap/final wait: ${group.silence}/${group.cap}/${group.stt}s · ${group.excluded} confirmed trial(s) excluded because one result or matched audio was missing.`,
+    ));
+    const table = element("table");
+    const header = table.createTHead().insertRow();
+    for (const title of ["Provider", "Correct targets (all correct)", "Wrong first counted correct", "Correct later words missed"])
+      header.append(element("th", title));
+    const fraction = (value, total) => total ? `${value}/${total} (${pct(value, total)})` : "—";
+    const body = table.createTBody();
+    for (const [title, count] of [["Chirp 3", group.chirp3], ["Deepgram Nova-3", group.deepgram]]) {
+      const row = body.insertRow();
+      for (const value of [
+        title,
+        fraction(count.correctWords, group.correctRuns * 3),
+        fraction(count.falseFirstCredit, group.wrongFirstRuns),
+        fraction(count.laterMisses, group.wrongFirstRuns * 2),
+      ]) row.append(element("td", value));
+    }
+    box.append(table);
+    paired.append(box);
+  }
+}
+
+function addComparisonReport(card, run) {
+  const dg = run.comparison;
+  if (!dg) return;
+  const panel = element("section");
+  panel.className = "paired-results";
+  panel.append(element("h4", "Same audio: Chirp 3 vs Deepgram Nova-3"));
+  if (dg.error || !dg.score)
+    panel.append(element("p", dg.ticketStatus === 503
+      ? "Deepgram is not configured. Add RSVP_BENCH_DEEPGRAM_API_KEY to this Preview’s Functions environment and redeploy."
+      : `Deepgram comparison unavailable: ${dg.error ?? "no result"}${dg.ticketStatus ? ` (ticket HTTP ${dg.ticketStatus})` : ""}.`));
+  panel.append(element("p", dg.sameInput
+    ? `Both clients sent ${dg.samples} PCM samples in ${dg.chunks} chunks.`
+    : "Matching audio delivery could not be verified. This run is not included in the comparison summary."));
+  const table = element("table");
+  const header = table.createTHead().insertRow();
+  for (const title of ["Evidence", "Chirp 3", "Deepgram Nova-3"])
+    header.append(element("th", title));
+  const body = table.createTBody();
+  for (const [title, google, deepgram] of [
+    ["Provider final", run.score?.raw, dg.score?.raw],
+    ["Normalized", run.score?.normalized, dg.score?.normalized],
+    ["Score by target", run.score?.vector.join(""), dg.score?.vector.join("")],
+    ["Finish to final (ms)", run.timing.finishToAckMs, dg.finishToFinalMs],
+  ]) {
+    const row = body.insertRow();
+    for (const value of [title, google, deepgram])
+      row.append(element("td", value === "" ? "(empty)" : value ?? "—"));
+  }
+  panel.append(table);
+  card.append(panel);
 }
 
 function addReport(run) {
@@ -662,6 +769,7 @@ function addReport(run) {
     actual.onchange();
   };
   if (run.mode === "live") card.append(label, confirm);
+  addComparisonReport(card, run);
   if (run.score) {
     for (const [name, value] of [
       ["Provider final", run.score.raw],
@@ -743,6 +851,7 @@ function addReport(run) {
           timingMs: run.timing,
           events: run.events,
           interimTranscripts: run.interimTranscripts,
+          deepgramInterimTranscripts: run.comparison?.interimTranscripts,
           alignment: run.score?.alignmentEvents,
         },
         null,
@@ -768,7 +877,7 @@ function download(name, value, type) {
 $("export").onclick = () =>
   download(
     "rsvp-benchmark.json",
-    JSON.stringify({ accuracy: summarize(), trials: memory }, null, 2),
+    JSON.stringify({ accuracy: summarize(), pairedAccuracy: summarizePairs(memory), trials: memory }, null, 2),
     "application/json",
   );
 const cell = (value) => {
@@ -795,6 +904,13 @@ $("export-csv").onclick = () => {
     "settings",
     "timing",
     "quest",
+    "expectedVector",
+    "sameInput",
+    "deepgramRaw",
+    "deepgramNormalized",
+    "deepgramVector",
+    "deepgramFinishToFinalMs",
+    "deepgramError",
   ];
   const rows = memory.map((r) => [
     r.scenario,
@@ -812,6 +928,13 @@ $("export-csv").onclick = () => {
     JSON.stringify(r.settings),
     JSON.stringify(r.timing),
     JSON.stringify(r.quest),
+    r.expected,
+    r.comparison?.sameInput,
+    r.comparison?.score?.raw,
+    r.comparison?.score?.normalized,
+    r.comparison?.score?.vector.join(""),
+    r.comparison?.finishToFinalMs,
+    r.comparison?.error,
   ]);
   download(
     "rsvp-benchmark.csv",
