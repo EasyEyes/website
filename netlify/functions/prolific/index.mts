@@ -1,20 +1,46 @@
-import fetch from "node-fetch";
+import nodeFetch from "node-fetch";
 import { nativeHandler } from "../shared/nativeHandler";
 
-const responseWrapper = (statusCode, body) => {
+const UPSTREAM_TIMEOUT_MS = 15_000;
+
+export const prolificUpstreamFetch = async (
+  url: string,
+  options: Record<string, any> = {},
+  fetchImpl: typeof nodeFetch = nodeFetch,
+) => {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), UPSTREAM_TIMEOUT_MS);
+  try {
+    return await fetchImpl(url, { ...options, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+};
+
+const fetch = (url: string, options: Record<string, any>) =>
+  prolificUpstreamFetch(url, options);
+
+export const responseWrapper = (statusCode, body, upstreamHeaders?) => {
+  const retryAfter = upstreamHeaders?.get?.("Retry-After");
   return {
     statusCode,
     headers: {
       "Access-Control-Allow-Origin": "*",
       "Access-Control-Allow-Headers": "*",
       "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+      ...(retryAfter
+        ? {
+            "Retry-After": retryAfter,
+            "Access-Control-Expose-Headers": "Retry-After",
+          }
+        : {}),
     },
     body: JSON.stringify(body),
   };
 };
 
 const handler = async (event, context) => {
-  let statusCode, data;
+  let statusCode, data, upstreamHeaders;
 
   if (event.httpMethod === "OPTIONS") {
     return responseWrapper(200, {});
@@ -152,8 +178,10 @@ const handler = async (event, context) => {
       );
 
       if (!workspacesResponse.ok) {
-        throw new Error(
-          `Failed to fetch workspaces: ${workspacesResponse.status} ${workspacesResponse.statusText}`,
+        return responseWrapper(
+          workspacesResponse.status,
+          await workspacesResponse.json(),
+          workspacesResponse.headers,
         );
       }
 
@@ -180,13 +208,16 @@ const handler = async (event, context) => {
       );
 
       if (!filterSetsResponse.ok) {
-        throw new Error(
-          `Failed to fetch filter sets: ${filterSetsResponse.status} ${filterSetsResponse.statusText}`,
+        return responseWrapper(
+          filterSetsResponse.status,
+          await filterSetsResponse.json(),
+          filterSetsResponse.headers,
         );
       }
 
       data = await filterSetsResponse.json();
-      statusCode = 200;
+      statusCode = filterSetsResponse.status;
+      upstreamHeaders = filterSetsResponse.headers;
     } catch (error) {
       console.error("ERROR", error);
 
@@ -196,7 +227,7 @@ const handler = async (event, context) => {
       statusCode = 500;
     }
 
-    return responseWrapper(statusCode, data);
+    return responseWrapper(statusCode, data, upstreamHeaders);
   } else if (task.includes("participant-groups")) {
     // ! participant groups
     try {
@@ -220,8 +251,10 @@ const handler = async (event, context) => {
       );
 
       if (!workspacesResponse.ok) {
-        throw new Error(
-          `Failed to fetch workspaces: ${workspacesResponse.status} ${workspacesResponse.statusText}`,
+        return responseWrapper(
+          workspacesResponse.status,
+          await workspacesResponse.json(),
+          workspacesResponse.headers,
         );
       }
 
@@ -250,13 +283,16 @@ const handler = async (event, context) => {
       );
 
       if (!participantGroupsResponse.ok) {
-        throw new Error(
-          `Failed to fetch participant groups: ${participantGroupsResponse.status} ${participantGroupsResponse.statusText}`,
+        return responseWrapper(
+          participantGroupsResponse.status,
+          await participantGroupsResponse.json(),
+          participantGroupsResponse.headers,
         );
       }
 
       data = await participantGroupsResponse.json();
-      statusCode = 200;
+      statusCode = participantGroupsResponse.status;
+      upstreamHeaders = participantGroupsResponse.headers;
     } catch (error) {
       console.error("ERROR", error);
 
@@ -266,7 +302,7 @@ const handler = async (event, context) => {
       statusCode = 500;
     }
 
-    return responseWrapper(statusCode, data);
+    return responseWrapper(statusCode, data, upstreamHeaders);
   } else if (task.includes("projects") && task.includes("studies")) {
     // ! list project studies (GET with pagination)
     try {
