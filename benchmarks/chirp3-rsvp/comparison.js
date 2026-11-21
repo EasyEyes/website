@@ -78,9 +78,7 @@ export function createComparison(run, provider, tokenProvider, elapsed) {
           for (const key of ["vad_silence_threshold_secs", "vad_threshold", "min_speech_duration_ms", "min_silence_duration_ms"])
             manual.searchParams.delete(key);
           return comparisonSocket(manual, undefined, () => {
-            report.error = "elevenlabsRetentionWarning";
-            report.score = null;
-            void session.close().catch(fail);
+            report.retentionWarning = true;
           });
         },
       })

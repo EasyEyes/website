@@ -213,10 +213,17 @@ try {
   assert(elevenAudio.elevenlabs.length > 0);
   assert.deepEqual(elevenAudio.chirp3, elevenAudio.elevenlabs);
   elevenRetentionWarning = true;
+  await page.evaluate(() => {
+    window.testAudio.chirp3 = [];
+    window.testAudio.elevenlabs = [];
+  });
   await runPaired();
   assert.match(await first.innerText(), /zero retention was not applied/);
   assert.match(await first.innerText(), /Call my stone/);
-  assert.equal(await page.evaluate(() => window.testAudio.elevenlabs.length), elevenAudio.elevenlabs.length);
+  assert.match(await first.innerText(), /Cold ducks stone/);
+  const warnedAudio = await page.evaluate(() => window.testAudio);
+  assert(warnedAudio.elevenlabs.length > 0);
+  assert.deepEqual(warnedAudio.chirp3, warnedAudio.elevenlabs);
   elevenRetentionWarning = false;
   deepgramConfigured = true;
   await page.locator("#comparison-provider").selectOption("both");
@@ -238,7 +245,7 @@ try {
   assert.match(await first.innerText(), /excluded from the combined summary/);
   assert.deepEqual(errors, []);
   console.log(
-    "Built Preview UI passed. Chirp 3 and each comparison adapter sent byte-identical PCM; the ElevenLabs retention warning stopped comparison.",
+    "Built Preview UI passed. The ElevenLabs retention warning did not interrupt matching PCM or scoring.",
   );
 } finally {
   await browser?.close();

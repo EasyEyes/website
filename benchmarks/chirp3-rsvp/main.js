@@ -714,8 +714,6 @@ function updateAggregate() {
 }
 
 function comparisonIssue(result) {
-  if (result.error === "elevenlabsRetentionWarning")
-    return "ElevenLabs reported that zero retention was not applied. Its comparison was stopped and excluded.";
   const { label, env } = comparisonProviders[result.provider];
   if (result.ticketError === "previewNotConfigured")
     return "The benchmark Preview ticket service is not configured.";
@@ -748,6 +746,8 @@ function addComparisonReport(card, run) {
   const panel = element("section");
   panel.className = "paired-results";
   panel.append(element("h4", "Same-audio provider comparison"));
+  if (results.some((result) => result.retentionWarning))
+    panel.append(element("p", "ElevenLabs reported that zero retention was not applied. The test continued; ElevenLabs may retain this test audio."));
   for (const result of results)
     if (result.error || !result.score)
       panel.append(element("p", comparisonIssue(result)));

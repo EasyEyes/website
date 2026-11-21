@@ -56,8 +56,8 @@ Runs without all selected results and matching audio counts are excluded from
 combined metrics, but their available individual results are still shown.
 No audio is saved or exported by this harness. Deepgram requests opt
 out of model improvement. ElevenLabs requests logging off; if ElevenLabs
-reports that zero retention was not applied, the comparison stops and is
-excluded. Use only consenting developer test speech.
+reports that zero retention was not applied, the Preview continues and
+records a warning. Use only consenting developer test speech.
 
 The preview build applies the repeated finish-phrase patch to a temporary copy
 of the pinned Threshold source. JSON exports keep the raw final transcript
