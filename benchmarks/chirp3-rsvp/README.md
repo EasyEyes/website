@@ -15,14 +15,30 @@ branch or preview. Do not change the values for Production.
 | `RSVP_BENCH_ORIGIN`      | Exact preview origin, without a trailing slash             |
 | `RSVP_BENCH_ACCESS_CODE` | Random 64-character hex code; share privately with testers |
 | `CHIRP3_RELAY_URL`       | Existing `wss://…/v1/stream` endpoint                      |
-| `CHIRP3_TICKET_SECRET`   | Same ticket signing secret as the existing Chirp 3 relay   |
+| `CHIRP3_TICKET_SECRET`   | Signing secret for the relay named by `CHIRP3_RELAY_URL` |
 | `RSVP_BENCH_DEEPGRAM_API_KEY` | Optional for paired trials; dedicated Deepgram key with permission to mint temporary tokens |
 | `RSVP_BENCH_ELEVENLABS_API_KEY` | Optional for paired trials; ElevenLabs key with Speech-to-Text access |
 
 Treat the access code and signing secret as Netlify secrets. Access code example:
 `node -e "process.stdout.write(require('node:crypto').randomBytes(32).toString('hex'))"`.
 Never pass the signing secret to a browser or commit it. Redeploy the preview
-after the environment is set. No relay redeploy is required.
+after the environment is set. The current relay still works without tracing.
+
+## Trace the last audio and Google results
+
+Deploy `services/chirp3-stream` from this branch to a **separate** Cloud Run
+service. Keep the production relay unchanged. Set
+`CHIRP3_BENCH_TRACE_ORIGIN=https://deploy-preview-169--easyeyes.netlify.app`
+on the new service along with its normal project, location, relay URL, and
+ticket secret settings. This service only accepts the exact preview origin
+and still requires a signed ticket. Set the matching relay URL and secret as
+branch-specific Netlify overrides for the benchmark and redeploy the preview.
+
+Run a trial using team test speech. Its details and JSON export show browser
+PCM bytes, relay receipt and gRPC write counts, finish times relative to each
+side's clock, and Google's original final segments with offsets when present.
+These counts verify the path through the relay, not Google's internal decoder.
+The relay does not persist this trace or write the transcript to Cloud Logging.
 
 ## Run a trial
 
@@ -49,7 +65,7 @@ keyterms off. Durations are fixed in these scenarios.
 
 All selected providers receive the same microphone PCM chunks. Chirp 3 still
 controls the recording window; comparison providers finalize at the same finish
-request and never feeds QUEST. ElevenLabs uses one explicit commit in this
+request and never feed QUEST. ElevenLabs uses one explicit commit in this
 benchmark. The paired summary counts correct targets on the all-correct
 runs, false credit on word 1, and missed correct words at positions 2–3.
 Runs without all selected results and matching audio counts are excluded from
@@ -59,8 +75,9 @@ out of model improvement. ElevenLabs requests logging off; if ElevenLabs
 reports that zero retention was not applied, the Preview continues and
 records a warning. Use only consenting developer test speech.
 
-The preview build applies the repeated finish-phrase patch to a temporary copy
-of the pinned Threshold source. JSON exports keep the raw final transcript
+The preview build applies the repeated finish-phrase and audio-drain patches
+to temporary copies of the pinned Threshold source. It waits for the last
+AudioWorklet frame before requesting the final transcript. JSON exports keep the raw final transcript
 and a bounded interim transcript history for diagnosis.
 
 The timeline separates permission/device open, capture start, first outgoing

@@ -20,6 +20,7 @@ export function createChirp3Server({
   maxConnections = 80,
   maxStreamMs = 290000,
   finalizationMs = 290000,
+  benchmarkTraceOrigin,
 }) {
   if (
     !/^[a-z][a-z0-9-]{4,61}[a-z0-9]$/.test(project ?? "") ||
@@ -35,7 +36,9 @@ export function createChirp3Server({
     maxStreamMs > 290000 ||
     !Number.isFinite(finalizationMs) ||
     finalizationMs <= 0 ||
-    finalizationMs > 290000
+    finalizationMs > 290000 ||
+    (benchmarkTraceOrigin !== undefined &&
+      !/^https:\/\/deploy-preview-\d+--easyeyes\.netlify\.app$/.test(benchmarkTraceOrigin))
   )
     throw new Error("Invalid Chirp 3 server configuration.");
   const audience = chirp3StreamUrl(publicUrl);
@@ -56,6 +59,7 @@ export function createChirp3Server({
     if (
       request.url !== "/v1/stream" ||
       !isAllowedOrigin(request.headers.origin) ||
+      (benchmarkTraceOrigin && request.headers.origin !== benchmarkTraceOrigin) ||
       sockets.clients.size >= maxConnections
     ) {
       socket.end("HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n");
@@ -66,6 +70,20 @@ export function createChirp3Server({
     );
   });
   sockets.on("connection", (ws, request) => {
+    const trace = benchmarkTraceOrigin ? {
+      receivedBytes: 0,
+      writtenBytes: 0,
+      firstAudioMs: null,
+      lastAudioMs: null,
+      finishMs: null,
+      pendingWritesAtFinish: null,
+      grpcStatus: null,
+      finalCount: 0,
+      interimCount: 0,
+      results: [],
+    } : undefined;
+    const startedAt = performance.now();
+    const elapsed = () => Math.round(performance.now() - startedAt);
     let stream, recognitionRequest, utteranceId;
     let phase = "authenticating";
     let pendingAudioWrites = 0;
@@ -94,14 +112,14 @@ export function createChirp3Server({
     const fail = (code) => {
       if (phase === "failed" || phase === "completed") return;
       phase = "failed";
-      send({ type: "error", code, utteranceId });
+      send({ type: "error", code, utteranceId, ...(trace && { trace }) });
       cleanup();
       ws.close(1011, "speech-failed");
     };
     const complete = () => {
       if (!ended || !statusOk || phase !== "finalizing") return;
       phase = "completed";
-      send({ type: "complete", utteranceId });
+      send({ type: "complete", utteranceId, ...(trace && { trace }) });
       cleanup();
       ws.close(1000, "speech-complete");
     };
@@ -121,6 +139,26 @@ export function createChirp3Server({
         const interim = [];
         for (const result of response.results ?? []) {
           const text = result.alternatives?.[0]?.transcript;
+          if (trace) {
+            const isFinal = result.isFinal === true;
+            if (isFinal) trace.finalCount++;
+            else trace.interimCount++;
+            if (trace.results.length < 64) {
+              const offset = result.resultEndOffset;
+              const seconds = Number(offset?.seconds ?? 0);
+              const endOffsetMs = offset && Number.isFinite(seconds)
+                ? Math.round(seconds * 1000 + (offset.nanos ?? 0) / 1e6)
+                : null;
+              trace.results.push({
+                atMs: elapsed(),
+                endOffsetMs,
+                isFinal,
+                ...(isFinal && typeof text === "string"
+                  ? { text: text.slice(0, 256) }
+                  : {}),
+              });
+            }
+          }
           if (typeof text !== "string") continue;
           if (result.isFinal) send({ type: "segment", utteranceId, text });
           else if (text.trim()) interim.push(text);
@@ -129,6 +167,7 @@ export function createChirp3Server({
           send({ type: "partial", utteranceId, text: interim.join(" ") });
       });
       stream.on("status", (status) => {
+        if (trace) trace.grpcStatus = status.code;
         if (status.code !== 0) {
           fail("providerUnavailable");
           return;
@@ -186,6 +225,12 @@ export function createChirp3Server({
           audioStartedAt ??= now;
           lastAudioAt = now;
           totalAudioBytes += data.length;
+          if (trace) {
+            const atMs = elapsed();
+            trace.firstAudioMs ??= atMs;
+            trace.lastAudioMs = atMs;
+            trace.receivedBytes = totalAudioBytes;
+          }
           if (
             totalAudioBytes > 32000 * 285 ||
             totalAudioBytes > (now - audioStartedAt + 2000) * 32
@@ -207,6 +252,7 @@ export function createChirp3Server({
             stream.write({ audio: Buffer.from(data) }, (error) => {
               pendingAudioWrites--;
               if (error) fail("providerUnavailable");
+              else if (trace) trace.writtenBytes += data.length;
             });
           } catch {
             fail("providerUnavailable");
@@ -255,6 +301,10 @@ export function createChirp3Server({
             return;
           }
           phase = "finalizing";
+          if (trace) {
+            trace.finishMs = elapsed();
+            trace.pendingWritesAtFinish = pendingAudioWrites;
+          }
           finalTimer = setTimeout(
             () => fail("providerUnavailable"),
             finalizationMs,

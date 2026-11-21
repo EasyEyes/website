@@ -1,0 +1,142 @@
+diff --git a/components/speech/microphoneCaptureWorkletSource.ts b/components/speech/microphoneCaptureWorkletSource.ts
+--- a/components/speech/microphoneCaptureWorkletSource.ts
++++ b/components/speech/microphoneCaptureWorkletSource.ts
+@@ -18,6 +18,14 @@ class EasyEyesMicrophoneCaptureProcessor extends AudioWorkletProcessor {
+       } else if (event.data?.type === "stop") {
+         this.capturing = false;
+         this.offset = 0;
++      } else if (event.data?.type === "stop-and-drain") {
++        this.capturing = false;
++        if (this.offset > 0) {
++          const tail = this.frame.slice(0, this.offset);
++          this.port.postMessage(tail, [tail.buffer]);
++        }
++        this.offset = 0;
++        this.port.postMessage("drained");
+       }
+     };
+   }
+diff --git a/components/speech/microphone.ts b/components/speech/microphone.ts
+--- a/components/speech/microphone.ts
++++ b/components/speech/microphone.ts
+@@ -59,6 +59,7 @@ export type MicrophoneAudioFrameListener = (
+ export interface MicrophoneAudioFrameSource {
+   start(): void;
+   stop(): void;
++  stopAndDrain?(): Promise<void>;
+   close(): void;
+ }
+
+@@ -452,8 +453,10 @@ class BrowserMicrophoneSession implements MicrophoneSession {
+       );
+       const silentOutput = this.audioContext.createGain();
+       silentOutput.gain.value = 0;
++      let pendingDrain: ((error?: Error) => void) | undefined;
+       const handleMessage = (event: MessageEvent<unknown>): void => {
+         if (event.data instanceof Float32Array) emit(event.data);
++        else if (event.data === "drained") pendingDrain?.();
+       };
+       captureNode.port.addEventListener("message", handleMessage);
+       captureNode.port.start();
+@@ -469,9 +472,28 @@ class BrowserMicrophoneSession implements MicrophoneSession {
+         stop: () => {
+           if (!closed) captureNode.port.postMessage({ type: "stop" });
+         },
++        stopAndDrain: () =>
++          new Promise<void>((resolve, reject) => {
++            if (closed || pendingDrain) {
++              reject(new Error("Microphone capture cannot drain."));
++              return;
++            }
++            const timeout = setTimeout(
++              () => pendingDrain?.(new Error("Microphone drain timed out.")),
++              1000,
++            );
++            pendingDrain = (error) => {
++              clearTimeout(timeout);
++              pendingDrain = undefined;
++              if (error) reject(error);
++              else resolve();
++            };
++            captureNode.port.postMessage({ type: "stop-and-drain" });
++          }),
+         close: () => {
+           if (closed) return;
+           closed = true;
++          pendingDrain?.(new Error("Microphone capture closed while draining."));
+           captureNode.port.removeEventListener("message", handleMessage);
+           captureNode.port.close();
+           disconnectAudioNode(captureNode);
+diff --git a/components/speech/audioCapture.ts b/components/speech/audioCapture.ts
+--- a/components/speech/audioCapture.ts
++++ b/components/speech/audioCapture.ts
+@@ -175,6 +175,17 @@ export class PcmMicrophoneCapture {
+     this.emitPending(true);
+   }
+
++  async stopAndDrain(): Promise<void> {
++    const source = this.frameSource;
++    if (!this.inputStarted || !source?.stopAndDrain) {
++      this.stop();
++      return;
++    }
++    this.inputStarted = false;
++    await source.stopAndDrain();
++    this.stop();
++  }
++
+   subscribe(listener: PcmAudioChunkListener): () => void {
+     this.listeners.add(listener);
+     return () => this.listeners.delete(listener);
+diff --git a/components/rsvpSpeech/rsvpSpeechController.ts b/components/rsvpSpeech/rsvpSpeechController.ts
+--- a/components/rsvpSpeech/rsvpSpeechController.ts
++++ b/components/rsvpSpeech/rsvpSpeechController.ts
+@@ -88,6 +88,7 @@ export interface RsvpSpeechCapturePort {
+   startInput(): void;
+   start(): void;
+   stop(): void;
++  stopAndDrain?(): Promise<void>;
+   subscribe(listener: (chunk: PcmAudioChunk) => void): () => void;
+   close(): Promise<void>;
+ }
+@@ -473,15 +474,23 @@ export class RsvpSpeechController {
+       return false;
+     this.finishRequested = true;
+     this.clearResponseControls();
++    void this.drainAndCommit();
++    return true;
++  }
++
++  private async drainAndCommit(): Promise<void> {
+     try {
+       this.assertMicrophoneReady();
+-      this.capture?.stop();
++      if (this.capture?.stopAndDrain) await this.capture.stopAndDrain();
++      else this.capture?.stop();
++      if (this.closeRequested || this.releasePromise) return;
+       if (this.audioChunkCount === 0)
+         throw new Error(
+           "No microphone audio reached the transcription session.",
+         );
+-      this.session.requestCommit();
++      this.session?.requestCommit();
+     } catch (error) {
++      if (this.closeRequested || this.releasePromise) return;
+       this.failureValue = asControllerError(
+         "captureFailed",
+         "RSVP speech could not finish recording.",
+@@ -489,13 +498,12 @@ export class RsvpSpeechController {
+       );
+       this.stateValue = "failed";
+       try {
+-        this.session.cancelUtterance();
++        this.session?.cancelUtterance();
+       } catch {
+         /* Cleanup is best effort. */
+       }
+       void this.releaseResources();
+     }
+-    return true;
+   }
+
+   private readonly handleFinishKey = (event: KeyboardEvent): void => {

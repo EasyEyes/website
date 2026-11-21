@@ -10,7 +10,7 @@ import {
 } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
-import { basename, dirname, resolve, join } from "node:path";
+import { dirname, resolve, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = fileURLToPath(new URL(".", import.meta.url));
@@ -24,33 +24,47 @@ const { build } = process.env.EE_BENCH_TOOL_ROOT
     )
   : require("esbuild");
 const output = join(root, "dist");
-const finishPath = "components/rsvpSpeech/rsvpSpeechFinish.ts";
+const patches = ["repeated-finish.patch", "capture-drain.patch"];
 
-async function loadBenchmarkFinishSource() {
-  const original = execFileSync("git", [
-    "-C",
-    threshold,
-    "show",
-    `HEAD:${finishPath}`,
-  ]);
-  const scratch = await mkdtemp(join(tmpdir(), "easyeyes-finish-"));
-  const staged = join(scratch, basename(finishPath));
+async function loadBenchmarkSources() {
+  const scratch = await mkdtemp(join(tmpdir(), "easyeyes-benchmark-"));
+  const sources = new Map();
+  const files = new Set();
+  const directories = new Set();
   try {
-    await writeFile(staged, original);
-    execFileSync(
-      "git",
-      ["apply", "-p3", join(root, "patches/repeated-finish.patch")],
-      { cwd: scratch },
-    );
-    return await readFile(staged, "utf8");
+    for (const patch of patches) {
+      const patchPath = join(root, "patches", patch);
+      const content = await readFile(patchPath, "utf8");
+      for (const [, path] of content.matchAll(/^--- a\/(components\/[\w/]+\.ts)\r?$/gm)) {
+        const staged = join(scratch, path);
+        if (files.has(staged)) continue;
+        files.add(staged);
+        for (let dir = dirname(staged); dir !== scratch; dir = dirname(dir))
+          directories.add(dir);
+        await mkdir(dirname(staged), { recursive: true });
+        await writeFile(
+          staged,
+          execFileSync("git", ["-C", threshold, "show", `HEAD:${path}`]),
+        );
+      }
+      execFileSync("git", ["apply", patchPath], { cwd: scratch });
+    }
+    for (const staged of files)
+      sources.set(resolve(threshold, staged.slice(scratch.length + 1)), await readFile(staged, "utf8"));
+    return sources;
   } finally {
-    await unlink(staged).catch((error) => {
-      if (error.code !== "ENOENT") throw error;
-    });
+    for (const staged of files)
+      await unlink(staged).catch((error) => {
+        if (error.code !== "ENOENT") throw error;
+      });
+    for (const dir of [...directories].sort((a, b) => b.length - a.length))
+      await rmdir(dir).catch((error) => {
+        if (error.code !== "ENOENT") throw error;
+      });
     await rmdir(scratch);
   }
 }
-const finishSource = await loadBenchmarkFinishSource();
+const benchmarkSources = await loadBenchmarkSources();
 
 await mkdir(output, { recursive: true });
 await build({
@@ -63,12 +77,13 @@ await build({
   alias: { "@threshold": threshold },
   plugins: [
     {
-      name: "benchmark-repeated-finish",
+      name: "benchmark-source-patches",
       setup(builder) {
-        builder.onLoad({ filter: /rsvpSpeechFinish\.ts$/ }, ({ path }) => {
-          if (resolve(path) === resolve(threshold, finishPath))
+        builder.onLoad({ filter: /\.ts$/ }, ({ path }) => {
+          const contents = benchmarkSources.get(resolve(path));
+          if (contents !== undefined)
             return {
-              contents: finishSource,
+              contents,
               loader: "ts",
               resolveDir: dirname(path),
             };

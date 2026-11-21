@@ -14,6 +14,7 @@ const service = createChirp3Server({
   location,
   publicUrl: process.env.CHIRP3_RELAY_URL,
   ticketSecret: process.env.CHIRP3_TICKET_SECRET,
+  benchmarkTraceOrigin: process.env.CHIRP3_BENCH_TRACE_ORIGIN || undefined,
   maxConnections: Number(process.env.CHIRP3_MAX_CONNECTIONS ?? 80),
   createStream: createGoogleStreamFactory(client),
 });

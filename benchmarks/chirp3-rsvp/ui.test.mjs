@@ -155,7 +155,12 @@ try {
           });
         } else if (!this.deepgram && message.type === "finish") {
           this.reply({ type: "segment", utteranceId: this.utteranceId, text: "Call my stone." });
-          this.reply({ type: "complete", utteranceId: this.utteranceId });
+          const bytes = window.testAudio.chirp3.reduce((n, chunk) => n + chunk.length, 0);
+          this.reply({
+            type: "complete",
+            utteranceId: this.utteranceId,
+            trace: { receivedBytes: bytes, writtenBytes: bytes, finalCount: 1 },
+          });
         } else if (this.deepgram && message.type === "CloseStream") {
           this.reply({
             type: "Results", is_final: true, speech_final: false,
@@ -192,6 +197,12 @@ try {
   assert.match(await first.innerText(), /All 2 clients sent [1-9]/);
   assert.match(await first.innerText(), /Call my stone/);
   assert.match(await first.innerText(), /Cold ducks stone/);
+  assert.match(await first.innerText(), /Chirp PCM bytes: browser \d+, relay \d+, gRPC writes \d+/);
+  const trace = JSON.parse(await first.locator("details pre").textContent());
+  assert.equal(trace.audioSent.samples * 2, trace.chirpRelayTrace.receivedBytes);
+  const drained = trace.events.find((event) => event.name === "capture-drained");
+  assert.ok(drained && drained.ms <= trace.audioSent.finishMs);
+  assert.ok(trace.audioSent.lastAudioMs <= trace.audioSent.finishMs);
   const audio = await page.evaluate(() => window.testAudio);
   assert.equal(audio.chirp3.length, audio.deepgram.length);
   assert(audio.chirp3.length > 0);

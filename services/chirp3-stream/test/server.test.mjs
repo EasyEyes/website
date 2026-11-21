@@ -60,7 +60,7 @@ class SlowGoogle extends FakeGoogle {
 
 async function harness(
   t,
-  { makeStream = () => new FakeGoogle(), ...options } = {},
+  { makeStream = () => new FakeGoogle(), clientOrigin = origin, ...options } = {},
 ) {
   const streams = [];
   const service = createChirp3Server({
@@ -82,7 +82,7 @@ async function harness(
   });
   const ws = new WebSocket(
     `ws://127.0.0.1:${service.server.address().port}/v1/stream`,
-    { origin },
+    { origin: clientOrigin },
   );
   await once(ws, "open");
   const messages = [];
@@ -105,7 +105,7 @@ async function harness(
     ws.send(
       JSON.stringify({
         ...configuration,
-        token: issueChirp3Ticket(claims, secret),
+        token: issueChirp3Ticket({ ...claims, origin: clientOrigin }, secret),
         ...overrides,
       }),
     );
@@ -209,11 +209,48 @@ test("streams audio immediately and retains segments until an explicit successfu
   await new Promise((resolve) => setTimeout(resolve, 10));
   h.streams[0].result("dog fish");
   h.streams[0].complete();
-  await h.wait((m) => m.type === "complete");
+  const completion = await h.wait((m) => m.type === "complete");
+  assert.equal(completion.trace, undefined);
   assert.deepEqual(
     h.messages.filter((m) => m.type === "segment").map((m) => m.text),
     ["cat", "dog fish"],
   );
+});
+
+test("benchmark relay compares audio writes and original Google results", async (t) => {
+  const clientOrigin = "https://deploy-preview-169--easyeyes.netlify.app";
+  const h = await harness(t, { benchmarkTraceOrigin: clientOrigin, clientOrigin });
+  h.start();
+  await h.wait((m) => m.type === "ready");
+  h.sendAudio();
+  h.sendAudio(Buffer.alloc(800));
+  await h.until(() => h.streams[0]?.requests.length === 3);
+  const stream = h.streams[0];
+  stream.result("boat la", false);
+  await h.wait((m) => m.type === "partial");
+  const endOfInput = once(stream, "finish");
+  h.finish();
+  await endOfInput;
+  stream.push({ results: [{
+    isFinal: true,
+    alternatives: [{ transcript: "boat lake morning" }],
+    resultEndOffset: { seconds: "0", nanos: 125000000 },
+  }] });
+  stream.complete();
+  const { trace } = await h.wait((m) => m.type === "complete");
+  assert.equal(trace.receivedBytes, 4000);
+  assert.equal(trace.writtenBytes, 4000);
+  assert.equal(trace.grpcStatus, 0);
+  assert.equal(trace.interimCount, 1);
+  assert.equal(trace.finalCount, 1);
+  assert.equal(trace.results[0].text, undefined);
+  assert.equal(trace.results[1].text, "boat lake morning");
+  assert.equal(trace.results[1].endOffsetMs, 125);
+  assert.ok(trace.finishMs >= trace.lastAudioMs);
+
+  const otherSite = new WebSocket(h.ws.url, { origin });
+  const [error] = await once(otherSite, "error");
+  assert.match(error.message, /403/);
 });
 
 test("ready sockets can wait for audio without allocating a Google stream", async (t) => {

@@ -147,7 +147,7 @@ const pause = (ms, signal) =>
     signal.addEventListener("abort", end, { once: true });
   });
 
-function instrument(transcriber, mark, comparisons, audioCounts) {
+function instrument(transcriber, mark, comparisons, audioCounts, elapsed) {
   let firstAudio = true;
   transcriber.subscribe((event) => {
     if (event.type === "commit") {
@@ -172,6 +172,7 @@ function instrument(transcriber, mark, comparisons, audioCounts) {
           target.sendAudio(id, chunk);
           audioCounts.chunks++;
           audioCounts.samples += chunk.samples.length;
+          audioCounts.lastAudioMs = elapsed();
           for (const comparison of comparisons) comparison.send(chunk);
           if (firstAudio) {
             firstAudio = false;
@@ -185,7 +186,7 @@ function instrument(transcriber, mark, comparisons, audioCounts) {
         };
       if (key === "requestCommit")
         return (...args) => {
-          mark("finish");
+          audioCounts.finishMs = mark("finish").ms;
           const result = target.requestCommit(...args);
           for (const comparison of comparisons) comparison.finish();
           return result;
@@ -350,6 +351,19 @@ async function play(run, signal, mark, elapsed) {
     targetKeytermBiasEnabled: run.settings.keyterms,
     webSocketFactory: (url, protocols) => {
       const socket = new WebSocket(url, protocols);
+      socket.addEventListener("message", ({ data }) => {
+        try {
+          const message = JSON.parse(data);
+          if (
+            message.utteranceId === run.id &&
+            (message.type === "complete" || message.type === "error") &&
+            message.trace
+          )
+            run.chirpRelayTrace = message.trace;
+        } catch {
+          // The transcriber validates relay messages.
+        }
+      });
       socket.addEventListener("open", () => mark("socket-open"), {
         once: true,
       });
@@ -366,6 +380,12 @@ async function play(run, signal, mark, elapsed) {
     openMicrophone: () => observedMicrophone(mark),
     createCapture: (microphone) =>
       new (class extends PcmMicrophoneCapture {
+        async stopAndDrain() {
+          mark("capture-drain-start");
+          await super.stopAndDrain();
+          mark("capture-drained");
+        }
+
         stop() {
           super.stop();
           if (
@@ -375,7 +395,7 @@ async function play(run, signal, mark, elapsed) {
             mark("capture-stop");
         }
       })(microphone),
-    createTranscriber: () => instrument(transcriber, mark, comparisons, audioCounts),
+    createTranscriber: () => instrument(transcriber, mark, comparisons, audioCounts, elapsed),
     createSession: (observed, config) => {
       const session = new SpeechSession(observed, {
         maximumUtteranceDurationMs: config.maximumResponseDurationMs,
@@ -892,14 +912,23 @@ function addReport(run) {
   }
   card.append(list);
   const details = element("details");
+  const browserBytes = run.audioSent ? run.audioSent.samples * 2 : 0;
+  const relay = run.chirpRelayTrace;
+  details.append(element(
+    "summary",
+    relay
+      ? `Settings and timing · Chirp PCM bytes: browser ${browserBytes}, relay ${relay.receivedBytes}, gRPC writes ${relay.writtenBytes}`
+      : "Settings, timing, and alignment events · Chirp relay trace unavailable",
+  ));
   details.append(
-    element("summary", "Settings, timing, and alignment events"),
     element(
       "pre",
       JSON.stringify(
         {
           settings: run.settings,
           timingMs: run.timing,
+          audioSent: run.audioSent,
+          chirpRelayTrace: relay,
           events: run.events,
           interimTranscripts: run.interimTranscripts,
           comparisons: Object.fromEntries(Object.entries(run.comparisons).map(([provider, result]) => [
