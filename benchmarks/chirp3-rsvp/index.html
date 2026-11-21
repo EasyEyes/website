@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>RSVP speech benchmark</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <main>
+      <header>
+        <span class="eyebrow">EASYEYES · TEST PREVIEW</span>
+        <h1>RSVP speech benchmark</h1>
+        <p>
+          Compare Google Chirp 3 with ElevenLabs Scribe v2 Realtime or
+          Deepgram Nova-3 using the same live microphone audio.
+        </p>
+      </header>
+      <form id="settings">
+        <fieldset id="options">
+          <legend>1. Set up a trial</legend>
+          <label
+            >Preview access code
+            <input
+              id="access-code"
+              type="password"
+              maxlength="64"
+              autocomplete="off"
+              required
+          /></label>
+          <label
+            ><code>rsvpReadingSTTProvider</code
+            ><select disabled>
+              <option>chirp3</option>
+            </select></label
+          >
+          <label>Scenario<select id="scenario"></select></label>
+          <label>
+            Compare with
+            <select id="comparison-provider">
+              <option value="">None — only Google Chirp 3</option>
+              <option value="both">Both — ElevenLabs + Deepgram</option>
+              <option value="elevenlabs">ElevenLabs Scribe v2 Realtime</option>
+              <option value="deepgram">Deepgram Nova-3</option>
+            </select>
+            <small>The selected provider also receives your test audio.</small>
+          </label>
+          <label id="wrong-word-field" hidden>
+            Intentional replacement for word 1
+            <input id="wrong-word" value="cold" maxlength="60" />
+          </label>
+          <label
+            >Target words <small>(exactly three)</small
+            ><input id="targets" value="boat, lake, morning" required
+          /></label>
+          <label
+            >readingCorpus
+            <small>Optional .txt word list; load a three-word set.</small
+            ><input id="corpus" type="file" accept=".txt,text/plain"
+          /></label>
+          <label
+            ><code>rsvpReadingSpeechFinishPhrase</code
+            ><input id="phrase" value="don't know" maxlength="80"
+          /></label>
+          <label
+            ><code>targetDurationSec</code
+            ><input
+              id="word"
+              type="number"
+              min="0.3"
+              max="3"
+              step="0.1"
+              required
+          /></label>
+          <label
+            ><code>rsvpReadingSpeechTimeoutSec</code
+            ><small>Seconds beyond the last displayed word</small
+            ><input
+              id="cap"
+              type="number"
+              min="0.2"
+              max="60"
+              step="0.1"
+              required
+          /></label>
+          <label
+            ><code>rsvpReadingSpeechSilenceSec</code
+            ><input
+              id="silence"
+              type="number"
+              min="0.2"
+              max="30"
+              step="0.1"
+              required
+          /></label>
+          <label
+            ><code>rsvpReadingSTTMaxSec</code
+            ><small>Seconds to wait for the final result</small
+            ><input
+              id="stt"
+              type="number"
+              min="0.1"
+              max="30"
+              step="0.1"
+              required
+          /></label>
+          <label
+            >Min. cross wait (s)<input
+              id="crossWait"
+              type="number"
+              min="0"
+              max="60"
+              step="1"
+              required
+          /></label>
+          <label
+            ><code>rsvpReadingSTTUseKeytermsBool</code
+            ><select id="keyterms">
+              <option>TRUE</option>
+              <option>FALSE</option>
+            </select></label
+          >
+          <label
+            ><code>rsvpReadingSTTIgnoreOrderBool</code
+            ><select id="ignoreOrder">
+              <option>TRUE</option>
+              <option>FALSE</option>
+            </select></label
+          >
+          <label
+            ><code>thresholdParameter</code
+            ><select id="adaptive">
+              <option value="FALSE">Fixed duration · no QUEST</option>
+              <option value="TRUE">targetDurationSec · use QUEST</option>
+            </select></label
+          >
+          <label
+            ><code>thresholdGuess</code
+            ><input
+              id="quest-guess"
+              type="number"
+              value="0.7"
+              min="0.3"
+              max="3"
+              step="0.1"
+              required
+          /></label>
+        </fieldset>
+        <p class="hint" id="availability">
+          Use your own test voice, not participant audio. Exports contain text
+          and measurements, not audio.
+        </p>
+        <aside>
+          <strong id="cue"></strong>
+          <p id="script"></p>
+        </aside>
+        <div class="actions">
+          <button id="prepare">Prepare trial</button
+          ><button id="cancel" type="button" disabled>Cancel</button>
+          <button id="next-set" type="button">Load next word set</button>
+        </div>
+      </form>
+      <section id="arena" aria-label="Trial display">
+        <h2>2. Run the trial</h2>
+        <p id="arena-cue" class="hint"></p>
+        <p id="stage" role="status">Choose a scenario, then prepare.</p>
+        <output id="clock">0.00 s · not started</output>
+        <div id="word-display"></div>
+        <button
+          type="button"
+          id="cross"
+          aria-label="Start showing words"
+          hidden
+        >
+          +
+        </button>
+      </section>
+      <section class="results">
+        <h2>3. Compare the results</h2>
+        <div class="actions">
+          <button id="export" type="button" disabled>Export JSON</button>
+          <button id="export-csv" type="button" disabled>
+            Export summary CSV
+          </button>
+        </div>
+        <p id="aggregate" class="hint"></p>
+        <div id="paired-aggregate"></div>
+        <div id="report"></div>
+        <details>
+          <summary>Current relative timeline</summary>
+          <pre id="trace"></pre>
+        </details>
+      </section>
+    </main>
+    <script type="module" src="./main.js"></script>
+  </body>
+</html>
