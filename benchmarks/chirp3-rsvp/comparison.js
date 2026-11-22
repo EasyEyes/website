@@ -8,7 +8,7 @@ export const comparisonProviders = {
   elevenlabs: { label: "ElevenLabs Scribe v2 Realtime", env: "RSVP_BENCH_ELEVENLABS_API_KEY" },
 };
 
-function comparisonSocket(url, protocols, onRetentionWarning) {
+export function comparisonSocket(url, protocols, onRetentionWarning) {
   const socket = new WebSocket(url, protocols);
   let keepAlive;
   if (protocols) {

@@ -53,6 +53,41 @@ Use developer test speech only. Exports may contain test transcripts, but
 never audio, tickets, or credentials. Nothing is kept by the page after
 reload unless it is exported.
 
+## Audio files + references
+
+This mode checks what the speaker said, independently of RSVP targets. It
+accepts a version 1 JSON manifest and separate browser-decodable audio files
+with unique filenames. Download the example on the page for the file format.
+Play the matching audio, correct the human reference as needed, and mark it
+reviewed. Export the reviewed manifest so the next session can reuse it.
+
+Local-only is the default. Review or import a version 1 results file with rows
+such as `{ "clipId": "example-001", "provider": "Engine / condition", "transcript": "boat lake" }`.
+Use `error` instead of `transcript` for a failed request. Successful empty
+transcripts use `"transcript": ""`. The table and graphs compare only the same
+reviewed clips on which all imported providers succeeded; coverage, errors
+and missing results are reported separately. JSON includes word alignment;
+CSV contains aggregate counts. The audio itself is not exported.
+
+Only for consenting team test voices, a separate manifest with
+`"audioPolicy": "team-test"` can use the preview's live adapters. After explicit
+confirmation, the browser sends the same audio to the selected providers,
+without the reference or keyterms. Clips are limited to 30 seconds and replay
+in batches of up to 20. This mode sends speech to third parties; do not use
+it to bypass any dataset restrictions.
+
+To prepare candidates from ACAD without any external requests:
+
+```text
+python benchmarks/chirp3-rsvp/prepare-acad.py --audio PATH_TO_ACAD-wav.zip --mapping PATH_TO_ACAD_EasyEyes_benchmark_mapping.zip --out PRIVATE_OUTPUT_DIRECTORY --limit 48
+```
+
+The script joins uniquely matched WAVs with transcript consensus and cuts
+the annotated utterances. Output references are candidates, not listening
+verified. Keep these recordings local; do not commit, deploy, or distribute
+them. Only process them externally if the applicable TalkBank data-use and
+non-retention conditions have been verified.
+
 ## Same-audio provider comparison
 
 In **Compare with**, choose **Both** to test all three engines together, or

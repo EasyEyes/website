@@ -16,6 +16,9 @@ import {
 import { analyze, measurements, checkRun } from "./evidence.js";
 import { comparisonProviders, createComparison } from "./comparison.js";
 import { summarizePairs } from "./pairedMetrics.mjs";
+import { setupFileBenchmark } from "./fileBenchmark.js";
+
+setupFileBenchmark();
 
 const scenarios = Object.fromEntries(
   Object.entries(allScenarios).filter(([, value]) => !value.fixtureOnly),

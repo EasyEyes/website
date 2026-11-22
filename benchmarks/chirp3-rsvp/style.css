@@ -114,6 +114,15 @@ select:focus-visible {
   flex-wrap: wrap;
   margin-top: 0.7rem;
 }
+.mode-switch { margin-block: 0 1rem; }
+.mode-switch button[aria-pressed="false"] { background: white; color: #18568a; border-color: #859eae; }
+.file-fields, #file-review, #file-summary { margin-block: 1rem; }
+#file-player { display: block; margin-block: .5rem; max-width: 100%; }
+#file-reference { font: inherit; }
+.file-bars { display: grid; gap: .6rem; margin-block: .75rem; }
+.file-bars label { grid-template-columns: minmax(10rem, 1fr) 1fr auto; align-items: center; }
+.file-bars meter { width: 100%; }
+.file-table { overflow-x: auto; }
 aside {
   margin: 0.65rem 0;
   padding: 0.75rem;

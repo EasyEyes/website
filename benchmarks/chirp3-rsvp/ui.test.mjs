@@ -86,7 +86,9 @@ try {
   let deepgramConfigured = true;
   let deepgramRejected = false;
   let elevenRetentionWarning = false;
+  let ticketRequests = 0;
   await page.route("**/.netlify/functions/rsvp-benchmark-ticket", (route) => {
+    ticketRequests++;
     const { provider } = route.request().postDataJSON();
     if (provider === "deepgram")
       return route.fulfill(deepgramRejected
@@ -254,9 +256,58 @@ try {
   assert.match(await first.innerText(), /Call my stone/);
   assert.match(await first.innerText(), /Cold ducks stone/);
   assert.match(await first.innerText(), /excluded from the combined summary/);
+  const jsonFile = (name, value) => ({
+    name, mimeType: "application/json", buffer: Buffer.from(JSON.stringify(value)),
+  });
+  const clip = { id: "audio-01", file: "example.wav", reference: "call my stone", referenceStatus: "candidate" };
+  const wav = Buffer.alloc(44 + 16000);
+  wav.write("RIFF");
+  wav.writeUInt32LE(wav.length - 8, 4);
+  wav.write("WAVEfmt ", 8);
+  wav.writeUInt32LE(16, 16);
+  wav.writeUInt16LE(1, 20);
+  wav.writeUInt16LE(1, 22);
+  wav.writeUInt32LE(16000, 24);
+  wav.writeUInt32LE(32000, 28);
+  wav.writeUInt16LE(2, 32);
+  wav.writeUInt16LE(16, 34);
+  wav.write("data", 36);
+  wav.writeUInt32LE(wav.length - 44, 40);
+  const beforeFileMode = ticketRequests;
+  await page.getByRole("button", { name: "Audio files + references" }).click();
+  await page.locator("#file-manifest").setInputFiles(jsonFile("manifest.json", { version: 1, audioPolicy: "local-only", clips: [clip] }));
+  await page.locator("#file-audio").setInputFiles({ name: clip.file, mimeType: "audio/wav", buffer: wav });
+  await page.getByText(/1 matching audio files/).waitFor();
+  assert(await page.locator("#file-cloud").isHidden());
+  await page.locator("#file-confirm").click();
+  await page.locator("#file-results").setInputFiles(jsonFile("results.json", { version: 1, results: [
+    { provider: "Local test A", clipId: clip.id, transcript: "call my" },
+    { provider: "Local test B", clipId: clip.id, transcript: "call my stone" },
+  ] }));
+  await page.getByText("Provider comparison · common successful clips").waitFor();
+  assert.match(await page.locator("#file-summary").innerText(), /66\.7%/);
+  assert.equal(ticketRequests, beforeFileMode);
+
+  await page.locator("#file-manifest").setInputFiles(jsonFile("team-manifest.json", {
+    version: 1, audioPolicy: "team-test", clips: [{ ...clip, referenceStatus: "reviewed" }],
+  }));
+  await page.locator("#file-consent").waitFor();
+  await page.locator("#file-code").fill("a".repeat(64));
+  await page.locator("#file-run").click();
+  assert.equal(ticketRequests, beforeFileMode);
+  await page.evaluate(() => { window.testAudio = { chirp3: [], deepgram: [], elevenlabs: [] }; });
+  await page.locator("#file-consent").check();
+  await page.locator("#file-run").click();
+  await page.getByText(/Batch complete/).waitFor();
+  assert.match(await page.locator("#file-summary").innerText(), /100\.0%/);
+  assert.match(await page.locator("#file-item-results").innerText(), /Cold ducks stone/);
+  const replayed = await page.evaluate(() => window.testAudio);
+  assert.equal(replayed.chirp3.length, 5);
+  assert.deepEqual(replayed.chirp3, replayed.elevenlabs);
+  assert.equal(ticketRequests, beforeFileMode + 2);
   assert.deepEqual(errors, []);
   console.log(
-    "Built Preview UI passed. The ElevenLabs retention warning did not interrupt matching PCM or scoring.",
+    "Preview UI passed: live comparison, offline file review, and same-audio team-file replay.",
   );
 } finally {
   await browser?.close();
