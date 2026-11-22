@@ -259,7 +259,13 @@ try {
   const jsonFile = (name, value) => ({
     name, mimeType: "application/json", buffer: Buffer.from(JSON.stringify(value)),
   });
-  const clip = { id: "audio-01", file: "example.wav", reference: "call my stone", referenceStatus: "candidate" };
+  const clips = [
+    { id: "audio-01", file: "example.wav", reference: "call my stone" },
+    {
+      id: "audio-02", file: "example-2.wav", reference: "cold ducks money",
+      targets: ["cold", "ducks", "stone"],
+    },
+  ];
   const wav = Buffer.alloc(44 + 16000);
   wav.write("RIFF");
   wav.writeUInt32LE(wav.length - 8, 4);
@@ -275,39 +281,33 @@ try {
   wav.writeUInt32LE(wav.length - 44, 40);
   const beforeFileMode = ticketRequests;
   await page.getByRole("button", { name: "Audio files + references" }).click();
-  await page.locator("#file-manifest").setInputFiles(jsonFile("manifest.json", { version: 1, audioPolicy: "local-only", clips: [clip] }));
-  await page.locator("#file-audio").setInputFiles({ name: clip.file, mimeType: "audio/wav", buffer: wav });
-  await page.getByText(/1 matching audio files/).waitFor();
-  assert(await page.locator("#file-cloud").isHidden());
-  await page.locator("#file-confirm").click();
-  await page.locator("#file-results").setInputFiles(jsonFile("results.json", { version: 1, results: [
-    { provider: "Local test A", clipId: clip.id, transcript: "call my" },
-    { provider: "Local test B", clipId: clip.id, transcript: "call my stone" },
-  ] }));
-  await page.getByText("Provider comparison · common successful clips").waitFor();
-  assert.match(await page.locator("#file-summary").innerText(), /66\.7%/);
+  await page.locator("#file-manifest").setInputFiles(jsonFile("manifest.json", { version: 1, clips }));
+  await page.locator("#file-audio").setInputFiles(
+    clips.map((clip) => ({ name: clip.file, mimeType: "audio/wav", buffer: wav })),
+  );
+  await page.getByText(/2 matching audio files/).waitFor();
   assert.equal(ticketRequests, beforeFileMode);
-
-  await page.locator("#file-manifest").setInputFiles(jsonFile("team-manifest.json", {
-    version: 1, audioPolicy: "team-test", clips: [{ ...clip, referenceStatus: "reviewed" }],
-  }));
-  await page.locator("#file-consent").waitFor();
   await page.locator("#file-code").fill("a".repeat(64));
   await page.locator("#file-run").click();
   assert.equal(ticketRequests, beforeFileMode);
   await page.evaluate(() => { window.testAudio = { chirp3: [], deepgram: [], elevenlabs: [] }; });
   await page.locator("#file-consent").check();
   await page.locator("#file-run").click();
-  await page.getByText(/Batch complete/).waitFor();
-  assert.match(await page.locator("#file-summary").innerText(), /100\.0%/);
-  assert.match(await page.locator("#file-item-results").innerText(), /Cold ducks stone/);
+  await page.getByText(/Run ended after 2 clips/).waitFor({ timeout: 16000 });
+  const summary = await page.locator("#file-summary tbody").innerText();
+  assert.match(summary, /Chirp 3[^\n]+2\/2[^\n]+50\.0%/);
+  assert.match(summary, /ElevenLabs[^\n]+2\/2[^\n]+100\.0%/);
+  await page.getByText("Inspect an individual clip (optional)").click();
+  await page.locator("#file-clip").selectOption("audio-02");
+  assert.match(await page.locator("#file-item-results").innerText(), /Expected: 110/);
+  assert.match(await page.locator("#file-item-results").innerText(), /Cold ducks stone[^\n]+111/);
   const replayed = await page.evaluate(() => window.testAudio);
-  assert.equal(replayed.chirp3.length, 5);
+  assert.equal(replayed.chirp3.length, 10);
   assert.deepEqual(replayed.chirp3, replayed.elevenlabs);
-  assert.equal(ticketRequests, beforeFileMode + 2);
+  assert.equal(ticketRequests, beforeFileMode + 4);
   assert.deepEqual(errors, []);
   console.log(
-    "Preview UI passed: live comparison, offline file review, and same-audio team-file replay.",
+    "Preview UI passed: live comparison and complete same-audio RSVP dataset replay.",
   );
 } finally {
   await browser?.close();

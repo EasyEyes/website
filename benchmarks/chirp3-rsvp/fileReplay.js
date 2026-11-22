@@ -61,7 +61,7 @@ function transcriber(provider, id, getTicket, onRetentionWarning) {
   });
 }
 
-const delay = (ms, signal) => new Promise((resolve) => {
+export const delay = (ms, signal) => new Promise((resolve) => {
   if (signal.aborted) return resolve();
   const done = () => {
     clearTimeout(timer);
@@ -72,7 +72,7 @@ const delay = (ms, signal) => new Promise((resolve) => {
   signal.addEventListener("abort", done, { once: true });
 });
 
-export async function replayClip(file, clipId, keys, accessCode, signal) {
+export async function replayClip(file, clipId, keys, accessCode, signal, nextTicketAt) {
   const fail = (provider, error) => ({ clipId, provider: replayProviders[provider], error });
   let samples;
   try {
@@ -86,13 +86,24 @@ export async function replayClip(file, clipId, keys, accessCode, signal) {
   const id = `file-${crypto.randomUUID()}`;
   let warning = false;
   const states = keys.map((key) => {
-    const getTicket = () => ticket(key, accessCode, signal);
+    let ticketError;
+    const getTicket = async () => {
+      await delay(Math.max(0, (nextTicketAt.get(key) ?? 0) - performance.now()), signal);
+      signal.throwIfAborted();
+      nextTicketAt.set(key, performance.now() + 2200);
+      try {
+        return await ticket(key, accessCode, signal);
+      } catch (error) {
+        ticketError = error.message?.match(/^Ticket HTTP \d+$/)?.[0];
+        throw error;
+      }
+    };
     const session = new SpeechSession(transcriber(key, id, getTicket, () => { warning = true; }), {
       maximumUtteranceDurationMs: 35_000,
       finalizationTimeoutMs: 10_000,
       externallyControlledEnd: true,
     });
-    return { key, session, error: null };
+    return { key, session, error: null, getTicketError: () => ticketError };
   });
   const abort = () => {
     for (const { session } of states) void session.close().catch(() => {});
@@ -107,7 +118,7 @@ export async function replayClip(file, clipId, keys, accessCode, signal) {
           return null;
         });
       } catch (error) {
-        state.error = error?.code || error.message?.match(/^Ticket HTTP \d+$/)?.[0] || "Could not connect.";
+        state.error = state.getTicketError() || error?.code || "Could not connect.";
       }
     }));
     for (let i = 0; i < samples.length && !signal.aborted; i += FRAME) {

@@ -21,48 +21,36 @@
         <button type="button" id="show-files" aria-pressed="false">Audio files + references</button>
       </nav>
       <section class="results" id="file-benchmark" hidden>
-        <h2>Audio-file benchmark</h2>
-        <p>Measure what was actually said. References are checked after transcription and are never used as recognition hints.</p>
+        <h2>RSVP dataset benchmark</h2>
+        <p>Select a reference manifest and all its audio files. Run the selected providers on the same audio, then compare their RSVP score vectors against the supplied references.</p>
         <a id="file-template" href="#">Download an example manifest</a>
         <fieldset class="file-fields">
-          <label>Reference manifest (.json)
+          <label>Validated reference manifest (.json)
             <input id="file-manifest" type="file" accept=".json,application/json" />
           </label>
           <label>Matching audio files
             <input id="file-audio" type="file" accept="audio/*,.wav,.mp3,.flac,.m4a,.ogg" multiple />
           </label>
-          <label>Import provider results (.json)
+          <label>Resume with previous results (.json, optional)
             <input id="file-results" type="file" accept=".json,application/json" />
           </label>
         </fieldset>
         <p id="file-status" role="status">Load a manifest to get started.</p>
-        <div id="file-review" hidden>
-          <h3>Review reference audio</h3>
-          <label>Clip<select id="file-clip"></select></label>
-          <audio id="file-player" controls preload="none" hidden></audio>
-          <label>What was actually said
-            <textarea id="file-reference" rows="2" maxlength="1500"></textarea>
-          </label>
-          <div class="actions">
-            <button id="file-confirm" type="button">Mark as reviewed</button>
-            <button id="file-save-manifest" type="button">Export manifest</button>
-          </div>
-          <div id="file-item-results"></div>
-        </div>
-        <fieldset id="file-cloud" class="file-fields" hidden>
-          <legend>Transcribe your team’s test recordings</legend>
+        <fieldset id="file-cloud" class="file-fields">
+          <legend>Run the dataset</legend>
           <label>Preview access code
             <input id="file-code" type="password" autocomplete="off" maxlength="64" />
           </label>
           <div>
+            <label class="check"><input type="checkbox" id="file-ignore-order" checked /> Ignore word order in RSVP scoring</label>
             <label class="check"><input type="checkbox" value="chirp3" name="file-provider" checked /> Chirp 3</label>
             <label class="check"><input type="checkbox" value="elevenlabs" name="file-provider" checked /> ElevenLabs</label>
             <label class="check"><input type="checkbox" value="deepgram" name="file-provider" /> Deepgram</label>
           </div>
           <div>
-            <label class="check"><input type="checkbox" id="file-consent" /> Only consenting team test voices; no participant or restricted audio. The chosen providers receive this audio and may retain it.</label>
+            <label class="check"><input type="checkbox" id="file-consent" /> I am authorized to send the selected audio to these providers. Their retention settings apply.</label>
             <div class="actions">
-              <button type="button" id="file-run">Transcribe pending clips</button>
+              <button type="button" id="file-run">Run dataset</button>
               <button type="button" id="file-cancel" disabled>Cancel</button>
             </div>
           </div>
@@ -73,6 +61,11 @@
           <button id="file-export-csv" type="button" disabled>Export metrics CSV</button>
         </div>
         <div id="file-summary"></div>
+        <details id="file-review" hidden>
+          <summary>Inspect an individual clip (optional)</summary>
+          <label>Clip<select id="file-clip"></select></label>
+          <div id="file-item-results"></div>
+        </details>
       </section>
       <form id="settings">
         <fieldset id="options">

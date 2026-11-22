@@ -1,5 +1,6 @@
-import { readManifest, readResults, summarizeFiles, tokenize } from "./fileMetrics.mjs";
+import { readManifest, readResults, summarizeFiles } from "./fileMetrics.mjs";
 import { replayClip, replayProviders } from "./fileReplay.js";
+import { fileRsvpScorer, makeRsvpCases } from "./fileRsvpScore.js";
 
 const $ = (id) => document.getElementById(id);
 function node(tag, text) {
@@ -18,15 +19,16 @@ function download(name, content, type) {
 }
 
 const json = (name, data) => download(name, JSON.stringify(data, null, 2), "application/json");
-const pct = (n, d) => d ? `${(100 * n / d).toFixed(1)}%` : "—";
+const pct = (n, d) => d ? (100 * n / d).toFixed(1) + "%" : "—";
 const csvCell = (value) => {
   const text = String(value ?? "");
-  const safe = typeof value === "string" && /^[\s]*[=+\-@]|^[\t\r\n]/.test(text) ? `'${text}` : text;
-  return `"${safe.replaceAll('"', '""')}"`;
+  const safe = typeof value === "string" && /^\s*[=+\-@]|^[\t\r\n]/.test(text) ? "'" + text : text;
+  return '"' + safe.replaceAll('"', '""') + '"';
 };
 
-async function readJson(file, maxBytes) {
-  if (!file || file.size > maxBytes) throw new Error("Missing JSON file or file is too large.");
+async function readJson(file, maxMB) {
+  if (!file || file.size > maxMB * 1024 * 1024)
+    throw new Error("Missing JSON file or file is too large.");
   return JSON.parse(await file.text());
 }
 
@@ -47,19 +49,16 @@ const table = (headers, rows) => {
 
 export function setupFileBenchmark() {
   let manifest;
+  let clips = [];
   let files = new Map();
   let results = new Map();
   let computed;
-  let playerUrl;
   let controller;
   const status = (message) => { $("file-status").textContent = message; };
-  const activeClip = () => manifest?.clips.find(({ id }) => id === $("file-clip").value);
+  const score = () => fileRsvpScorer($("file-ignore-order").checked);
   const showFiles = (show) => {
     if (show && !$("cancel").disabled) $("cancel").click();
-    if (!show) {
-      $("file-player").pause();
-      controller?.abort();
-    }
+    if (!show) controller?.abort();
     $("show-files").setAttribute("aria-pressed", show);
     $("show-live").setAttribute("aria-pressed", !show);
     $("file-benchmark").hidden = !show;
@@ -67,12 +66,10 @@ export function setupFileBenchmark() {
   };
   $("show-live").onclick = () => showFiles(false);
   $("show-files").onclick = () => showFiles(true);
-
   const resultRows = () => [...results.values()].flatMap((group) => [...group.values()]);
-  const reviewed = () => manifest.clips.filter((clip) => clip.referenceStatus === "reviewed");
 
   function refreshReport() {
-    computed = manifest && summarizeFiles(manifest.clips, results);
+    computed = manifest && summarizeFiles(clips, results, score());
     const hasResults = !!computed?.summary.length;
     $("file-export-csv").disabled = !hasResults;
     $("file-export-json").disabled = !hasResults;
@@ -81,99 +78,108 @@ export function setupFileBenchmark() {
     if (!hasResults) return;
     const { summary } = computed;
     output.append(
-      node("h3", "Provider comparison · common successful clips"),
-      node("p", "Failed or missing results are counted separately. A successful empty transcript counts as missed speech."),
+      node("h3", "RSVP score comparison · common successful clips"),
+      node("p", "Missed correct = expected 1, got 0. False credit = expected 0, got 1. When no targets are supplied, reference-derived targets only test missed correct answers. Failed or missing results are reported separately."),
       table(
-        ["Provider", "Returned / reviewed", "Failed / missing", "Paired clips", "Words correct", "Last word correct", "Exact clips", "WER", "Sub / omitted / extra"],
+        ["Provider", "Returned / clips", "Failed / missing", "Paired clips", "Exact vectors", "Missed correct", "False credit", "Last target agreement"],
         summary.map((s) => [
-          s.provider, `${s.returned}/${s.reviewed}`, `${s.failed}/${s.missing}`, s.paired,
-          pct(s.match, s.words),
-          pct(s.byPosition.last.count - s.byPosition.last.errors, s.byPosition.last.count),
-          pct(s.exact, s.paired), pct(s.substitute + s.delete + s.insert, s.words),
-          `${s.substitute} / ${s.delete} / ${s.insert}`,
+          s.provider, s.returned + "/" + s.clips, s.failed + "/" + s.missing, s.paired,
+          pct(s.exact, s.paired), pct(s.falseNeg, s.positives), pct(s.falsePos, s.negatives),
+          pct(s.paired - s.lastErrors, s.paired),
         ]),
       ),
     );
+    if (summary.some((s) => s.returned > s.paired)) output.append(
+      node("h3", "Each provider's available clips"),
+      node("p", "These sets may differ. Use the common-clips table for a paired comparison."),
+      table(["Provider", "Clips", "Exact vectors", "Missed correct", "False credit"],
+        summary.map(({ provider, returned, allReturned: s }) => [
+          provider, returned, pct(s.exact, returned), pct(s.falseNeg, s.positives), pct(s.falsePos, s.negatives),
+        ])),
+    );
     for (const [title, values] of [
-      ["Spoken words recognized exactly", (s) => [s.match, s.words]],
-      ["Last spoken word recognized exactly", (s) => [
-        s.byPosition.last.count - s.byPosition.last.errors, s.byPosition.last.count,
-      ]],
+      ["Exact RSVP score vectors", (s) => [s.exact, s.paired]],
+      ["Missed correct targets · lower is better", (s) => [s.falseNeg, s.positives]],
+      ["False credit · lower is better", (s) => [s.falsePos, s.negatives]],
     ]) {
       const chart = node("div");
       chart.className = "file-bars";
       chart.append(node("h3", title));
       for (const s of summary) {
-        const [correct, total] = values(s);
-        if (!total) continue;
+        const [count, total] = values(s);
         const label = node("label", s.provider);
+        const value = node("span", total ? count + "/" + total + " · " + pct(count, total) : "Not measured");
         const bar = node("meter");
-        bar.max = total;
-        bar.value = correct;
-        label.append(bar, node("span", `${correct}/${total} · ${pct(correct, total)}`));
+        bar.max = total || 1;
+        bar.value = count;
+        label.append(total ? bar : node("span"), value);
         chart.append(label);
       }
       output.append(chart);
     }
+    refreshClip();
   }
 
-  function refreshClip(keepPlayback = false) {
-    const clip = activeClip();
-    const player = $("file-player");
-    if (!clip) return;
-    const file = files.get(clip.file);
-    if (!keepPlayback) {
-      player.removeAttribute("src");
-      if (playerUrl) URL.revokeObjectURL(playerUrl);
-      playerUrl = file ? URL.createObjectURL(file) : undefined;
-      if (playerUrl) player.src = playerUrl;
-      player.hidden = !playerUrl;
-      $("file-reference").value = clip.reference;
-    }
+  function refreshClip() {
+    const clip = clips.find(({ id }) => id === $("file-clip").value);
     const item = $("file-item-results");
     item.replaceChildren();
-    const mark = clip.referenceStatus === "reviewed" ? "Reviewed" : "Candidate · needs listening";
-    item.append(node("p", `${mark} · ${file ? "Audio matched" : "Audio file not selected"}`));
+    if (!clip) return;
+    item.append(
+      node("p", "Reference: " + (clip.reference || "(empty)")),
+      node("p", "Targets: " + clip.targets.join(", ") + " · Expected: " + clip.expected.join("")),
+    );
     const scores = computed?.details.filter((row) => row.clipId === clip.id);
-    if (scores?.length)
-      item.append(table(["Provider", "Recognized", "Word differences"], scores.map((row) => [
+    if (scores?.length) item.append(table(
+      ["Provider", "Recognized", "Normalized", "RSVP vector", "Missed / false credit"],
+      scores.map((row) => [
         row.provider,
-        row.error || (row.transcript === "" ? "(empty transcript)" : row.transcript) || "(missing)",
-        row.score?.alignment.filter(({ op }) => op !== "match")
-          .map(({ op, expected, heard }) => `${op}: ${expected ?? "∅"} → ${heard ?? "∅"}`).join("; ") || "—",
-      ])));
+        row.error || (row.transcript === "" ? "(empty transcript)" : row.transcript),
+        row.normalized ?? "—", row.vector?.join("") ?? "—",
+        row.differences
+          ? row.differences.falseNeg.length + " / " + row.differences.falsePos.length : "—",
+      ]),
+    ));
   }
 
   const refreshStatus = () => {
     if (!manifest) return;
-    const matched = manifest.clips.filter((clip) => files.has(clip.file));
-    status(`${manifest.clips.length} clips · ${matched.length} matching audio files · ${reviewed().length} reviewed references.`);
+    const matched = clips.filter((clip) => files.has(clip.file));
+    status(clips.length + " clips · " + matched.length + " matching audio files.");
   };
+  function merge(incoming) {
+    for (const [provider, entries] of incoming) {
+      const existing = results.get(provider) ?? new Map();
+      for (const [id, row] of entries) existing.set(id, row);
+      results.set(provider, existing);
+    }
+  }
 
   $("file-template").onclick = (event) => {
     event.preventDefault();
-    json("audio-benchmark-manifest.example.json", {
+    json("rsvp-dataset-manifest.example.json", {
       version: 1,
-      audioPolicy: "local-only",
-      clips: [{ id: "example-001", file: "example.wav", reference: "boat lake morning", referenceStatus: "candidate" }],
+      clips: [
+        { id: "example-001", file: "example.wav", reference: "boat lake morning" },
+        { id: "example-002", file: "example-2.wav", reference: "boat lake money", targets: ["boat", "lake", "morning"] },
+      ],
     });
   };
   $("file-manifest").onchange = async () => {
     try {
-      const next = readManifest(await readJson($("file-manifest").files[0], 2 * 1024 * 1024));
+      const next = readManifest(await readJson($("file-manifest").files[0], 16));
+      const cases = makeRsvpCases(next.clips, score());
       manifest = next;
+      clips = cases;
       results = new Map();
-      $("file-clip").replaceChildren(...manifest.clips.map((clip) => {
+      $("file-clip").replaceChildren(...clips.map((clip) => {
         const option = node("option", clip.file);
         option.value = clip.id;
         return option;
       }));
       $("file-results").value = "";
-      $("file-cloud").hidden = manifest.audioPolicy !== "team-test";
       $("file-consent").checked = false;
-      $("file-policy").textContent = manifest.audioPolicy === "team-test"
-        ? "Selecting files does not send them. Only the explicit transcription action sends audio."
-        : "Local-only: browse and review audio here, or import results from an authorized transcription run. This page will not send these audio files.";
+      $("file-policy").textContent = "No files are sent before you press Run dataset. References and targets are used for scoring only, never sent as keyterms.";
       $("file-review").hidden = false;
       refreshReport();
       refreshClip();
@@ -184,98 +190,102 @@ export function setupFileBenchmark() {
     const selected = new Map();
     for (const file of $("file-audio").files) {
       if (selected.has(file.name)) {
-        status(`Duplicate filename: ${file.name}. Select files with unique names.`);
+        status("Duplicate filename: " + file.name + ". Select files with unique names.");
         return;
       }
       selected.set(file.name, file);
     }
     files = selected;
-    refreshClip();
     refreshStatus();
   };
   $("file-results").onchange = async () => {
     try {
       if (!manifest) throw new Error("Load the reference manifest first.");
-      const incoming = readResults(await readJson($("file-results").files[0], 20 * 1024 * 1024), manifest.clips);
-      for (const [provider, entries] of incoming)
-        results.set(provider, new Map([...results.get(provider) ?? [], ...entries]));
+      const data = await readJson($("file-results").files[0], 256);
+      merge(readResults(data, clips));
       refreshReport();
-      refreshClip(true);
       refreshStatus();
     } catch (error) { status(error.message); }
   };
-  $("file-clip").onchange = () => refreshClip();
-  $("file-confirm").onclick = () => {
-    const clip = activeClip();
-    const reference = $("file-reference").value.trim();
-    if (!clip || !files.has(clip.file)) return status("Select the corresponding audio before reviewing a reference.");
-    if (tokenize(reference).length > 160) return status("Reference exceeds 160 words.");
-    if (!reference && !window.confirm("Confirm there is no spoken response in this clip?")) return;
-    if (reference !== clip.reference)
-      clip.previousReference ??= clip.reference;
-    clip.reference = reference;
-    clip.referenceStatus = "reviewed";
+  $("file-clip").onchange = refreshClip;
+  $("file-ignore-order").onchange = () => {
+    if (!manifest) return;
+    clips = makeRsvpCases(manifest.clips, score());
     refreshReport();
-    refreshClip(true);
-    refreshStatus();
+    refreshClip();
   };
-  $("file-save-manifest").onclick = () => json("audio-benchmark-manifest.json", manifest);
-  $("file-export-json").onclick = () => json("audio-benchmark-results.json", {
+  $("file-export-json").onclick = () => json("rsvp-dataset-results.json", {
     version: 1,
+    settings: { ignoreOrder: $("file-ignore-order").checked, targetHintsSent: false },
     results: resultRows(),
     summary: computed.summary,
     details: computed.details,
   });
   $("file-export-csv").onclick = () => {
-    const header = ["provider", "reviewed", "returned", "failed", "missing", "paired", "reference_words", "matched_words", "substitutions", "omissions", "insertions", "exact_clips", "first_words", "first_errors", "middle_words", "middle_errors", "last_words", "last_errors", "last_omissions"];
+    const header = ["provider", "clips", "returned", "failed", "missing", "paired", "exact_vectors", "exact_vectors_pct", "expected_ones", "missed_correct", "missed_correct_pct", "expected_zeros", "false_credit", "false_credit_pct", "last_target_errors", "explicit_target_clips", "reference_target_clips", "all_returned_exact_pct", "all_returned_missed_correct_pct", "all_returned_false_credit_pct"];
     const rows = computed.summary.map((s) => [
-      s.provider, s.reviewed, s.returned, s.failed, s.missing, s.paired, s.words, s.match, s.substitute, s.delete, s.insert, s.exact,
-      s.byPosition.first.count, s.byPosition.first.errors, s.byPosition.middle.count, s.byPosition.middle.errors,
-      s.byPosition.last.count, s.byPosition.last.errors, s.byPosition.last.omitted,
+      s.provider, s.clips, s.returned, s.failed, s.missing, s.paired,
+      s.exact, pct(s.exact, s.paired), s.positives, s.falseNeg, pct(s.falseNeg, s.positives),
+      s.negatives, s.falsePos, pct(s.falsePos, s.negatives), s.lastErrors, s.explicitClips, s.referenceClips,
+      pct(s.allReturned.exact, s.returned),
+      pct(s.allReturned.falseNeg, s.allReturned.positives),
+      pct(s.allReturned.falsePos, s.allReturned.negatives),
     ]);
-    download("audio-benchmark-metrics.csv", [header, ...rows].map((row) => row.map(csvCell).join(",")).join("\r\n"), "text/csv");
+    download("rsvp-dataset-metrics.csv", [header, ...rows].map((row) => row.map(csvCell).join(",")).join("\r\n"), "text/csv");
   };
   $("file-cancel").onclick = () => controller?.abort();
+
+  const nextTicketAt = new Map();
   $("file-run").onclick = async () => {
-    if (controller || manifest?.audioPolicy !== "team-test") return;
-    const accessCode = $("file-code").value.trim();
+    if (controller) return;
+    if (!manifest) return status("Load a reference manifest first.");
+    const accessCode = $("file-code").value.trim() || $("access-code").value.trim();
     const keys = [...document.querySelectorAll('input[name="file-provider"]:checked')].map((input) => input.value);
     if (!$("file-consent").checked || !/^[0-9a-f]{64}$/i.test(accessCode) || !keys.length)
-      return status("Confirm team-audio permission, enter the preview code, and choose providers.");
-    const pending = reviewed().filter((clip) => files.has(clip.file) && keys.some((key) =>
-      typeof results.get(replayProviders[key])?.get(clip.id)?.transcript !== "string"));
-    const unattempted = (clip) => keys.some((key) => !results.get(replayProviders[key])?.has(clip.id));
-    pending.sort((a, b) => Number(unattempted(b)) - Number(unattempted(a)));
-    if (!pending.length) return status("No pending reviewed clips with matching audio.");
+      return status("Confirm you can send these files, enter the preview code, and choose providers.");
+    const missingResults = (clip, providers) => providers.filter((key) =>
+      typeof results.get(replayProviders[key])?.get(clip.id)?.transcript !== "string");
+    const pending = clips.filter((clip) => missingResults(clip, keys).length);
+    if (!pending.length) return status("All selected providers have results for this dataset.");
+    const missingFiles = pending.filter((clip) => !files.has(clip.file));
+    if (missingFiles.length) return status(
+      missingFiles.length + " audio files missing. First missing file: " + missingFiles[0].file
+    );
+
     controller = new AbortController();
     const { signal } = controller;
-    for (const id of ["file-manifest", "file-audio", "file-results", "file-run", "file-confirm"])
-      $(id).disabled = true;
+    const controls = ["file-manifest", "file-audio", "file-results", "file-run", "file-ignore-order"];
+    for (const id of controls) $(id).disabled = true;
     $("file-cancel").disabled = false;
-    let warning = false;
+    const stopped = new Set();
+    let warning = false, attempted = 0;
     try {
-      const batch = pending.slice(0, 20);
-      for (const [index, clip] of batch.entries()) {
+      for (const [index, clip] of pending.entries()) {
+        const selected = missingResults(clip, keys).filter((key) => !stopped.has(key));
+        if (signal.aborted || stopped.size === keys.length) break;
+        if (!selected.length) continue;
+        status("Processing " + (index + 1) + " of " + pending.length + " pending clips. Leave this tab open.");
+        const output = await replayClip(files.get(clip.file), clip.id, selected, accessCode, signal, nextTicketAt);
         if (signal.aborted) break;
-        status(`Transcribing clip ${index + 1} of ${batch.length}. Leave this tab open.`);
-        const missing = keys.filter((key) => typeof results.get(replayProviders[key])?.get(clip.id)?.transcript !== "string");
-        const output = await replayClip(files.get(clip.file), clip.id, missing, accessCode, signal);
+        attempted++;
         warning ||= output.warning;
-        const incoming = readResults({ version: 1, results: output.rows }, manifest.clips);
-        for (const [provider, entries] of incoming)
-          results.set(provider, new Map([...results.get(provider) ?? [], ...entries]));
-        refreshReport();
-        refreshClip(true);
+        merge(readResults({ version: 1, results: output.rows }, [clip]));
+        for (const row of output.rows) {
+          if (/^Ticket HTTP (401|403|429|502|503)$/.test(row.error ?? "")) {
+            const key = selected.find((item) => replayProviders[item] === row.provider);
+            if (key) stopped.add(key);
+          }
+        }
       }
-      status(signal.aborted ? "Cancelled. Completed results are kept in this tab."
-        : "Batch complete. You can export results or transcribe the next batch.");
+      const suffix = stopped.size ? " Paused providers: " + [...stopped].join(", ") + ". Check the error in the clip report and run again to resume." : "";
+      status((signal.aborted ? "Cancelled after " : "Run ended after ") + attempted + " clips. Results are kept in this tab." + suffix);
     } catch (error) { status(error.message); }
     finally {
-      if (warning) $("file-policy").textContent = "ElevenLabs reported that zero retention was not applied to a team test clip.";
+      if (warning) $("file-policy").textContent = "ElevenLabs reported that zero retention was not applied.";
       controller = undefined;
-      for (const id of ["file-manifest", "file-audio", "file-results", "file-run", "file-confirm"])
-        $(id).disabled = false;
+      for (const id of controls) $(id).disabled = false;
       $("file-cancel").disabled = true;
+      refreshReport();
     }
   };
 }

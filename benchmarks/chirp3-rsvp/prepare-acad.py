@@ -108,7 +108,6 @@ def prepare(audio_zip, mapping_zip, destination, limit):
             lists[task] += 1
         result = {
             "version": 1,
-            "audioPolicy": "local-only",
             "source": "ACAD / TalkBank (Bunton & Story); transcript: DrivenData",
             "clips": clips,
         }
