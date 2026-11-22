@@ -60,8 +60,13 @@ choose providers, and press **Run dataset** once. No per-clip approval is
 needed. The example manifest on the page documents the format; only the
 clip ID, filename, and spoken reference are required. This run sends audio
 to the selected third-party providers; the operator is responsible for
-authorization and retention requirements. References and targets are used
-only for scoring and are never used as keyterms.
+authorization and retention requirements. Keyterms default to **Off**. With
+**On**, each request receives the displayed target words if supplied, or
+individual normalized reference words otherwise. This latter mode gives the
+provider a known-answer hint and only measures recognition with those hints.
+**Compare off and on** runs both variants with the same audio and reports each
+provider's changes on clips for which both variants succeeded. Import an
+earlier results JSON first to reuse completed baseline runs.
 
 The benchmark runs the same EasyEyes RSVP normalizer and scorer on the
 human reference and on each provider's transcript, using the same targets

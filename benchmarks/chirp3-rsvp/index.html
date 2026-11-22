@@ -43,6 +43,14 @@
           </label>
           <div>
             <label class="check"><input type="checkbox" id="file-ignore-order" checked /> Ignore word order in RSVP scoring</label>
+            <label>Keyterms
+              <select id="file-keyterms">
+                <option value="off">Off</option>
+                <option value="on">On</option>
+                <option value="both">Compare off and on</option>
+              </select>
+              <small>Use displayed targets if supplied; otherwise use the words in the reference.</small>
+            </label>
             <label class="check"><input type="checkbox" value="chirp3" name="file-provider" checked /> Chirp 3</label>
             <label class="check"><input type="checkbox" value="elevenlabs" name="file-provider" checked /> ElevenLabs</label>
             <label class="check"><input type="checkbox" value="deepgram" name="file-provider" /> Deepgram</label>

@@ -1,6 +1,10 @@
-import { readManifest, readResults, summarizeFiles } from "./fileMetrics.mjs";
-import { replayClip, replayProviders } from "./fileReplay.js";
-import { fileRsvpScorer, makeRsvpCases } from "./fileRsvpScore.js";
+import { readManifest, readResults, summarizeFiles, summarizeKeytermPairs } from "./fileMetrics.mjs";
+import { replayClip, replayProviders, replayLabel } from "./fileReplay.js";
+import { fileKeyterms, fileRsvpScorer, makeRsvpCases } from "./fileRsvpScore.js";
+
+const keytermVariants = Object.entries(replayProviders).map(([key, provider]) => ({
+  provider, off: replayLabel(key, false), on: replayLabel(key, true),
+}));
 
 const $ = (id) => document.getElementById(id);
 function node(tag, text) {
@@ -77,6 +81,7 @@ export function setupFileBenchmark() {
     output.replaceChildren();
     if (!hasResults) return;
     const { summary } = computed;
+    computed.keytermPairs = summarizeKeytermPairs(clips, computed.details, keytermVariants);
     output.append(
       node("h3", "RSVP score comparison · common successful clips"),
       node("p", "Missed correct = expected 1, got 0. False credit = expected 0, got 1. When no targets are supplied, reference-derived targets only test missed correct answers. Failed or missing results are reported separately."),
@@ -97,6 +102,19 @@ export function setupFileBenchmark() {
           provider, returned, pct(s.exact, returned), pct(s.falseNeg, s.positives), pct(s.falsePos, s.negatives),
         ])),
     );
+    if (computed.keytermPairs.length) {
+      const change = (a, b, metric, denominator) =>
+        pct(a[metric], denominator) + " → " + pct(b[metric], denominator);
+      output.append(
+        node("h3", "Keyterms effect · Off → On"),
+        table(["Provider", "Same successful clips", "Exact vectors", "Missed correct", "False credit", "Last target error"],
+          computed.keytermPairs.map(({ provider, paired, without: a, withTerms: b }) => [
+            provider, paired, change(a, b, "exact", paired),
+            change(a, b, "falseNeg", a.positives), change(a, b, "falsePos", a.negatives),
+            change(a, b, "lastErrors", paired),
+          ])),
+      );
+    }
     for (const [title, values] of [
       ["Exact RSVP score vectors", (s) => [s.exact, s.paired]],
       ["Missed correct targets · lower is better", (s) => [s.falseNeg, s.positives]],
@@ -179,7 +197,7 @@ export function setupFileBenchmark() {
       }));
       $("file-results").value = "";
       $("file-consent").checked = false;
-      $("file-policy").textContent = "No files are sent before you press Run dataset. References and targets are used for scoring only, never sent as keyterms.";
+      $("file-policy").textContent = "Nothing is sent before you press Run dataset. With keyterms on, the selected providers also receive the target words, or words from the reference when targets are not supplied.";
       $("file-review").hidden = false;
       refreshReport();
       refreshClip();
@@ -216,9 +234,10 @@ export function setupFileBenchmark() {
   };
   $("file-export-json").onclick = () => json("rsvp-dataset-results.json", {
     version: 1,
-    settings: { ignoreOrder: $("file-ignore-order").checked, targetHintsSent: false },
+    settings: { ignoreOrder: $("file-ignore-order").checked },
     results: resultRows(),
     summary: computed.summary,
+    keytermPairs: computed.keytermPairs,
     details: computed.details,
   });
   $("file-export-csv").onclick = () => {
@@ -243,42 +262,48 @@ export function setupFileBenchmark() {
     const keys = [...document.querySelectorAll('input[name="file-provider"]:checked')].map((input) => input.value);
     if (!$("file-consent").checked || !/^[0-9a-f]{64}$/i.test(accessCode) || !keys.length)
       return status("Confirm you can send these files, enter the preview code, and choose providers.");
-    const missingResults = (clip, providers) => providers.filter((key) =>
-      typeof results.get(replayProviders[key])?.get(clip.id)?.transcript !== "string");
-    const pending = clips.filter((clip) => missingResults(clip, keys).length);
+    const mode = $("file-keyterms").value;
+    const variants = mode === "both" ? [false, true] : [mode === "on"];
+    const missingResults = (clip, providers, enabled) => providers.filter((key) =>
+      typeof results.get(replayLabel(key, enabled))?.get(clip.id)?.transcript !== "string");
+    const pending = clips.flatMap((clip) => variants
+      .filter((enabled) => missingResults(clip, keys, enabled).length)
+      .map((enabled) => ({ clip, enabled })));
     if (!pending.length) return status("All selected providers have results for this dataset.");
-    const missingFiles = pending.filter((clip) => !files.has(clip.file));
+    const missingFiles = [...new Set(pending.map(({ clip }) => clip.file).filter((file) => !files.has(file)))];
     if (missingFiles.length) return status(
-      missingFiles.length + " audio files missing. First missing file: " + missingFiles[0].file
+      missingFiles.length + " audio files missing. First missing file: " + missingFiles[0]
     );
 
     controller = new AbortController();
     const { signal } = controller;
-    const controls = ["file-manifest", "file-audio", "file-results", "file-run", "file-ignore-order"];
+    const controls = ["file-manifest", "file-audio", "file-results", "file-run", "file-ignore-order", "file-keyterms"];
     for (const id of controls) $(id).disabled = true;
     $("file-cancel").disabled = false;
     const stopped = new Set();
     let warning = false, attempted = 0;
     try {
-      for (const [index, clip] of pending.entries()) {
-        const selected = missingResults(clip, keys).filter((key) => !stopped.has(key));
+      for (const [index, { clip, enabled }] of pending.entries()) {
+        const selected = missingResults(clip, keys, enabled).filter((key) => !stopped.has(key));
         if (signal.aborted || stopped.size === keys.length) break;
         if (!selected.length) continue;
-        status("Processing " + (index + 1) + " of " + pending.length + " pending clips. Leave this tab open.");
-        const output = await replayClip(files.get(clip.file), clip.id, selected, accessCode, signal, nextTicketAt);
+        const terms = enabled ? fileKeyterms(clip.targets) : null;
+        status("Processing " + (index + 1) + " of " + pending.length + " runs. Keyterms " + (enabled ? "on" : "off") + ".");
+        const output = await replayClip(files.get(clip.file), clip.id, selected, accessCode, signal, nextTicketAt, terms);
         if (signal.aborted) break;
         attempted++;
         warning ||= output.warning;
         merge(readResults({ version: 1, results: output.rows }, [clip]));
         for (const row of output.rows) {
           if (/^Ticket HTTP (401|403|429|502|503)$/.test(row.error ?? "")) {
-            const key = selected.find((item) => replayProviders[item] === row.provider);
+            const key = selected.find((item) => replayLabel(item, enabled) === row.provider);
             if (key) stopped.add(key);
           }
         }
       }
       const suffix = stopped.size ? " Paused providers: " + [...stopped].join(", ") + ". Check the error in the clip report and run again to resume." : "";
-      status((signal.aborted ? "Cancelled after " : "Run ended after ") + attempted + " clips. Results are kept in this tab." + suffix);
+      const unit = mode === "both" ? " clip runs." : " clips.";
+      status((signal.aborted ? "Cancelled after " : "Run ended after ") + attempted + unit + " Results are kept in this tab." + suffix);
     } catch (error) { status(error.message); }
     finally {
       if (warning) $("file-policy").textContent = "ElevenLabs reported that zero retention was not applied.";

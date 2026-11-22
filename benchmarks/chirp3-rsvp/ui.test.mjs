@@ -105,6 +105,7 @@ try {
   });
   await page.addInitScript(() => {
     window.testAudio = { chirp3: [], deepgram: [], elevenlabs: [] };
+    window.testHints = { chirp3: [], deepgram: [], elevenlabs: [] };
     window.WebSocket = class extends EventTarget {
       static OPEN = 1;
       readyState = 0;
@@ -114,6 +115,8 @@ try {
         const target = new URL(url);
         this.deepgram = target.hostname === "api.deepgram.com";
         this.eleven = target.hostname === "api.elevenlabs.io";
+        if (this.deepgram) window.testHints.deepgram.push(target.searchParams.getAll("keyterm"));
+        if (this.eleven) window.testHints.elevenlabs.push(target.searchParams.getAll("keyterms"));
         if (this.deepgram && target.searchParams.get("mip_opt_out") !== "true")
           throw new Error("Missing opt out");
         if (this.eleven &&
@@ -150,6 +153,7 @@ try {
           return;
         }
         if (!this.deepgram && message.type === "start") {
+          window.testHints.chirp3.push({ enabled: message.useKeyterms, terms: message.keyterms });
           this.utteranceId = message.utteranceId;
           this.reply({
             type: "ready", utteranceId: this.utteranceId, model: "chirp_3",
@@ -290,7 +294,10 @@ try {
   await page.locator("#file-code").fill("a".repeat(64));
   await page.locator("#file-run").click();
   assert.equal(ticketRequests, beforeFileMode);
-  await page.evaluate(() => { window.testAudio = { chirp3: [], deepgram: [], elevenlabs: [] }; });
+  await page.evaluate(() => {
+    window.testAudio = { chirp3: [], deepgram: [], elevenlabs: [] };
+    window.testHints = { chirp3: [], deepgram: [], elevenlabs: [] };
+  });
   await page.locator("#file-consent").check();
   await page.locator("#file-run").click();
   await page.getByText(/Run ended after 2 clips/).waitFor({ timeout: 16000 });
@@ -305,6 +312,23 @@ try {
   assert.equal(replayed.chirp3.length, 10);
   assert.deepEqual(replayed.chirp3, replayed.elevenlabs);
   assert.equal(ticketRequests, beforeFileMode + 4);
+  await page.locator("#file-keyterms").selectOption("both");
+  await page.locator("#file-run").click();
+  await page.getByText(/Run ended after 2 clip runs/).waitFor({ timeout: 16000 });
+  await page.getByText("Keyterms effect · Off → On", { exact: true }).waitFor();
+  const { testAudio: bothAudio, testHints } = await page.evaluate(() => ({
+    testAudio: window.testAudio, testHints: window.testHints,
+  }));
+  assert.deepEqual(bothAudio.chirp3.slice(10), replayed.chirp3);
+  assert.deepEqual(bothAudio.chirp3, bothAudio.elevenlabs);
+  assert.deepEqual(testHints.chirp3, [
+    { enabled: false, terms: [] },
+    { enabled: false, terms: [] },
+    { enabled: true, terms: ["call", "my", "stone"] },
+    { enabled: true, terms: ["cold", "ducks", "stone"] },
+  ]);
+  assert.deepEqual(testHints.elevenlabs, [[], [], ["call", "my", "stone"], ["cold", "ducks", "stone"]]);
+  assert.equal(ticketRequests, beforeFileMode + 8);
   assert.deepEqual(errors, []);
   console.log(
     "Preview UI passed: live comparison and complete same-audio RSVP dataset replay.",

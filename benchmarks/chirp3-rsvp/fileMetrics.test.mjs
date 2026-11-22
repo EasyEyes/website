@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readManifest, readResults, compareVectors, summarizeFiles } from "./fileMetrics.mjs";
+import { readManifest, readResults, compareVectors, summarizeFiles, summarizeKeytermPairs } from "./fileMetrics.mjs";
 
 test("distinguishes missed correct targets from false credit", () => {
   assert.deepEqual(compareVectors([1, 1, 0], [1, 0, 1]),
@@ -40,4 +40,9 @@ test("provider percentages use the same successful clips, excluding errors but c
     [2, 3, 1, 1, 1, 0, 1], [2, 3, 1, 0, 0, 2, 0],
   ]);
   assert.equal(result.summary[1].allReturned.exact, 3);
+  const [pair] = summarizeKeytermPairs(clips, result.details, [{ provider: "Test", off: "A", on: "B" }]);
+  assert.equal(pair.paired, 2);
+  assert.equal(pair.without.falseNeg, 1);
+  assert.equal(pair.without.falsePos, 1);
+  assert.equal(pair.withTerms.exact, 2);
 });

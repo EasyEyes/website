@@ -100,3 +100,26 @@ export function summarizeFiles(clips, providers, score) {
   });
   return { summary, details };
 }
+
+export function summarizeKeytermPairs(clips, details, variants) {
+  const scores = new Map();
+  for (const row of details) {
+    if (!row.differences) continue;
+    if (!scores.has(row.provider)) scores.set(row.provider, new Map());
+    scores.get(row.provider).set(row.clipId, row);
+  }
+  return variants.flatMap(({ provider, off, on }) => {
+    if (!scores.has(off) || !scores.has(on)) return [];
+    const without = blankScore(), withTerms = blankScore();
+    let paired = 0;
+    for (const clip of clips) {
+      const a = scores.get(off).get(clip.id);
+      const b = scores.get(on).get(clip.id);
+      if (!a || !b) continue;
+      paired++;
+      countVector(without, clip, a, a.differences);
+      countVector(withTerms, clip, b, b.differences);
+    }
+    return [{ provider, paired, without, withTerms }];
+  });
+}

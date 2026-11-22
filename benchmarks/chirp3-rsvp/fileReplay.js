@@ -6,10 +6,12 @@ import { float32ToPcm16 } from "@threshold/components/speech/audioCapture";
 import { comparisonSocket } from "./comparison.js";
 
 export const replayProviders = {
-  chirp3: "Chirp 3 · no keyterms",
-  elevenlabs: "ElevenLabs Scribe v2 Realtime · no keyterms",
-  deepgram: "Deepgram Nova-3 · no keyterms",
+  chirp3: "Chirp 3",
+  elevenlabs: "ElevenLabs Scribe v2 Realtime",
+  deepgram: "Deepgram Nova-3",
 };
+export const replayLabel = (provider, enabled) =>
+  replayProviders[provider] + (enabled ? " · with keyterms" : " · no keyterms");
 
 async function ticket(provider, accessCode, signal) {
   const response = await fetch("/.netlify/functions/rsvp-benchmark-ticket", {
@@ -38,8 +40,12 @@ async function decode(file) {
   return float32ToPcm16(mono);
 }
 
-function transcriber(provider, id, getTicket, onRetentionWarning) {
-  const common = { keyterms: [], targetKeytermBiasEnabled: false, languageCode: "en-US" };
+function transcriber(provider, id, getTicket, keyterms, onRetentionWarning) {
+  const common = {
+    keyterms: keyterms ?? [],
+    targetKeytermBiasEnabled: keyterms !== null,
+    languageCode: "en-US",
+  };
   if (provider === "chirp3")
     return new GoogleChirp3Transcriber({
       ...common, utteranceId: id, credentialProvider: getTicket,
@@ -72,8 +78,9 @@ export const delay = (ms, signal) => new Promise((resolve) => {
   signal.addEventListener("abort", done, { once: true });
 });
 
-export async function replayClip(file, clipId, keys, accessCode, signal, nextTicketAt) {
-  const fail = (provider, error) => ({ clipId, provider: replayProviders[provider], error });
+export async function replayClip(file, clipId, keys, accessCode, signal, nextTicketAt, keyterms) {
+  const label = (key) => replayLabel(key, keyterms !== null);
+  const fail = (key, error) => ({ clipId, provider: label(key), error });
   let samples;
   try {
     samples = await decode(file);
@@ -82,10 +89,12 @@ export async function replayClip(file, clipId, keys, accessCode, signal, nextTic
   }
   if (signal.aborted) return { rows: [], warning: false };
 
-  // The reference text is never passed into this module or into the credentials request.
+  // Only the optional target hints are sent to the transcriber, not the reference record.
   const id = `file-${crypto.randomUUID()}`;
   let warning = false;
-  const states = keys.map((key) => {
+  const rejected = [];
+  const states = [];
+  for (const key of keys) {
     let ticketError;
     const getTicket = async () => {
       await delay(Math.max(0, (nextTicketAt.get(key) ?? 0) - performance.now()), signal);
@@ -98,13 +107,18 @@ export async function replayClip(file, clipId, keys, accessCode, signal, nextTic
         throw error;
       }
     };
-    const session = new SpeechSession(transcriber(key, id, getTicket, () => { warning = true; }), {
-      maximumUtteranceDurationMs: 35_000,
-      finalizationTimeoutMs: 10_000,
-      externallyControlledEnd: true,
-    });
-    return { key, session, error: null, getTicketError: () => ticketError };
-  });
+    try {
+      const adapter = transcriber(key, id, getTicket, keyterms, () => { warning = true; });
+      const session = new SpeechSession(adapter, {
+        maximumUtteranceDurationMs: 35_000,
+        finalizationTimeoutMs: 10_000,
+        externallyControlledEnd: true,
+      });
+      states.push({ key, session, error: null, getTicketError: () => ticketError });
+    } catch (error) {
+      rejected.push(fail(key, error.message?.slice(0, 180) || "Invalid provider configuration."));
+    }
+  }
   const abort = () => {
     for (const { session } of states) void session.close().catch(() => {});
   };
@@ -142,10 +156,10 @@ export async function replayClip(file, clipId, keys, accessCode, signal, nextTic
       if (state.error) return fail(state.key, state.error);
       const result = await state.result;
       return result
-        ? { clipId, provider: replayProviders[state.key], transcript: result.text }
+        ? { clipId, provider: label(state.key), transcript: result.text }
         : fail(state.key, state.error || "No result.");
     }));
-    return { rows, warning };
+    return { rows: [...rows, ...rejected], warning };
   } finally {
     signal.removeEventListener("abort", abort);
     await Promise.allSettled(states.map(({ session }) => session.close()));
