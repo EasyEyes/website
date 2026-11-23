@@ -1,11 +1,56 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readManifest, readResults, compareVectors, summarizeFiles, summarizeKeytermPairs } from "./fileMetrics.mjs";
+import { readManifest, readResults, compareVectors, summarizeFiles, summarizeKeytermPairs, summarizeReviews, summarizeSpeakers } from "./fileMetrics.mjs";
+import { manifestKey, readReviews } from "./fileReview.mjs";
 
 test("distinguishes missed correct targets from false credit", () => {
   assert.deepEqual(compareVectors([1, 1, 0], [1, 0, 1]),
     { falsePos: [2], falseNeg: [1], exact: false });
   assert.throws(() => compareVectors([1, 1], [1]));
+});
+
+test("review preserves raw counts, fixes reference and scoring separately, and excludes by quality", () => {
+  const score = (targets, transcript) => ({
+    vector: targets.map((target) => Number(transcript.split(" ").includes(target))),
+  });
+  const clips = [
+    { id: "a", reference: "cat", expected: [1, 0], speakerGroup: "p1" },
+    { id: "b", reference: "cat", expected: [1, 0], speakerGroup: "p1" },
+    { id: "c", reference: "cat", expected: [1, 0], speakerGroup: "p2" },
+    { id: "d", reference: "cat", expected: [1, 0], speakerGroup: "p2" },
+    { id: "e", reference: "cat", expected: [1, 0], speakerGroup: "p2" },
+    { id: "f", reference: "cat", expected: [1, 0] },
+  ].map((x) => ({ ...x, file: x.id + ".wav", targets: ["cat", "dog"], targetSource: "explicit" }));
+  const p = "Chirp";
+  const results = readResults({ version: 1, results: [
+    { clipId: "a", provider: p, transcript: "dog" },
+    { clipId: "b", provider: p, transcript: "dog" },
+    { clipId: "c", provider: p, transcript: "cat dog" },
+    { clipId: "d", provider: p, error: "timeout" },
+    { clipId: "f", provider: p, transcript: "" },
+  ] }, clips);
+  const data = { manifestKey: manifestKey(clips), reviews: [
+    { clipId: "a", quality: "clear", reference: "dog", predictions: [] },
+    { clipId: "b", quality: "difficult", predictions: [{ provider: p, transcript: "dog", ignoreOrder: true, bits: [null, 0] }] },
+    { clipId: "c", quality: "unclear", predictions: [] },
+    { clipId: "e", quality: "invalid", predictions: [] },
+  ] };
+  const reviews = readReviews(data, clips);
+  const { reports, quality } = summarizeReviews(clips, results, score, reviews, true);
+  const view = (report) => {
+    const [s] = report.summary;
+    return [s.clips, s.returned, s.failed, s.missing, s.truePos, s.trueNeg, s.falseNeg, s.falsePos];
+  };
+  assert.deepEqual(view(reports.original), [6, 4, 1, 1, 1, 1, 3, 3]);
+  assert.deepEqual(view(reports.adjudicated), [4, 3, 1, 0, 1, 3, 2, 0]);
+  assert.deepEqual(view(reports.unflagged), [3, 2, 1, 0, 1, 2, 1, 0]);
+  assert.deepEqual(quality, { unreviewed: 2, clear: 1, difficult: 1, unclear: 1, invalid: 1, corrected: 1 });
+  assert.deepEqual(reports.adjudicated.details.find((r) => r.clipId === "b").automaticVector, [0, 1]);
+  assert.equal(summarizeReviews(clips, results, score, reviews, false).reports.adjudicated.summary[0].falsePos, 1);
+  const speakers = summarizeSpeakers(reports.adjudicated.clips, reports.adjudicated.details, [p]);
+  assert.deepEqual(speakers.map((s) => [s.speaker, s.returned, s.failed, s.falseNeg]), [["p1", 2, 0, 1], ["p2", 0, 1, 0]]);
+  assert.throws(() => readReviews(data, clips.map((c) => ({ ...c, reference: "different" }))));
+  assert.equal(readReviews({}, clips).size, 0);
 });
 
 test("manifest accepts references in bulk without workflow flags and validates optional targets", () => {

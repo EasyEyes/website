@@ -22,16 +22,16 @@
       </nav>
       <section class="results" id="file-benchmark" hidden>
         <h2>RSVP dataset benchmark</h2>
-        <p>Select a reference manifest and all its audio files. Run the selected providers on the same audio, then compare their RSVP score vectors against the supplied references.</p>
+        <p>Compare speech providers on the same recordings. Supply both the words the child was asked to say (targets) and a human transcript of what they said to measure missed targets and false credit.</p>
         <a id="file-template" href="#">Download an example manifest</a>
         <fieldset class="file-fields">
-          <label>Validated reference manifest (.json)
+          <label>Targets and human references (.json)
             <input id="file-manifest" type="file" accept=".json,application/json" />
           </label>
           <label>Matching audio files
             <input id="file-audio" type="file" accept="audio/*,.wav,.mp3,.flac,.m4a,.ogg" multiple />
           </label>
-          <label>Resume with previous results (.json, optional)
+          <label>Resume results and reviews (.json, optional)
             <input id="file-results" type="file" accept=".json,application/json" />
           </label>
         </fieldset>
@@ -49,13 +49,21 @@
                 <option value="on">On</option>
                 <option value="both">Compare off and on</option>
               </select>
-              <small>Use displayed targets if supplied; otherwise use the words in the reference.</small>
+              <small>With keyterms on, providers receive the target words. Without explicit targets, the reference is used and false credit cannot be measured.</small>
             </label>
             <label class="check"><input type="checkbox" value="chirp3" name="file-provider" checked /> Chirp 3</label>
             <label class="check"><input type="checkbox" value="elevenlabs" name="file-provider" checked /> ElevenLabs</label>
             <label class="check"><input type="checkbox" value="deepgram" name="file-provider" /> Deepgram</label>
           </div>
           <div>
+            <label>Maximum runs this batch
+              <select id="file-batch-limit">
+                <option value="all">All remaining runs</option>
+                <option value="25">25 runs</option>
+                <option value="100">100 runs</option>
+              </select>
+              <small>With both keyterms settings, a clip can use two runs. Export JSON between batches to keep progress.</small>
+            </label>
             <label class="check"><input type="checkbox" id="file-consent" /> I am authorized to send the selected audio to these providers. Their retention settings apply.</label>
             <div class="actions">
               <button type="button" id="file-run">Run dataset</button>
@@ -68,10 +76,35 @@
           <button id="file-export-json" type="button" disabled>Export results JSON</button>
           <button id="file-export-csv" type="button" disabled>Export metrics CSV</button>
         </div>
+        <label id="file-scope-label" hidden>Report view
+          <select id="file-scope">
+            <option value="original">Original · no review decisions</option>
+            <option value="adjudicated" selected>After review</option>
+            <option value="unflagged">After review · difficult audio excluded</option>
+          </select>
+        </label>
         <div id="file-summary"></div>
         <details id="file-review" hidden>
-          <summary>Inspect an individual clip (optional)</summary>
-          <label>Clip<select id="file-clip"></select></label>
+          <summary>Listen to and review individual clips</summary>
+          <p>Listen locally, verify or correct the human reference, then check how each provider's text was scored. Export the results JSON to keep your decisions.</p>
+          <div class="file-review-controls">
+            <label>Show clips
+              <select id="file-review-filter">
+                <option value="all">All clips</option>
+                <option value="diff">Unreviewed reference / target differences</option>
+                <option value="error">Provider disagrees with the reference</option>
+                <option value="flagged">Difficult, unclear or invalid audio</option>
+              </select>
+            </label>
+            <label>Clip<select id="file-clip"></select></label>
+            <div class="actions">
+              <button id="file-prev" type="button">Previous</button>
+              <button id="file-next" type="button">Next</button>
+            </div>
+          </div>
+          <audio id="file-player" controls preload="none" hidden></audio>
+          <p id="file-player-status" class="hint"></p>
+          <p id="file-review-status" role="status"></p>
           <div id="file-item-results"></div>
         </details>
       </section>

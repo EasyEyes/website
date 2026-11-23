@@ -264,10 +264,10 @@ try {
     name, mimeType: "application/json", buffer: Buffer.from(JSON.stringify(value)),
   });
   const clips = [
-    { id: "audio-01", file: "example.wav", reference: "call my stone" },
+    { id: "audio-01", file: "example.wav", reference: "call my stone", speakerGroup: "p1" },
     {
       id: "audio-02", file: "example-2.wav", reference: "cold ducks money",
-      targets: ["cold", "ducks", "stone"],
+      targets: ["cold", "ducks", "stone"], speakerGroup: "p2", referenceStatus: "needsReview",
     },
   ];
   const wav = Buffer.alloc(44 + 16000);
@@ -301,13 +301,35 @@ try {
   await page.locator("#file-consent").check();
   await page.locator("#file-run").click();
   await page.getByText(/Run ended after 2 clips/).waitFor({ timeout: 16000 });
-  const summary = await page.locator("#file-summary tbody").innerText();
-  assert.match(summary, /Chirp 3[^\n]+2\/2[^\n]+50\.0%/);
-  assert.match(summary, /ElevenLabs[^\n]+2\/2[^\n]+100\.0%/);
-  await page.getByText("Inspect an individual clip (optional)").click();
+  const summary = await page.locator("#file-summary tbody").nth(1).innerText();
+  assert.match(summary, /Chirp 3[^\n]+2\/2[^\n]+2\/5 \(40\.0%\)/);
+  assert.match(summary, /ElevenLabs[^\n]+2\/2[^\n]+3\/5 \(60\.0%\)[^\n]+1\/1 \(100\.0%\)/);
+  await page.getByText("Listen to and review individual clips").click();
   await page.locator("#file-clip").selectOption("audio-02");
   assert.match(await page.locator("#file-item-results").innerText(), /Expected: 110/);
-  assert.match(await page.locator("#file-item-results").innerText(), /Cold ducks stone[^\n]+111/);
+  const elevenReview = page.locator('#file-item-results details[data-provider^="ElevenLabs"]');
+  await elevenReview.locator("summary").click();
+  assert.match(await elevenReview.innerText(), /Cold ducks stone/);
+  const player = page.locator("#file-player");
+  assert.match(await player.getAttribute("src"), /^blob:/);
+  await player.evaluate(async (audio) => {
+    await audio.play();
+    audio.pause();
+  });
+  assert.equal(ticketRequests, beforeFileMode + 4, "local playback must not request a ticket");
+  await page.getByLabel("Audio quality / review status").selectOption("difficult");
+  await page.getByLabel("Human transcript · edit only if the original is wrong").fill("cold ducks stone");
+  await page.getByRole("button", { name: "Save audio / reference review" }).click();
+  assert.match(await page.locator("#file-item-results").innerText(), /Expected: 111/);
+  await page.locator("#file-scope").selectOption("original");
+  assert.match(await page.locator("#file-summary tbody").nth(1).innerText(), /ElevenLabs[^\n]+1\/1 \(100\.0%\)/);
+  await page.locator("#file-scope").selectOption("unflagged");
+  assert.match(await page.locator("#file-summary tbody").nth(1).innerText(), /ElevenLabs[^\n]+1\/1/);
+  await page.locator("#file-scope").selectOption("adjudicated");
+  await elevenReview.getByLabel("Review stone", { exact: false }).selectOption("0");
+  await elevenReview.getByRole("button", { name: "Save target decisions" }).click();
+  assert.match(await elevenReview.innerText(), /stone\s+1\s+1\s+0\s+Missed target/);
+  assert.equal(await page.locator(".file-scatter circle").count(), 2);
   const replayed = await page.evaluate(() => window.testAudio);
   assert.equal(replayed.chirp3.length, 10);
   assert.deepEqual(replayed.chirp3, replayed.elevenlabs);
@@ -329,6 +351,25 @@ try {
   ]);
   assert.deepEqual(testHints.elevenlabs, [[], [], ["call", "my", "stone"], ["cold", "ducks", "stone"]]);
   assert.equal(ticketRequests, beforeFileMode + 8);
+  const exported = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Export results JSON" }).click();
+  const saved = await (await exported).path();
+  const data = JSON.parse(await readFile(saved, "utf8"));
+  assert.equal(data.reviews[0].reference, "cold ducks stone");
+  assert.equal(data.reports.original.details.find((r) => r.clipId === "audio-02").expected.join(""), "110");
+  await page.locator("#file-manifest").setInputFiles(jsonFile("manifest.json", { version: 1, clips }));
+  await page.locator("#file-results").setInputFiles(saved);
+  await page.locator("#file-clip").selectOption("audio-02");
+  assert.match(await page.locator("#file-item-results").innerText(), /Expected: 111/);
+  if (process.env.EE_BENCH_ACAD_MANIFEST) {
+    const acad = JSON.parse(await readFile(process.env.EE_BENCH_ACAD_MANIFEST, "utf8"));
+    await page.locator("#file-manifest").setInputFiles(process.env.EE_BENCH_ACAD_MANIFEST);
+    await page.getByText(new RegExp(`^${acad.clips.length} clips`)).waitFor();
+    await page.locator("#file-review-filter").selectOption("diff");
+    assert.ok(await page.locator("#file-clip option").count() >=
+      acad.clips.filter((clip) => clip.referenceStatus === "needsReview").length);
+    assert.equal(ticketRequests, beforeFileMode + 8);
+  }
   assert.deepEqual(errors, []);
   console.log(
     "Preview UI passed: live comparison and complete same-audio RSVP dataset replay.",

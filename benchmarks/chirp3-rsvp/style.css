@@ -117,10 +117,49 @@ select:focus-visible {
 .mode-switch { margin-block: 0 1rem; }
 .mode-switch button[aria-pressed="false"] { background: white; color: #18568a; border-color: #859eae; }
 .file-fields, #file-review, #file-summary { margin-block: 1rem; }
-.file-bars { display: grid; gap: .6rem; margin-block: .75rem; }
-.file-bars label { grid-template-columns: minmax(10rem, 1fr) 1fr auto; align-items: center; }
-.file-bars meter { width: 100%; }
 .file-table { overflow-x: auto; }
+#file-summary h4, #file-item-results h4 { margin: 1rem 0 .25rem; }
+#file-summary th, #file-item-results th { background: #edf4f8; }
+#file-scope-label, #file-summary > label { width: min(100%, 33rem); }
+.file-chart-panel {
+  border: 1px solid #d4e0ea;
+  border-radius: .6rem;
+  padding: .75rem;
+  margin-top: .65rem;
+}
+.file-matrix td div {
+  padding: .4rem .55rem;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  border-radius: .25rem;
+}
+.matrix-error { background: color-mix(in srgb, #f0a16d var(--share, 0%), #fff5ee); }
+.matrix-correct { background: color-mix(in srgb, #95cabc var(--share, 0%), #eff8f5); }
+.file-scatter { display: block; width: min(100%, 44rem); }
+.file-scatter text { fill: #304a5c; font-size: 12px; }
+.file-review-controls {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr));
+  align-items: end;
+  gap: .65rem;
+  margin-block: .75rem;
+}
+#file-review summary, .file-chart-panel summary { cursor: pointer; font-weight: 750; margin-block: .5rem; }
+#file-player { width: min(100%, 34rem); margin-block: .5rem; }
+.file-review-form { display: grid; gap: .75rem; margin-block: .8rem; }
+.file-review-form select { width: fit-content; }
+.file-review-form button { justify-self: start; }
+.file-review-form textarea {
+  width: 100%;
+  min-height: 4.4rem;
+  box-sizing: border-box;
+  padding: .5rem;
+  border: 1px solid #859eae;
+  border-radius: .35rem;
+  font: inherit;
+  resize: vertical;
+}
+#file-item-results details { border-top: 1px solid #d4e0ea; padding-block: .25rem; }
 aside {
   margin: 0.65rem 0;
   padding: 0.75rem;

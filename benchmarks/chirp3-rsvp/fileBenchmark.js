@@ -1,18 +1,14 @@
-import { readManifest, readResults, summarizeFiles, summarizeKeytermPairs } from "./fileMetrics.mjs";
+import { readManifest, readResults, summarizeReviews, summarizeKeytermPairs } from "./fileMetrics.mjs";
 import { replayClip, replayProviders, replayLabel } from "./fileReplay.js";
 import { fileKeyterms, fileRsvpScorer, makeRsvpCases } from "./fileRsvpScore.js";
+import { manifestKey, qualityLabels, readReviews } from "./fileReview.mjs";
+import { csvMetricRows, node, renderFileReport, table } from "./fileReport.js";
 
 const keytermVariants = Object.entries(replayProviders).map(([key, provider]) => ({
   provider, off: replayLabel(key, false), on: replayLabel(key, true),
 }));
 
 const $ = (id) => document.getElementById(id);
-function node(tag, text) {
-  const element = document.createElement(tag);
-  if (text !== undefined) element.textContent = text;
-  return element;
-}
-
 function download(name, content, type) {
   const link = node("a");
   const url = URL.createObjectURL(new Blob([content], { type }));
@@ -23,7 +19,6 @@ function download(name, content, type) {
 }
 
 const json = (name, data) => download(name, JSON.stringify(data, null, 2), "application/json");
-const pct = (n, d) => d ? (100 * n / d).toFixed(1) + "%" : "—";
 const csvCell = (value) => {
   const text = String(value ?? "");
   const safe = typeof value === "string" && /^\s*[=+\-@]|^[\t\r\n]/.test(text) ? "'" + text : text;
@@ -36,33 +31,23 @@ async function readJson(file, maxMB) {
   return JSON.parse(await file.text());
 }
 
-const table = (headers, rows) => {
-  const wrap = node("div");
-  wrap.className = "file-table";
-  const t = node("table");
-  const head = t.createTHead().insertRow();
-  for (const heading of headers) head.append(node("th", heading));
-  const body = t.createTBody();
-  for (const row of rows) {
-    const tr = body.insertRow();
-    for (const value of row) tr.append(node("td", value));
-  }
-  wrap.append(t);
-  return wrap;
-};
-
 export function setupFileBenchmark() {
   let manifest;
   let clips = [];
   let files = new Map();
   let results = new Map();
-  let computed;
+  let reviews = new Map();
+  let computed, selectedProvider, audioUrl, audioClip, audioFile, reviewedClip;
   let controller;
   const status = (message) => { $("file-status").textContent = message; };
-  const score = () => fileRsvpScorer($("file-ignore-order").checked);
+  const ignoreOrder = () => $("file-ignore-order").checked;
+  const score = () => fileRsvpScorer(ignoreOrder());
   const showFiles = (show) => {
     if (show && !$("cancel").disabled) $("cancel").click();
-    if (!show) controller?.abort();
+    if (!show) {
+      controller?.abort();
+      $("file-player").pause();
+    }
     $("show-files").setAttribute("aria-pressed", show);
     $("show-live").setAttribute("aria-pressed", !show);
     $("file-benchmark").hidden = !show;
@@ -73,91 +58,187 @@ export function setupFileBenchmark() {
   const resultRows = () => [...results.values()].flatMap((group) => [...group.values()]);
 
   function refreshReport() {
-    computed = manifest && summarizeFiles(clips, results, score());
-    const hasResults = !!computed?.summary.length;
+    if (!manifest) return;
+    const scorer = score();
+    const memo = new Map();
+    const cachedScore = (targets, transcript) => {
+      const key = JSON.stringify([targets, transcript]);
+      if (!memo.has(key)) memo.set(key, scorer(targets, transcript));
+      return memo.get(key);
+    };
+    computed = summarizeReviews(clips, results, cachedScore, reviews, ignoreOrder());
+    for (const report of Object.values(computed.reports))
+      report.keytermPairs = summarizeKeytermPairs(report.clips, report.details, keytermVariants);
+    const hasResults = !!results.size;
     $("file-export-csv").disabled = !hasResults;
-    $("file-export-json").disabled = !hasResults;
-    const output = $("file-summary");
-    output.replaceChildren();
-    if (!hasResults) return;
-    const { summary } = computed;
-    computed.keytermPairs = summarizeKeytermPairs(clips, computed.details, keytermVariants);
-    output.append(
-      node("h3", "RSVP score comparison · common successful clips"),
-      node("p", "Missed correct = expected 1, got 0. False credit = expected 0, got 1. When no targets are supplied, reference-derived targets only test missed correct answers. Failed or missing results are reported separately."),
-      table(
-        ["Provider", "Returned / clips", "Failed / missing", "Paired clips", "Exact vectors", "Missed correct", "False credit", "Last target agreement"],
-        summary.map((s) => [
-          s.provider, s.returned + "/" + s.clips, s.failed + "/" + s.missing, s.paired,
-          pct(s.exact, s.paired), pct(s.falseNeg, s.positives), pct(s.falsePos, s.negatives),
-          pct(s.paired - s.lastErrors, s.paired),
-        ]),
-      ),
-    );
-    if (summary.some((s) => s.returned > s.paired)) output.append(
-      node("h3", "Each provider's available clips"),
-      node("p", "These sets may differ. Use the common-clips table for a paired comparison."),
-      table(["Provider", "Clips", "Exact vectors", "Missed correct", "False credit"],
-        summary.map(({ provider, returned, allReturned: s }) => [
-          provider, returned, pct(s.exact, returned), pct(s.falseNeg, s.positives), pct(s.falsePos, s.negatives),
-        ])),
-    );
-    if (computed.keytermPairs.length) {
-      const change = (a, b, metric, denominator) =>
-        pct(a[metric], denominator) + " → " + pct(b[metric], denominator);
-      output.append(
-        node("h3", "Keyterms effect · Off → On"),
-        table(["Provider", "Same successful clips", "Exact vectors", "Missed correct", "False credit", "Last target error"],
-          computed.keytermPairs.map(({ provider, paired, without: a, withTerms: b }) => [
-            provider, paired, change(a, b, "exact", paired),
-            change(a, b, "falseNeg", a.positives), change(a, b, "falsePos", a.negatives),
-            change(a, b, "lastErrors", paired),
-          ])),
-      );
+    $("file-export-json").disabled = !hasResults && !reviews.size;
+    $("file-scope-label").hidden = !hasResults;
+    drawReport();
+    refreshClipList(true);
+  }
+
+  const drawReport = () => renderFileReport($("file-summary"), computed, $("file-scope").value,
+    selectedProvider, (value) => { selectedProvider = value; });
+
+  function setAudio(clip) {
+    const player = $("file-player");
+    const file = clip && files.get(clip.file);
+    if (audioClip === clip?.id && audioFile === file) return;
+    player.pause();
+    player.removeAttribute("src");
+    player.load();
+    if (audioUrl) URL.revokeObjectURL(audioUrl);
+    audioUrl = file && URL.createObjectURL(file);
+    audioClip = clip?.id;
+    audioFile = file;
+    player.hidden = !audioUrl;
+    if (audioUrl) player.src = audioUrl;
+    $("file-player-status").textContent = clip && !file ? "Select the matching audio file to listen here." : "";
+  }
+
+  function refreshClipList(keepCurrent = false) {
+    const picker = $("file-clip");
+    const previous = picker.value;
+    const filter = $("file-review-filter").value;
+    const errors = filter === "error" ? new Set(computed.reports.adjudicated.details
+      .filter((row) => row.differences && !row.differences.exact).map((row) => row.clipId)) : null;
+    const visible = clips.filter((clip) => {
+      const quality = reviews.get(clip.id)?.quality ?? "unreviewed";
+      if (filter === "diff") return quality === "unreviewed" &&
+        (clip.referenceStatus === "needsReview" || clip.expected.includes(0));
+      if (filter === "flagged") return ["difficult", "unclear", "invalid"].includes(quality);
+      return !errors || errors.has(clip.id);
+    });
+    if (keepCurrent && previous && !visible.some((clip) => clip.id === previous)) {
+      const clip = clips.find((clip) => clip.id === previous);
+      if (clip) visible.unshift(clip);
     }
-    for (const [title, values] of [
-      ["Exact RSVP score vectors", (s) => [s.exact, s.paired]],
-      ["Missed correct targets · lower is better", (s) => [s.falseNeg, s.positives]],
-      ["False credit · lower is better", (s) => [s.falsePos, s.negatives]],
-    ]) {
-      const chart = node("div");
-      chart.className = "file-bars";
-      chart.append(node("h3", title));
-      for (const s of summary) {
-        const [count, total] = values(s);
-        const label = node("label", s.provider);
-        const value = node("span", total ? count + "/" + total + " · " + pct(count, total) : "Not measured");
-        const bar = node("meter");
-        bar.max = total || 1;
-        bar.value = count;
-        label.append(total ? bar : node("span"), value);
-        chart.append(label);
-      }
-      output.append(chart);
-    }
+    picker.replaceChildren(...visible.map((clip) => {
+      const tag = [clip.file, clip.speakerGroup, clip.referenceStatus === "needsReview" ? "check reference" : null].filter(Boolean);
+      const option = node("option", tag.join(" · "));
+      option.value = clip.id;
+      return option;
+    }));
+    if (visible.some((clip) => clip.id === previous)) picker.value = previous;
+    picker.disabled = !visible.length;
     refreshClip();
   }
 
+  function saveReview(clip, review, message) {
+    const updated = { clipId: clip.id, ...review };
+    if (updated.quality === "unreviewed" && updated.reference === undefined && !updated.predictions.length)
+      reviews.delete(clip.id);
+    else reviews.set(clip.id, updated);
+    refreshReport();
+    $("file-review-status").textContent = message;
+  }
+
   function refreshClip() {
-    const clip = clips.find(({ id }) => id === $("file-clip").value);
+    const picker = $("file-clip");
+    const clip = clips.find(({ id }) => id === picker.value);
     const item = $("file-item-results");
+    const sameClip = reviewedClip === clip?.id;
+    const openProviders = new Set(sameClip
+      ? [...item.querySelectorAll("details[open]")].map((section) => section.dataset.provider)
+      : []);
+    reviewedClip = clip?.id;
     item.replaceChildren();
-    if (!clip) return;
+    setAudio(clip);
+    $("file-prev").disabled = picker.selectedIndex <= 0;
+    $("file-next").disabled = !clip || picker.selectedIndex >= picker.length - 1;
+    if (!clip) return item.append(node("p", "No clips match this filter."));
+    const review = reviews.get(clip.id) ?? { quality: "unreviewed", predictions: [] };
+    const reference = review.reference ?? clip.reference;
+    const expected = review.reference === undefined ? clip.expected : score()(clip.targets, reference).vector;
     item.append(
-      node("p", "Reference: " + (clip.reference || "(empty)")),
-      node("p", "Targets: " + clip.targets.join(", ") + " · Expected: " + clip.expected.join("")),
+      node("p", [clip.speakerGroup ?? "Participant not supplied", clip.session, clip.list && "Task " + clip.list].filter(Boolean).join(" · ")),
+      node("p", "Targets: " + clip.targets.join(", ") + " · Expected: " + expected.join("")),
+      node("p", "Original human transcript: " + (clip.reference || "(empty)")),
     );
-    const scores = computed?.details.filter((row) => row.clipId === clip.id);
-    if (scores?.length) item.append(table(
-      ["Provider", "Recognized", "Normalized", "RSVP vector", "Missed / false credit"],
-      scores.map((row) => [
-        row.provider,
-        row.error || (row.transcript === "" ? "(empty transcript)" : row.transcript),
-        row.normalized ?? "—", row.vector?.join("") ?? "—",
-        row.differences
-          ? row.differences.falseNeg.length + " / " + row.differences.falsePos.length : "—",
-      ]),
-    ));
+    const form = node("form");
+    form.className = "file-review-form";
+    const quality = node("select");
+    const qualityLabel = node("label", "Audio quality / review status");
+    qualityLabel.append(quality);
+    for (const [key, label] of Object.entries(qualityLabels)) {
+      const option = node("option", label);
+      option.value = key;
+      quality.append(option);
+    }
+    quality.value = review.quality;
+    const field = node("textarea");
+    field.maxLength = 1500;
+    field.value = reference;
+    const correction = node("label", "Human transcript · edit only if the original is wrong");
+    correction.append(field, node("small", "Leave empty only if no words were spoken. Targets do not change."));
+    const save = node("button", "Save audio / reference review");
+    save.type = "submit";
+    form.append(qualityLabel);
+    if (clip.targetSource === "explicit") form.append(correction);
+    else form.append(node("p", "Supply explicit targets in the manifest to edit the reference or review individual target decisions."));
+    form.append(save);
+    form.onsubmit = (event) => {
+      event.preventDefault();
+      const text = field.value.trim();
+      const changed = clip.targetSource === "explicit" && text !== clip.reference.trim();
+      saveReview(clip, { ...review, quality: quality.value, reference: changed ? text : undefined }, "Audio / reference review saved.");
+    };
+    item.append(form);
+    const raw = computed?.reports.original.details.filter((row) => row.clipId === clip.id) ?? [];
+    const reviewed = new Map(computed?.reports.adjudicated.details.filter((row) => row.clipId === clip.id).map((row) => [row.provider, row]));
+    if (!raw.length) return;
+    item.append(node("h4", "Provider decisions by target"),
+      node("p", "Judge whether the provider’s text contains the target, not whether the child said it. If the model actually missed a word, leave the error in place. Override only if the automatic text scorer misread the provider’s output."));
+    for (const row of raw) {
+      const section = node("details");
+      section.dataset.provider = row.provider;
+      section.open = openProviders.has(row.provider) || (!sameClip && raw.length === 1);
+      const effective = reviewed.get(row.provider);
+      const actual = effective ?? row;
+      const result = actual.vector ? actual.vector.join("") : "not scored";
+      section.append(node("summary", row.provider + " · " + result));
+      if (!row.vector) section.append(node("p", row.error || "No result"));
+      else {
+        section.append(node("p", "Provider text: " + (row.transcript || "(empty)")),
+          node("p", "Normalized: " + (row.normalized || "(empty)") +
+            (effective ? "" : " · excluded from reviewed statistics")));
+        const match = (d) => d.provider === row.provider && d.transcript === row.transcript && d.ignoreOrder === ignoreOrder();
+        const stored = review.predictions.find(match);
+        const controls = [];
+        section.append(table(
+          ["Target", "Human bit", "Automatic STT bit", "Effective STT bit", "Decision", "Scorer review"],
+          clip.targets.map((target, i) => {
+            const control = node("select");
+            control.setAttribute("aria-label", "Review " + target + " for " + row.provider);
+            for (const [key, label] of [["", "Automatic"], ["1", "Target present (1)"], ["0", "Target absent (0)"]]) {
+              const option = node("option", label);
+              option.value = key;
+              control.append(option);
+            }
+            control.value = String(stored?.bits[i] ?? "");
+            controls.push(control);
+            const bit = actual.vector[i];
+            return [target, expected[i], row.vector[i], bit,
+              expected[i] === bit ? "Agrees" : expected[i] ? "Missed target" : "False credit",
+              clip.targetSource === "explicit" && effective ? control : "—"];
+          }),
+        ));
+        if (clip.targetSource === "explicit" && effective) {
+          const button = node("button", "Save target decisions");
+          button.type = "button";
+          button.onclick = () => {
+            const bits = controls.map((field) => field.value === "" ? null : Number(field.value));
+            const predictions = review.predictions.filter((d) => !match(d) &&
+              !(d.provider === row.provider && d.ignoreOrder === ignoreOrder()));
+            if (bits.some((bit) => bit !== null))
+              predictions.push({ provider: row.provider, transcript: row.transcript, ignoreOrder: ignoreOrder(), bits });
+            saveReview(clip, { ...review, predictions }, "Target decisions saved. Provider text and the original report are unchanged.");
+          };
+          section.append(button);
+        }
+      }
+      item.append(section);
+    }
   }
 
   const refreshStatus = () => {
@@ -178,8 +259,8 @@ export function setupFileBenchmark() {
     json("rsvp-dataset-manifest.example.json", {
       version: 1,
       clips: [
-        { id: "example-001", file: "example.wav", reference: "boat lake morning" },
-        { id: "example-002", file: "example-2.wav", reference: "boat lake money", targets: ["boat", "lake", "morning"] },
+        { id: "example-001", file: "example.wav", reference: "boat lake morning", targets: ["boat", "lake", "morning"], speakerGroup: "participant-01" },
+        { id: "example-002", file: "example-2.wav", reference: "boat lake money", targets: ["boat", "lake", "morning"], speakerGroup: "participant-01" },
       ],
     });
   };
@@ -190,17 +271,16 @@ export function setupFileBenchmark() {
       manifest = next;
       clips = cases;
       results = new Map();
-      $("file-clip").replaceChildren(...clips.map((clip) => {
-        const option = node("option", clip.file);
-        option.value = clip.id;
-        return option;
-      }));
+      reviews = new Map();
+      reviewedClip = undefined;
+      $("file-review-filter").value = "all";
+      $("file-clip").replaceChildren();
+      $("file-review-status").textContent = "";
       $("file-results").value = "";
       $("file-consent").checked = false;
       $("file-policy").textContent = "Nothing is sent before you press Run dataset. With keyterms on, the selected providers also receive the target words, or words from the reference when targets are not supplied.";
       $("file-review").hidden = false;
       refreshReport();
-      refreshClip();
       refreshStatus();
     } catch (error) { status(error.message); }
   };
@@ -214,43 +294,54 @@ export function setupFileBenchmark() {
       selected.set(file.name, file);
     }
     files = selected;
+    refreshClip();
     refreshStatus();
   };
   $("file-results").onchange = async () => {
     try {
       if (!manifest) throw new Error("Load the reference manifest first.");
       const data = await readJson($("file-results").files[0], 256);
-      merge(readResults(data, clips));
+      if (data.manifestKey !== undefined && data.manifestKey !== manifestKey(manifest.clips))
+        throw new Error("These results do not match the loaded reference manifest.");
+      const incoming = readResults(data, clips);
+      const saved = readReviews(data, manifest.clips);
+      merge(incoming);
+      for (const [id, row] of saved) reviews.set(id, row);
       refreshReport();
       refreshStatus();
     } catch (error) { status(error.message); }
   };
-  $("file-clip").onchange = refreshClip;
+  const navigate = () => {
+    $("file-review-status").textContent = "";
+    refreshClip();
+  };
+  $("file-clip").onchange = navigate;
+  $("file-prev").onclick = () => { $("file-clip").selectedIndex--; navigate(); };
+  $("file-next").onclick = () => { $("file-clip").selectedIndex++; navigate(); };
+  $("file-review-filter").onchange = () => {
+    $("file-review-status").textContent = "";
+    refreshClipList();
+  };
+  $("file-scope").onchange = drawReport;
   $("file-ignore-order").onchange = () => {
     if (!manifest) return;
     clips = makeRsvpCases(manifest.clips, score());
     refreshReport();
-    refreshClip();
   };
   $("file-export-json").onclick = () => json("rsvp-dataset-results.json", {
     version: 1,
-    settings: { ignoreOrder: $("file-ignore-order").checked },
+    manifestKey: manifestKey(manifest.clips),
+    settings: { ignoreOrder: ignoreOrder() },
     results: resultRows(),
-    summary: computed.summary,
-    keytermPairs: computed.keytermPairs,
-    details: computed.details,
+    reviews: [...reviews.values()],
+    quality: computed.quality,
+    reports: Object.fromEntries(Object.entries(computed.reports).map(([key, report]) =>
+      [key, { summary: report.summary, keytermPairs: report.keytermPairs,
+        details: key === "unflagged" ? undefined : report.details }])),
   });
   $("file-export-csv").onclick = () => {
-    const header = ["provider", "clips", "returned", "failed", "missing", "paired", "exact_vectors", "exact_vectors_pct", "expected_ones", "missed_correct", "missed_correct_pct", "expected_zeros", "false_credit", "false_credit_pct", "last_target_errors", "explicit_target_clips", "reference_target_clips", "all_returned_exact_pct", "all_returned_missed_correct_pct", "all_returned_false_credit_pct"];
-    const rows = computed.summary.map((s) => [
-      s.provider, s.clips, s.returned, s.failed, s.missing, s.paired,
-      s.exact, pct(s.exact, s.paired), s.positives, s.falseNeg, pct(s.falseNeg, s.positives),
-      s.negatives, s.falsePos, pct(s.falsePos, s.negatives), s.lastErrors, s.explicitClips, s.referenceClips,
-      pct(s.allReturned.exact, s.returned),
-      pct(s.allReturned.falseNeg, s.allReturned.positives),
-      pct(s.allReturned.falsePos, s.allReturned.negatives),
-    ]);
-    download("rsvp-dataset-metrics.csv", [header, ...rows].map((row) => row.map(csvCell).join(",")).join("\r\n"), "text/csv");
+    download("rsvp-dataset-metrics.csv",
+      csvMetricRows(computed).map((row) => row.map(csvCell).join(",")).join("\r\n"), "text/csv;charset=UTF-8");
   };
   $("file-cancel").onclick = () => controller?.abort();
 
@@ -266,9 +357,14 @@ export function setupFileBenchmark() {
     const variants = mode === "both" ? [false, true] : [mode === "on"];
     const missingResults = (clip, providers, enabled) => providers.filter((key) =>
       typeof results.get(replayLabel(key, enabled))?.get(clip.id)?.transcript !== "string");
-    const pending = clips.flatMap((clip) => variants
+    const remaining = clips.flatMap((clip) => variants
       .filter((enabled) => missingResults(clip, keys, enabled).length)
       .map((enabled) => ({ clip, enabled })));
+    const attemptedBefore = ({ clip, enabled }) => missingResults(clip, keys, enabled).every((key) =>
+      results.get(replayLabel(key, enabled))?.has(clip.id));
+    remaining.sort((a, b) => Number(attemptedBefore(a)) - Number(attemptedBefore(b)));
+    const limit = $("file-batch-limit").value;
+    const pending = limit === "all" ? remaining : remaining.slice(0, Number(limit));
     if (!pending.length) return status("All selected providers have results for this dataset.");
     const missingFiles = [...new Set(pending.map(({ clip }) => clip.file).filter((file) => !files.has(file)))];
     if (missingFiles.length) return status(
@@ -277,7 +373,7 @@ export function setupFileBenchmark() {
 
     controller = new AbortController();
     const { signal } = controller;
-    const controls = ["file-manifest", "file-audio", "file-results", "file-run", "file-ignore-order", "file-keyterms"];
+    const controls = ["file-manifest", "file-audio", "file-results", "file-run", "file-ignore-order", "file-keyterms", "file-batch-limit"];
     for (const id of controls) $(id).disabled = true;
     $("file-cancel").disabled = false;
     const stopped = new Set();
@@ -303,7 +399,9 @@ export function setupFileBenchmark() {
       }
       const suffix = stopped.size ? " Paused providers: " + [...stopped].join(", ") + ". Check the error in the clip report and run again to resume." : "";
       const unit = mode === "both" ? " clip runs." : " clips.";
-      status((signal.aborted ? "Cancelled after " : "Run ended after ") + attempted + unit + " Results are kept in this tab." + suffix);
+      const left = remaining.filter(({ clip, enabled }) => missingResults(clip, keys, enabled).length).length;
+      status((signal.aborted ? "Cancelled after " : "Run ended after ") + attempted + unit +
+        (left ? ` ${left} runs still need results. Export JSON to keep progress.` : " Results are kept in this tab.") + suffix);
     } catch (error) { status(error.message); }
     finally {
       if (warning) $("file-policy").textContent = "ElevenLabs reported that zero retention was not applied.";

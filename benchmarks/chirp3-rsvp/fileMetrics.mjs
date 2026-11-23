@@ -14,7 +14,14 @@ export function readManifest(data) {
       throw new Error("Each clip needs a unique id, audio filename, and reference text. Targets are optional.");
     ids.add(clip.id);
     names.add(clip.file);
-    return { id: clip.id, file: clip.file, reference: clip.reference, targets: clip.targets };
+    const meta = {};
+    for (const key of ["speakerGroup", "session", "list", "referenceStatus"]) {
+      if (clip[key] === undefined) continue;
+      if (typeof clip[key] !== "string" || !clip[key].trim() || clip[key].length > 100)
+        throw new Error(`Clip ${clip.id}: invalid ${key}.`);
+      meta[key] = clip[key];
+    }
+    return { id: clip.id, file: clip.file, reference: clip.reference, targets: clip.targets, ...meta };
   });
   return { version: 1, clips };
 }
@@ -54,7 +61,7 @@ export function compareVectors(expected, actual) {
 
 const blankScore = () => ({
   positives: 0, negatives: 0, falsePos: 0, falseNeg: 0, exact: 0,
-  lastErrors: 0, explicitClips: 0, referenceClips: 0,
+  truePos: 0, trueNeg: 0, lastErrors: 0, explicitClips: 0, referenceClips: 0,
 });
 
 function countVector(totals, clip, actual, diff) {
@@ -62,11 +69,13 @@ function countVector(totals, clip, actual, diff) {
   for (const bit of clip.expected) totals[bit ? "positives" : "negatives"]++;
   totals.falsePos += diff.falsePos.length;
   totals.falseNeg += diff.falseNeg.length;
+  totals.truePos += clip.expected.filter((bit) => bit === 1).length - diff.falseNeg.length;
+  totals.trueNeg += clip.expected.filter((bit) => bit === 0).length - diff.falsePos.length;
   totals.exact += Number(diff.exact);
   totals.lastErrors += Number(clip.expected.at(-1) !== actual.vector.at(-1));
 }
 
-export function summarizeFiles(clips, providers, score) {
+export function summarizeFiles(clips, providers, score, amend = (_clip, _result, actual) => actual) {
   const paired = new Set(providers.size
     ? clips.filter(({ id }) => [...providers.values()].every((rows) =>
         typeof rows.get(id)?.transcript === "string")).map(({ id }) => id)
@@ -83,15 +92,16 @@ export function summarizeFiles(clips, providers, score) {
       else if (!result) totals.missing++;
       else totals.returned++;
       if (!result) continue;
-      const actual = typeof result.transcript === "string" ? score(clip.targets, result.transcript) : null;
+      const automatic = typeof result.transcript === "string" ? score(clip.targets, result.transcript) : null;
+      const actual = automatic && amend(clip, result, automatic);
       const diff = actual && compareVectors(clip.expected, actual.vector);
       const included = paired.has(clip.id);
       details.push({
-        clipId: clip.id, provider, targets: clip.targets, targetSource: clip.targetSource,
+        clipId: clip.id, provider, targets: clip.targets, targetSource: clip.targetSource, speakerGroup: clip.speakerGroup,
         reference: clip.reference, expected: clip.expected, included,
         transcript: result.transcript ?? null, normalized: actual?.normalized ?? null,
         vector: actual?.vector ?? null, alignment: actual?.alignment ?? null,
-        error: result.error ?? null, differences: diff,
+        automaticVector: automatic?.vector ?? null, error: result.error ?? null, differences: diff,
       });
       if (actual) countVector(totals.allReturned, clip, actual, diff);
       if (included) countVector(totals, clip, actual, diff);
@@ -99,6 +109,73 @@ export function summarizeFiles(clips, providers, score) {
     return totals;
   });
   return { summary, details };
+}
+
+export const scopes = {
+  original: "Original",
+  adjudicated: "After review",
+  unflagged: "After review · difficult audio excluded",
+};
+
+export function summarizeReviews(clips, providers, score, reviews, ignoreOrder) {
+  const kept = [], clear = [];
+  const quality = { unreviewed: 0, clear: 0, difficult: 0, unclear: 0, invalid: 0, corrected: 0 };
+  for (const clip of clips) {
+    const review = reviews.get(clip.id);
+    quality[review?.quality ?? "unreviewed"]++;
+    if (review?.reference !== undefined) quality.corrected++;
+    if (review?.quality === "unclear" || review?.quality === "invalid") continue;
+    const edited = review?.reference !== undefined
+      ? { ...clip, reference: review.reference, expected: score(clip.targets, review.reference).vector }
+      : clip;
+    kept.push(edited);
+    if (review?.quality !== "difficult") clear.push(edited);
+  }
+  const amend = (clip, result, automatic) => {
+    const decision = reviews.get(clip.id)?.predictions.find((item) =>
+      item.provider === result.provider && item.transcript === result.transcript && item.ignoreOrder === ignoreOrder);
+    if (!decision) return automatic;
+    const vector = automatic.vector.map((bit, i) => decision.bits[i] ?? bit);
+    return {
+      ...automatic, vector,
+      alignment: automatic.alignment?.map((row, i) =>
+        vector[i] === automatic.vector[i] ? row : { ...row, correct: vector[i], outcome: "reviewOverride" }),
+    };
+  };
+  return {
+    quality,
+    reports: {
+      original: { clips, ...summarizeFiles(clips, providers, score) },
+      adjudicated: { clips: kept, ...summarizeFiles(kept, providers, score, amend) },
+      unflagged: { clips: clear, ...summarizeFiles(clear, providers, score, amend) },
+    },
+  };
+}
+
+export function summarizeSpeakers(clips, details, providers) {
+  const groups = new Map();
+  for (const clip of clips) {
+    if (clip.speakerGroup === undefined) continue;
+    if (!groups.has(clip.speakerGroup)) groups.set(clip.speakerGroup, []);
+    groups.get(clip.speakerGroup).push(clip);
+  }
+  const byKey = new Map(details.map((row) => [JSON.stringify([row.provider, row.clipId]), row]));
+  const rows = [];
+  for (const [speaker, group] of groups) {
+    for (const provider of providers) {
+      const out = { speaker, provider, clips: group.length, returned: 0, failed: 0, missing: 0, ...blankScore() };
+      for (const clip of group) {
+        const row = byKey.get(JSON.stringify([provider, clip.id]));
+        if (row?.differences) {
+          out.returned++;
+          countVector(out, clip, row, row.differences);
+        } else if (row?.error) out.failed++;
+        else out.missing++;
+      }
+      rows.push(out);
+    }
+  }
+  return rows;
 }
 
 export function summarizeKeytermPairs(clips, details, variants) {

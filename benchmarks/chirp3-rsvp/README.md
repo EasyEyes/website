@@ -79,11 +79,27 @@ file replay, not a measurement of adaptive reading speed.
 The full dataset runs automatically, pacing requests to the preview ticket
 limit. Individual clips must be at most 30 seconds. Results can be exported
 and reimported to resume without rerunning providers that already succeeded.
-The report compares exactly matched vectors, missed correct targets, false
-credit, and last target agreement on the common successful subset, with
-coverage and failures reported separately. JSON includes source/normalized
-text and the two vectors. CSV contains counts and percentages. No raw audio
-is included in the exports.
+For a large pack, use 25- or 100-run batches and export a checkpoint JSON.
+The report scores individual targets. It shows all scored targets, agreement,
+missed targets (1 → 0) and false credit (0 → 1). The latter two rates use
+different denominators: human reference 1s and 0s, respectively. Compare
+providers on common successful clips; use the available-clips table for each
+provider's full coverage. The participant chart is available when the manifest
+includes a pseudonymous `speakerGroup` on its clips.
+
+In **Listen to and review individual clips**, playback uses the selected local
+file. The original report stays fixed. A corrected human transcript changes
+the expected decisions; it does not change the targets or provider text. A
+provider-side override corrects an automatic scoring mistake, not a word the
+provider genuinely misrecognized. The reviewed report excludes invalid and
+unintelligible clips. The third view also excludes difficult-but-intelligible
+audio; it still includes unreviewed clips. Use the reference-difference filter
+to prioritize review when a reference does not match the task targets.
+
+Export JSON to retain transcripts, the original and reviewed decisions and
+the saved reviews. Import the JSON with the same manifest to resume. CSV
+contains target-level counts and percentages for all views, including separate
+participant rows. No audio is included in either export.
 
 To prepare candidates from ACAD without any external requests:
 
@@ -95,6 +111,15 @@ The script joins uniquely matched WAVs with transcript consensus and cuts
 the annotated utterances. Output references are candidates, not listening
 verified. Do not treat them as validated references without independent
 review, or include the dataset files in a Git commit or deploy.
+
+For the larger ACAD pack with explicit targets from task lists 23, 24 and 26,
+run `prepare-acad-targets.py` with the same ZIP inputs, the original human
+transcripts ZIP (`--transcripts`), and a different `--out` directory. It
+checks the archived task templates and original transcript text, source
+identity, WAV duration and segment bounds, and writes a source audit next to
+the manifest. Use `--verify-existing` to compare a prepared pack to the
+source archives without rewriting it. The pack stays local and is not served
+by the preview.
 
 ## Same-audio provider comparison
 
