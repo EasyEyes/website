@@ -79,7 +79,10 @@ file replay, not a measurement of adaptive reading speed.
 The full dataset runs automatically, pacing requests to the preview ticket
 limit. Individual clips must be at most 30 seconds. Results can be exported
 and reimported to resume without rerunning providers that already succeeded.
-For a large pack, use 25- or 100-run batches and export a checkpoint JSON.
+For a large pack, use 25- or 100-run batches and keep the tab visible. The
+progress panel shows the current file and provider stage, successful and
+failed jobs, and each finished transcript or error. Export results JSON at
+any point after a provider has returned to keep a resumable checkpoint.
 The report scores individual targets. It shows all scored targets, agreement,
 missed targets (1 → 0) and false credit (0 → 1). The latter two rates use
 different denominators: human reference 1s and 0s, respectively. Compare

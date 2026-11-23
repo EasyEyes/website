@@ -78,21 +78,30 @@ export const delay = (ms, signal) => new Promise((resolve) => {
   signal.addEventListener("abort", done, { once: true });
 });
 
-export async function replayClip(file, clipId, keys, accessCode, signal, nextTicketAt, keyterms) {
+export async function replayClip(file, clipId, keys, accessCode, signal, nextTicketAt, keyterms, update) {
   const label = (key) => replayLabel(key, keyterms !== null);
-  const fail = (key, error) => ({ clipId, provider: label(key), error });
+  const settled = new Set();
+  const stage = (key, phase) => {
+    if (!signal.aborted && !settled.has(key)) update(key, phase);
+  };
+  const finish = (key, result) => {
+    if (signal.aborted || settled.has(key)) return;
+    settled.add(key);
+    update(key, result.error ? "failed" : "done", { clipId, provider: label(key), ...result });
+  };
   let samples;
   try {
     samples = await decode(file);
   } catch (error) {
-    return { rows: keys.map((key) => fail(key, error.message?.slice(0, 180) || "Could not decode audio.")), warning: false };
+    for (const key of keys)
+      finish(key, { error: error.message?.slice(0, 180) || "Could not decode audio." });
+    return { warning: false };
   }
-  if (signal.aborted) return { rows: [], warning: false };
+  if (signal.aborted) return { warning: false };
 
   // Only the optional target hints are sent to the transcriber, not the reference record.
   const id = `file-${crypto.randomUUID()}`;
   let warning = false;
-  const rejected = [];
   const states = [];
   for (const key of keys) {
     let ticketError;
@@ -116,7 +125,7 @@ export async function replayClip(file, clipId, keys, accessCode, signal, nextTic
       });
       states.push({ key, session, error: null, getTicketError: () => ticketError });
     } catch (error) {
-      rejected.push(fail(key, error.message?.slice(0, 180) || "Invalid provider configuration."));
+      finish(key, { error: error.message?.slice(0, 180) || "Invalid provider configuration." });
     }
   }
   const abort = () => {
@@ -125,41 +134,50 @@ export async function replayClip(file, clipId, keys, accessCode, signal, nextTic
   signal.addEventListener("abort", abort, { once: true });
   try {
     await Promise.all(states.map(async (state) => {
+      stage(state.key, "connecting");
       try {
         await state.session.connect();
         state.result = state.session.beginUtterance(id).catch((error) => {
           state.error ??= error?.code || "Transcription failed.";
+          finish(state.key, { error: state.error });
           return null;
         });
+        stage(state.key, "ready");
       } catch (error) {
         state.error = state.getTicketError() || error?.code || "Could not connect.";
+        finish(state.key, { error: state.error });
       }
     }));
+    for (const state of states) stage(state.key, "streaming");
     for (let i = 0; i < samples.length && !signal.aborted; i += FRAME) {
       const active = states.filter((state) => !state.error);
       if (!active.length) break;
       const chunk = { samples: samples.subarray(i, i + FRAME), sampleRate: RATE, capturedAtMs: performance.now() };
-      for (const state of active)
-        if (!state.session.pushAudio(chunk)) state.error ??= "Provider stopped accepting audio.";
+      for (const state of active) {
+        if (!state.session.pushAudio(chunk)) {
+          state.error ??= "Provider stopped accepting audio.";
+          finish(state.key, { error: state.error });
+        }
+      }
       await delay(chunk.samples.length * 1000 / RATE, signal);
     }
-    if (signal.aborted) return { rows: [], warning };
+    if (signal.aborted) return { warning };
     for (const state of states) {
       if (state.error) continue;
       try {
+        stage(state.key, "finalizing");
         state.session.requestCommit();
       } catch (error) {
         state.error ??= error?.code || "Could not finalize.";
+        finish(state.key, { error: state.error });
       }
     }
-    const rows = await Promise.all(states.map(async (state) => {
-      if (state.error) return fail(state.key, state.error);
+    await Promise.all(states.map(async (state) => {
+      if (state.error) return;
       const result = await state.result;
-      return result
-        ? { clipId, provider: label(state.key), transcript: result.text }
-        : fail(state.key, state.error || "No result.");
+      finish(state.key, result ? { transcript: result.text } : { error: state.error || "No result." });
     }));
-    return { rows: [...rows, ...rejected], warning };
+    return { warning };
   } finally {
     signal.removeEventListener("abort", abort);
     await Promise.allSettled(states.map(({ session }) => session.close()));

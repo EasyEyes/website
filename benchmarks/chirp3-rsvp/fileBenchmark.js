@@ -3,6 +3,7 @@ import { replayClip, replayProviders, replayLabel } from "./fileReplay.js";
 import { fileKeyterms, fileRsvpScorer, makeRsvpCases } from "./fileRsvpScore.js";
 import { manifestKey, qualityLabels, readReviews } from "./fileReview.mjs";
 import { csvMetricRows, node, renderFileReport, table } from "./fileReport.js";
+import { createFileProgress } from "./fileProgress.js";
 
 const keytermVariants = Object.entries(replayProviders).map(([key, provider]) => ({
   provider, off: replayLabel(key, false), on: replayLabel(key, true),
@@ -39,6 +40,7 @@ export function setupFileBenchmark() {
   let reviews = new Map();
   let computed, selectedProvider, audioUrl, audioClip, audioFile, reviewedClip;
   let controller;
+  const progress = createFileProgress();
   const status = (message) => { $("file-status").textContent = message; };
   const ignoreOrder = () => $("file-ignore-order").checked;
   const score = () => fileRsvpScorer(ignoreOrder());
@@ -70,7 +72,7 @@ export function setupFileBenchmark() {
     for (const report of Object.values(computed.reports))
       report.keytermPairs = summarizeKeytermPairs(report.clips, report.details, keytermVariants);
     const hasResults = !!results.size;
-    $("file-export-csv").disabled = !hasResults;
+    $("file-export-csv").disabled = !!controller || !hasResults;
     $("file-export-json").disabled = !hasResults && !reviews.size;
     $("file-scope-label").hidden = !hasResults;
     drawReport();
@@ -272,6 +274,7 @@ export function setupFileBenchmark() {
       clips = cases;
       results = new Map();
       reviews = new Map();
+      progress.reset();
       reviewedClip = undefined;
       $("file-review-filter").value = "all";
       $("file-clip").replaceChildren();
@@ -334,8 +337,8 @@ export function setupFileBenchmark() {
     settings: { ignoreOrder: ignoreOrder() },
     results: resultRows(),
     reviews: [...reviews.values()],
-    quality: computed.quality,
-    reports: Object.fromEntries(Object.entries(computed.reports).map(([key, report]) =>
+    quality: controller ? undefined : computed.quality,
+    reports: controller ? undefined : Object.fromEntries(Object.entries(computed.reports).map(([key, report]) =>
       [key, { summary: report.summary, keytermPairs: report.keytermPairs,
         details: key === "unflagged" ? undefined : report.details }])),
   });
@@ -364,7 +367,8 @@ export function setupFileBenchmark() {
       results.get(replayLabel(key, enabled))?.has(clip.id));
     remaining.sort((a, b) => Number(attemptedBefore(a)) - Number(attemptedBefore(b)));
     const limit = $("file-batch-limit").value;
-    const pending = limit === "all" ? remaining : remaining.slice(0, Number(limit));
+    const pending = (limit === "all" ? remaining : remaining.slice(0, Number(limit)))
+      .map((run) => ({ ...run, providers: missingResults(run.clip, keys, run.enabled) }));
     if (!pending.length) return status("All selected providers have results for this dataset.");
     const missingFiles = [...new Set(pending.map(({ clip }) => clip.file).filter((file) => !files.has(file)))];
     if (missingFiles.length) return status(
@@ -376,34 +380,50 @@ export function setupFileBenchmark() {
     const controls = ["file-manifest", "file-audio", "file-results", "file-run", "file-ignore-order", "file-keyterms", "file-batch-limit"];
     for (const id of controls) $(id).disabled = true;
     $("file-cancel").disabled = false;
+    $("file-export-csv").disabled = true;
+    const byProvider = new Map(keys.map((key) => {
+      const success = variants.reduce((sum, enabled) => sum +
+        clips.filter((clip) => !missingResults(clip, [key], enabled).length).length, 0);
+      return [key, { total: clips.length * variants.length, success, failed: 0 }];
+    }));
+    progress.start(pending.reduce((total, run) => total + run.providers.length, 0), byProvider);
     const stopped = new Set();
     let warning = false, attempted = 0;
+    let batchState = "Batch finished";
     try {
-      for (const [index, { clip, enabled }] of pending.entries()) {
-        const selected = missingResults(clip, keys, enabled).filter((key) => !stopped.has(key));
+      for (const [index, { clip, enabled, providers }] of pending.entries()) {
         if (signal.aborted || stopped.size === keys.length) break;
+        const selected = providers.filter((key) => !stopped.has(key));
         if (!selected.length) continue;
         const terms = enabled ? fileKeyterms(clip.targets) : null;
-        status("Processing " + (index + 1) + " of " + pending.length + " runs. Keyterms " + (enabled ? "on" : "off") + ".");
-        const output = await replayClip(files.get(clip.file), clip.id, selected, accessCode, signal, nextTicketAt, terms);
+        status(`Processing run ${index + 1} of ${pending.length} · ${clip.file}`);
+        progress.clip(clip.file, enabled, selected, index + 1, pending.length);
+        const output = await replayClip(files.get(clip.file), clip.id, selected, accessCode,
+          signal, nextTicketAt, terms, (key, phase, row) => {
+            if (row) {
+              merge(readResults({ version: 1, results: [row] }, [clip]));
+              $("file-export-json").disabled = false;
+              if (/^Ticket HTTP (401|403|429|502|503)$/.test(row.error ?? "")) stopped.add(key);
+            }
+            progress.update(key, phase, row);
+          });
+        warning ||= output.warning;
         if (signal.aborted) break;
         attempted++;
-        warning ||= output.warning;
-        merge(readResults({ version: 1, results: output.rows }, [clip]));
-        for (const row of output.rows) {
-          if (/^Ticket HTTP (401|403|429|502|503)$/.test(row.error ?? "")) {
-            const key = selected.find((item) => replayLabel(item, enabled) === row.provider);
-            if (key) stopped.add(key);
-          }
-        }
       }
       const suffix = stopped.size ? " Paused providers: " + [...stopped].join(", ") + ". Check the error in the clip report and run again to resume." : "";
       const unit = mode === "both" ? " clip runs." : " clips.";
       const left = remaining.filter(({ clip, enabled }) => missingResults(clip, keys, enabled).length).length;
+      if (signal.aborted) batchState = "Cancelled · finished results are saved in this tab";
+      else if (stopped.size) batchState = "Batch paused for " + [...stopped].map((key) => replayProviders[key]).join(", ");
       status((signal.aborted ? "Cancelled after " : "Run ended after ") + attempted + unit +
         (left ? ` ${left} runs still need results. Export JSON to keep progress.` : " Results are kept in this tab.") + suffix);
-    } catch (error) { status(error.message); }
+    } catch (error) {
+      batchState = "Batch stopped: " + error.message;
+      status(error.message);
+    }
     finally {
+      progress.end(batchState);
       if (warning) $("file-policy").textContent = "ElevenLabs reported that zero retention was not applied.";
       controller = undefined;
       for (const id of controls) $(id).disabled = false;

@@ -146,9 +146,11 @@ try {
         }
         const message = JSON.parse(data);
         if (this.eleven) {
-          if (message.commit)
-            this.reply({ message_type: "committed_transcript", text: "Cold ducks stone." });
-          else
+          if (message.commit) {
+            const final = () => this.reply({ message_type: "committed_transcript", text: "Cold ducks stone." });
+            if (window.testHoldElevenFinal) window.testReleaseElevenFinal = final;
+            else final();
+          } else
             window.testAudio.elevenlabs.push(Array.from(atob(message.audio_base_64), (byte) => byte.charCodeAt(0)));
           return;
         }
@@ -297,10 +299,24 @@ try {
   await page.evaluate(() => {
     window.testAudio = { chirp3: [], deepgram: [], elevenlabs: [] };
     window.testHints = { chirp3: [], deepgram: [], elevenlabs: [] };
+    window.testHoldElevenFinal = true;
   });
   await page.locator("#file-consent").check();
   await page.locator("#file-run").click();
+  await page.getByText(/1 \/ 4 provider jobs finished/).waitFor();
+  assert.match(await page.locator("#file-progress-active").innerText(), /ElevenLabs.*\nWaiting for final transcript/);
+  assert.match(await page.locator("#file-progress-log").innerText(), /example\.wav[\s\S]+Call my stone/);
+  const checkpoint = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Export results JSON" }).click();
+  const checkpointData = JSON.parse(await readFile(await (await checkpoint).path(), "utf8"));
+  assert.deepEqual(checkpointData.results.map((r) => [r.clipId, r.provider]), [["audio-01", "Chirp 3 · no keyterms"]]);
+  assert.equal(checkpointData.reports, undefined);
+  await page.evaluate(() => {
+    window.testHoldElevenFinal = false;
+    window.testReleaseElevenFinal();
+  });
   await page.getByText(/Run ended after 2 clips/).waitFor({ timeout: 16000 });
+  assert.match(await page.locator("#file-progress-counts").innerText(), /4 \/ 4 provider jobs finished · 4 transcribed · 0 failed/);
   const summary = await page.locator("#file-summary tbody").nth(1).innerText();
   assert.match(summary, /Chirp 3[^\n]+2\/2[^\n]+2\/5 \(40\.0%\)/);
   assert.match(summary, /ElevenLabs[^\n]+2\/2[^\n]+3\/5 \(60\.0%\)[^\n]+1\/1 \(100\.0%\)/);
@@ -337,6 +353,7 @@ try {
   await page.locator("#file-keyterms").selectOption("both");
   await page.locator("#file-run").click();
   await page.getByText(/Run ended after 2 clip runs/).waitFor({ timeout: 16000 });
+  assert.match(await page.locator("#file-progress-providers").innerText(), /Chirp 3: 4 \/ 4 successful across this dataset/);
   await page.getByText("Keyterms effect · Off → On", { exact: true }).waitFor();
   const { testAudio: bothAudio, testHints } = await page.evaluate(() => ({
     testAudio: window.testAudio, testHints: window.testHints,
@@ -361,6 +378,13 @@ try {
   await page.locator("#file-results").setInputFiles(saved);
   await page.locator("#file-clip").selectOption("audio-02");
   assert.match(await page.locator("#file-item-results").innerText(), /Expected: 111/);
+  await page.locator("#file-keyterms").selectOption("off");
+  await page.locator('input[name="file-provider"][value="deepgram"]').check();
+  await page.locator("#file-consent").check();
+  await page.locator("#file-run").click();
+  await page.getByText("Batch paused for Deepgram Nova-3", { exact: true }).waitFor();
+  assert.match(await page.locator("#file-progress-counts").innerText(), /1 \/ 2 provider jobs finished · 0 transcribed · 1 failed · 1 not finished/);
+  assert.match(await page.locator("#file-progress-log").innerText(), /Ticket HTTP 502/);
   if (process.env.EE_BENCH_ACAD_MANIFEST) {
     const acad = JSON.parse(await readFile(process.env.EE_BENCH_ACAD_MANIFEST, "utf8"));
     await page.locator("#file-manifest").setInputFiles(process.env.EE_BENCH_ACAD_MANIFEST);
@@ -368,7 +392,7 @@ try {
     await page.locator("#file-review-filter").selectOption("diff");
     assert.ok(await page.locator("#file-clip option").count() >=
       acad.clips.filter((clip) => clip.referenceStatus === "needsReview").length);
-    assert.equal(ticketRequests, beforeFileMode + 8);
+    assert.equal(ticketRequests, beforeFileMode + 9);
   }
   assert.deepEqual(errors, []);
   console.log(

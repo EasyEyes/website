@@ -62,7 +62,7 @@
                 <option value="25">25 runs</option>
                 <option value="100">100 runs</option>
               </select>
-              <small>With both keyterms settings, a clip can use two runs. Export JSON between batches to keep progress.</small>
+              <small>With both keyterms settings, a clip can use two runs. Export JSON during or between batches to keep progress.</small>
             </label>
             <label class="check"><input type="checkbox" id="file-consent" /> I am authorized to send the selected audio to these providers. Their retention settings apply.</label>
             <div class="actions">
@@ -72,6 +72,25 @@
           </div>
         </fieldset>
         <p id="file-policy" class="hint"></p>
+        <section id="file-progress-panel" class="file-progress" aria-labelledby="file-progress-heading" hidden>
+          <h3 id="file-progress-heading">Dataset run progress</h3>
+          <progress id="file-progress-bar" value="0" max="1" aria-label="Finished provider jobs in this batch" aria-describedby="file-progress-counts"></progress>
+          <p id="file-progress-counts"></p>
+          <p id="file-progress-clock" class="hint"></p>
+          <p id="file-progress-activity"></p>
+          <ul id="file-progress-active" aria-label="Current file by provider"></ul>
+          <ul id="file-progress-providers" aria-label="Results by provider"></ul>
+          <details open>
+            <summary>File and provider outcomes · this batch</summary>
+            <div id="file-progress-log"></div>
+            <div class="file-progress-pagination">
+              <button id="file-progress-newer" type="button" disabled>Newer</button>
+              <span id="file-progress-page"></span>
+              <button id="file-progress-older" type="button" disabled>Older</button>
+            </div>
+          </details>
+          <p class="hint">Audio is streamed in real time. Keep this tab visible and your computer awake for large batches.</p>
+        </section>
         <div class="actions">
           <button id="file-export-json" type="button" disabled>Export results JSON</button>
           <button id="file-export-csv" type="button" disabled>Export metrics CSV</button>

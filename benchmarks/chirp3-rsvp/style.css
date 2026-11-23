@@ -118,6 +118,36 @@ select:focus-visible {
 .mode-switch button[aria-pressed="false"] { background: white; color: #18568a; border-color: #859eae; }
 .file-fields, #file-review, #file-summary { margin-block: 1rem; }
 .file-table { overflow-x: auto; }
+.file-progress {
+  padding: .85rem;
+  margin-block: .8rem;
+  border: 1px solid #d4e0ea;
+  border-radius: .6rem;
+  background: #f5f9fb;
+}
+.file-progress progress { width: 100%; accent-color: #18568a; }
+#file-progress-counts, #file-progress-activity { font-weight: 650; }
+#file-progress-clock { font-variant-numeric: tabular-nums; }
+#file-progress-active {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .5rem;
+  list-style: none;
+  padding: 0;
+}
+#file-progress-active li {
+  display: grid;
+  padding: .4rem .6rem;
+  border: 1px solid #859eae;
+  border-radius: .35rem;
+  background: #fff;
+}
+#file-progress-active [data-phase="done"] { background: #e4f4ef; }
+#file-progress-active [data-phase="failed"] { background: #fff0e5; }
+#file-progress-providers { padding-inline-start: 1.4rem; }
+#file-progress-log td:last-child { min-width: 12rem; overflow-wrap: anywhere; }
+.file-progress summary { cursor: pointer; font-weight: 700; }
+.file-progress-pagination { display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; }
 #file-summary h4, #file-item-results h4 { margin: 1rem 0 .25rem; }
 #file-summary th, #file-item-results th { background: #edf4f8; }
 #file-scope-label, #file-summary > label { width: min(100%, 33rem); }
