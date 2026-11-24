@@ -320,6 +320,7 @@ try {
   const summary = await page.locator("#file-summary tbody").nth(1).innerText();
   assert.match(summary, /Chirp 3[^\n]+2\/2[^\n]+2\/5 \(40\.0%\)/);
   assert.match(summary, /ElevenLabs[^\n]+2\/2[^\n]+3\/5 \(60\.0%\)[^\n]+1\/1 \(100\.0%\)/);
+  assert.match(await page.locator("#file-overlap-result").innerText(), /Invalidated by disagreement: 2\/2 \(100\.00%\)/);
   await page.getByText("Listen to and review individual clips").click();
   await page.locator("#file-clip").selectOption("audio-02");
   assert.match(await page.locator("#file-item-results").innerText(), /Expected: 110/);
@@ -394,6 +395,19 @@ try {
       acad.clips.filter((clip) => clip.referenceStatus === "needsReview").length);
     assert.equal(ticketRequests, beforeFileMode + 9);
   }
+  await page.locator("#file-manifest").setInputFiles(jsonFile("manifest.json", { version: 1, clips }));
+  await page.getByText(/2 clips · 2 matching audio files/).waitFor();
+  await page.locator("#file-workers").selectOption("2");
+  await page.locator('input[name="file-provider"][value="deepgram"]').uncheck();
+  await page.locator("#file-consent").check();
+  await page.evaluate(() => { window.testHoldElevenFinal = true; });
+  await page.locator("#file-run").click();
+  await page.waitForFunction(() => {
+    const active = document.getElementById("file-progress-active").textContent;
+    return active.includes("example.wav") && active.includes("example-2.wav");
+  });
+  await page.locator("#file-cancel").click();
+  await page.getByText("Cancelled · finished results are saved in this tab", { exact: true }).waitFor();
   assert.deepEqual(errors, []);
   console.log(
     "Preview UI passed: live comparison and complete same-audio RSVP dataset replay.",

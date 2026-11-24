@@ -1,4 +1,4 @@
-import { scopes, summarizeSpeakers } from "./fileMetrics.mjs";
+import { scopes, summarizeProviderAgreement, summarizeSpeakers } from "./fileMetrics.mjs";
 import { qualityLabels } from "./fileReview.mjs";
 
 export function node(tag, text) {
@@ -102,7 +102,75 @@ function participantReport(container, report, provider) {
   scatter(rows), detail);
 }
 
-export function renderFileReport(container, computed, scope, preferredProvider, onProvider) {
+function agreementReport(report, choices, onChange) {
+  const labels = report.summary.map((s) => s.provider);
+  if (labels.length < 2) return node("p", "Add results from a second provider to measure agreement.");
+  const section = node("section");
+  section.className = "file-chart-panel";
+  const selectors = node("div");
+  selectors.className = "file-review-controls";
+  const select = (label, id) => {
+    const wrap = node("label", label);
+    const input = node("select");
+    input.id = id;
+    for (const name of labels) {
+      const option = node("option", name);
+      option.value = name;
+      input.append(option);
+    }
+    wrap.append(input);
+    selectors.append(wrap);
+    return input;
+  };
+  const first = select("First provider / setting", "file-overlap-first");
+  const second = select("Second provider / setting", "file-overlap-second");
+  if (labels.includes(choices?.[0]) && labels.includes(choices?.[1]) && choices[0] !== choices[1]) {
+    [first.value, second.value] = choices;
+  } else {
+    const identity = (label) => label.split(" · ")[0];
+    const matchingMode = (label) => label.split(" · ")[1];
+    second.value = labels.find((label) => identity(label) !== identity(first.value) &&
+      matchingMode(label) === matchingMode(first.value)) ??
+      labels.find((label) => identity(label) !== identity(first.value)) ?? labels[1];
+  }
+  const output = node("div");
+  output.id = "file-overlap-result";
+  const percentage = (n, d) => d ? `${n}/${d} (${(100 * n / d).toFixed(2)}%)` : "—";
+  const delta = (before, after) => {
+    const rates = (s) => [[errors(s), size(s)], [s.falseNeg, s.positives], [s.falsePos, s.negatives]];
+    const b = rates(before), a = rates(after);
+    return a.map(([n, d], i) => {
+      if (!d || !b[i][1]) return "—";
+      const pp = (n / d - b[i][0] / b[i][1]) * 100;
+      return `${pp > 0 ? "+" : ""}${pp.toFixed(2)} pp`;
+    }).join(" / ");
+  };
+  function draw() {
+    for (const item of first.options) item.disabled = item.value === second.value;
+    for (const item of second.options) item.disabled = item.value === first.value;
+    onChange([first.value, second.value]);
+    const { eligible, paired, rejected, rejectedTargets, first: a, second: b, accepted } =
+      summarizeProviderAgreement(report.clips, report.details, first.value, second.value);
+    const row = (name, n, s) => [name, n, percentage(errors(s), size(s)),
+      percentage(s.falseNeg, s.positives), percentage(s.falsePos, s.negatives)];
+    output.replaceChildren(
+      node("p", `Successful for both: ${paired}/${eligible} clips. Failed or missing for either: ${eligible - paired} (not counted as disagreement).`),
+      node("p", `Accepted: ${percentage(paired - rejected, paired)} · Invalidated by disagreement: ${percentage(rejected, paired)} · Excluded targets: ${rejectedTargets}.`),
+      table(["Policy", "Scored clips", "Target error rate", "Missed target (1 → 0)", "False credit (0 → 1)"], [
+        row(first.value + " alone", paired, a), row(second.value + " alone", paired, b),
+        row("Only accept full agreement", paired - rejected, accepted),
+      ]),
+      node("p", `Change after filtering (overall / missed / false credit): vs. first ${delta(a, accepted)}; vs. second ${delta(b, accepted)}.`),
+      node("p", "A lower error rate applies only to the retained clips. This filter does not correct mistakes, and both providers can agree on the wrong bit."),
+    );
+  }
+  first.onchange = second.onchange = draw;
+  section.append(node("h4", "Provider agreement · reject a trial if any target differs"), selectors, output);
+  draw();
+  return section;
+}
+
+export function renderFileReport(container, computed, scope, preferredProvider, onProvider, overlap, onOverlap) {
   container.replaceChildren();
   if (!computed) return;
   const { reports, quality } = computed;
@@ -123,6 +191,7 @@ export function renderFileReport(container, computed, scope, preferredProvider, 
     node("p", "The same clips are used for every provider and keyterms setting in this table."),
     table(["Provider", "Returned / eligible", "Failed / missing", "Common clips", ...metricLabels],
       summary.map((s) => [s.provider, s.returned + "/" + s.clips, s.failed + "/" + s.missing, s.paired, ...metrics(s)])),
+    agreementReport(report, overlap, onOverlap),
     node("h4", "Effect of review · each provider’s available clips"),
     table(["View", "Provider", "Scored / eligible clips", ...metricLabels],
       Object.entries(reports).flatMap(([key, r]) => r.summary.map((s) =>

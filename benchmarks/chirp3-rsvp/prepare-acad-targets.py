@@ -1,4 +1,4 @@
-"""Build the local ACAD three-target pack from the audio and annotation archives."""
+"""Build local ACAD word-list packs from the audio and annotation archives."""
 
 import argparse
 import csv
@@ -13,6 +13,7 @@ from zipfile import ZipFile
 
 # TalkBank ACAD task list, records 23, 24 and 26.
 TARGETS = {23: "cow house owie", 24: "bike kite five", 26: "boy toy voice"}
+LONGER_TASKS = {2, 3, 5, 7, 8, 9, 17, 19}
 WAV_PATH = re.compile(r"ASU-wav/(\d+)([FM])[^/]*/([^/]+)/R(\d+)\.wav", re.I)
 ROW_PATH = re.compile(r"(\d+)/(\d+)_(.+)_R(\d+)\.wav", re.I)
 
@@ -22,13 +23,18 @@ def rows(archive, name):
         return list(csv.DictReader(text))
 
 
-def prepare(audio_zip, mapping_zip, transcripts_zip, out, verify_existing=False):
+def prepare(audio_zip, mapping_zip, transcripts_zip, out, verify_existing=False, longer=False):
     with ZipFile(audio_zip) as audio, ZipFile(mapping_zip) as mapping, ZipFile(transcripts_zip) as transcripts:
-        for task, words in TARGETS.items():
+        targets = {} if longer else TARGETS.copy()
+        for task in sorted(LONGER_TASKS if longer else TARGETS):
             template = audio.read(f"ASU-wav/0files/R{task}.cha").decode("utf-8-sig")
             target = re.findall(r"^\*CHI:\s+(.+)$", template, flags=re.M)
-            if len(target) != 1 or target[0].rstrip(".").strip() != words:
+            words = target[0].strip().rstrip(".") if len(target) == 1 else ""
+            if (longer and not re.fullmatch(r"[a-z]+(?: [a-z]+){3,9}", words)) or (
+                not longer and words != TARGETS[task]
+            ):
                 raise ValueError(f"Task {task}: archived CHAT template does not match expected targets")
+            targets[task] = words
         index = defaultdict(list)
         for entry in audio.infolist():
             if match := WAV_PATH.fullmatch(entry.filename):
@@ -39,11 +45,16 @@ def prepare(audio_zip, mapping_zip, transcripts_zip, out, verify_existing=False)
             for row in rows(mapping, "ACAD_recording_manifest.csv")
         }
         candidates, rejected = [], []
-        for row in rows(mapping, "ACAD_utterance_manifest.csv"):
+        utterances = rows(mapping, "ACAD_utterance_manifest.csv")
+        segment_counts = Counter(row["audio_relative_path"] for row in utterances)
+        for row in utterances:
             match = ROW_PATH.fullmatch(row["audio_relative_path"])
-            if (not match or row["task"] not in {"23", "24", "26"} or
-                    row["word_count"] != "3" or row["inexact_transcription"] != "False" or
+            if (not match or int(match[4]) not in targets or
+                    (not longer and row["word_count"] != "3") or row["inexact_transcription"] != "False" or
                     row["jsonl_vs_chat_text"] != "match"):
+                continue
+            if longer and segment_counts[row["audio_relative_path"]] != 1:
+                rejected.append((row["utterance_id"], "Multiple child segments; audio not stitched"))
                 continue
             folder_child, file_child, session, task = match.groups()
             child = int(folder_child)
@@ -77,7 +88,8 @@ def prepare(audio_zip, mapping_zip, transcripts_zip, out, verify_existing=False)
                     source["orthographic_text_normalized"] != row["text_normalized_for_stt"] or
                     any(float(row[field]) != source[field] for field in ("start_seconds", "end_seconds"))):
                 raise ValueError(f"{uid}: original transcript and mapping disagree")
-            clip_id = f"acad-targets-{len(clips) + 1:04d}"
+            prefix = "acad-wordlists" if longer else "acad-targets"
+            clip_id = f"{prefix}-{len(clips) + 1:04d}"
             name = clip_id + ".wav"
             start, end = float(row["start_seconds"]), float(row["end_seconds"])
             with audio.open(entry) as archive_wav, wave.open(archive_wav) as wav:
@@ -104,7 +116,7 @@ def prepare(audio_zip, mapping_zip, transcripts_zip, out, verify_existing=False)
                 with wave.open(str(out / name), "wb") as output:
                     output.setparams((channels, width, rate, 0, "NONE", "not compressed"))
                     output.writeframes(pcm)
-            target = TARGETS[task]
+            target = targets[task]
             reference = " ".join(row["text_normalized_for_stt"].split())
             status = "matchesTargets" if reference == target else "needsReview"
             group = f"speaker-{child:02d}" if str(child) == row["child_id"] else None
@@ -139,7 +151,7 @@ def prepare(audio_zip, mapping_zip, transcripts_zip, out, verify_existing=False)
         writer = csv.writer(report)
         writer.writerow(("sourceUtterance", "reason"))
         writer.writerows(rejected)
-    print(f"{len(rejected)} path-matched rows excluded due to inconsistent source markers")
+    print(f"{len(rejected)} annotation rows excluded; see excluded-source-rows.csv")
     print(f"{len(clips)} clips from {len(set(c['speakerGroup'] for c in clips if 'speakerGroup' in c))} confirmed speaker IDs")
     print(f"{sum('speakerGroup' not in c for c in clips)} clips with conflicting speaker IDs (overall only)")
     print(dict(Counter(c["list"] for c in clips)))
@@ -153,5 +165,6 @@ if __name__ == "__main__":
     parser.add_argument("--transcripts", type=Path, required=True)
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--verify-existing", action="store_true")
+    parser.add_argument("--longer-wordlists", action="store_true")
     args = parser.parse_args()
-    prepare(args.audio, args.mapping, args.transcripts, args.out, args.verify_existing)
+    prepare(args.audio, args.mapping, args.transcripts, args.out, args.verify_existing, args.longer_wordlists)

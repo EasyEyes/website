@@ -89,6 +89,30 @@ different denominators: human reference 1s and 0s, respectively. Compare
 providers on common successful clips; use the available-clips table for each
 provider's full coverage. The participant chart is available when the manifest
 includes a pseudonymous `speakerGroup` on its clips.
+The provider agreement panel compares any two provider/settings on their
+jointly successful clips. An unequal target bit invalidates the whole clip in
+this analysis. Both single-provider rates use the same baseline clips; the
+agreement rates use only the retained clips.
+
+For unattended runs on Windows, use the headless preview runner from the
+website root. It requires Google Chrome and the benchmark workspace's
+Playwright dependency (or set `EE_BENCH_SOURCE_ROOT` to the website checkout
+that has it installed under Threshold).
+
+```powershell
+$code = Read-Host "Preview access code" -AsSecureString
+$env:RSVP_BENCH_ACCESS_CODE = [System.Net.NetworkCredential]::new("", $code).Password
+node benchmarks/chirp3-rsvp/run-dataset.mjs --manifest PATH_TO_manifest.json --output PATH_TO_results.json --allow-provider-upload
+Remove-Item Env:RSVP_BENCH_ACCESS_CODE
+```
+
+The runner uses three concurrent clips by default; `--workers 1` or
+`--workers 2` lowers concurrency. It
+streams in real time and obeys ticket pacing. Add `--batch 25` or
+`--batch 100` for a shorter run. The JSON is replaced atomically
+as new outcomes arrive (checked every five seconds), and rerunning the same
+command resumes it. Keep the computer awake; no visible browser tab is
+needed. The JSON can be loaded into the Preview to score and review it.
 
 In **Listen to and review individual clips**, playback uses the selected local
 file. The original report stays fixed. A corrected human transcript changes
@@ -123,6 +147,9 @@ identity, WAV duration and segment bounds, and writes a source audit next to
 the manifest. Use `--verify-existing` to compare a prepared pack to the
 source archives without rewriting it. The pack stays local and is not served
 by the preview.
+Use `--longer-wordlists` for the separate ordinary-word lists. This mode
+keeps one contiguous, annotated child segment per recording instead of
+joining multiple segments.
 
 ## Same-audio provider comparison
 

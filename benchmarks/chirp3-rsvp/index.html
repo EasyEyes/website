@@ -64,6 +64,14 @@
               </select>
               <small>With both keyterms settings, a clip can use two runs. Export JSON during or between batches to keep progress.</small>
             </label>
+            <label>Clips at once
+              <select id="file-workers">
+                <option value="1">1 · sequential</option>
+                <option value="2">2 · parallel</option>
+                <option value="3">3 · parallel</option>
+              </select>
+              <small>Each clip still streams at its original speed.</small>
+            </label>
             <label class="check"><input type="checkbox" id="file-consent" /> I am authorized to send the selected audio to these providers. Their retention settings apply.</label>
             <div class="actions">
               <button type="button" id="file-run">Run dataset</button>

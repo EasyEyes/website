@@ -200,3 +200,32 @@ export function summarizeKeytermPairs(clips, details, variants) {
     return [{ provider, paired, without, withTerms }];
   });
 }
+
+// Compare only the two selected providers on their common successful clips.
+export function summarizeProviderAgreement(clips, details, first, second) {
+  const a = new Map(), b = new Map();
+  for (const row of details) {
+    if (!row.differences) continue;
+    if (row.provider === first) a.set(row.clipId, row);
+    if (row.provider === second) b.set(row.clipId, row);
+  }
+  const result = {
+    eligible: clips.length, paired: 0, rejected: 0, rejectedTargets: 0,
+    first: blankScore(), second: blankScore(), accepted: blankScore(),
+  };
+  if (first === second) return result;
+  for (const clip of clips) {
+    const x = a.get(clip.id), y = b.get(clip.id);
+    if (!x || !y) continue;
+    result.paired++;
+    countVector(result.first, clip, x, x.differences);
+    countVector(result.second, clip, y, y.differences);
+    if (x.vector.some((bit, i) => bit !== y.vector[i])) {
+      result.rejected++;
+      result.rejectedTargets += clip.expected.length;
+    } else {
+      countVector(result.accepted, clip, x, x.differences);
+    }
+  }
+  return result;
+}

@@ -38,7 +38,7 @@ export function setupFileBenchmark() {
   let files = new Map();
   let results = new Map();
   let reviews = new Map();
-  let computed, selectedProvider, audioUrl, audioClip, audioFile, reviewedClip;
+  let computed, selectedProvider, overlap, audioUrl, audioClip, audioFile, reviewedClip;
   let controller;
   const progress = createFileProgress();
   const status = (message) => { $("file-status").textContent = message; };
@@ -80,7 +80,7 @@ export function setupFileBenchmark() {
   }
 
   const drawReport = () => renderFileReport($("file-summary"), computed, $("file-scope").value,
-    selectedProvider, (value) => { selectedProvider = value; });
+    selectedProvider, (value) => { selectedProvider = value; }, overlap, (pair) => { overlap = pair; });
 
   function setAudio(clip) {
     const player = $("file-player");
@@ -377,7 +377,7 @@ export function setupFileBenchmark() {
 
     controller = new AbortController();
     const { signal } = controller;
-    const controls = ["file-manifest", "file-audio", "file-results", "file-run", "file-ignore-order", "file-keyterms", "file-batch-limit"];
+    const controls = ["file-manifest", "file-audio", "file-results", "file-run", "file-ignore-order", "file-keyterms", "file-batch-limit", "file-workers"];
     for (const id of controls) $(id).disabled = true;
     $("file-cancel").disabled = false;
     $("file-export-csv").disabled = true;
@@ -388,11 +388,12 @@ export function setupFileBenchmark() {
     }));
     progress.start(pending.reduce((total, run) => total + run.providers.length, 0), byProvider);
     const stopped = new Set();
-    let warning = false, attempted = 0;
+    let warning = false, attempted = 0, cursor = 0;
     let batchState = "Batch finished";
-    try {
-      for (const [index, { clip, enabled, providers }] of pending.entries()) {
-        if (signal.aborted || stopped.size === keys.length) break;
+    const worker = async () => {
+      while (cursor < pending.length && !signal.aborted && stopped.size < keys.length) {
+        const index = cursor++;
+        const { clip, enabled, providers } = pending[index];
         const selected = providers.filter((key) => !stopped.has(key));
         if (!selected.length) continue;
         const terms = enabled ? fileKeyterms(clip.targets) : null;
@@ -405,12 +406,22 @@ export function setupFileBenchmark() {
               $("file-export-json").disabled = false;
               if (/^Ticket HTTP (401|403|429|502|503)$/.test(row.error ?? "")) stopped.add(key);
             }
-            progress.update(key, phase, row);
+            progress.update(index + 1, key, phase, row);
           });
         warning ||= output.warning;
         if (signal.aborted) break;
         attempted++;
+        progress.finishClip(index + 1);
       }
+    };
+    try {
+      const count = Math.min(Number($("file-workers").value), pending.length);
+      const outcomes = await Promise.allSettled(Array.from({ length: count }, async () => {
+        try { await worker(); }
+        catch (error) { controller.abort(); throw error; }
+      }));
+      const failure = outcomes.find((outcome) => outcome.status === "rejected");
+      if (failure) throw failure.reason;
       const suffix = stopped.size ? " Paused providers: " + [...stopped].join(", ") + ". Check the error in the clip report and run again to resume." : "";
       const unit = mode === "both" ? " clip runs." : " clips.";
       const left = remaining.filter(({ clip, enabled }) => missingResults(clip, keys, enabled).length).length;

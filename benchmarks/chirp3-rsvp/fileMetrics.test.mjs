@@ -1,12 +1,31 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readManifest, readResults, compareVectors, summarizeFiles, summarizeKeytermPairs, summarizeReviews, summarizeSpeakers } from "./fileMetrics.mjs";
+import { readManifest, readResults, compareVectors, summarizeFiles, summarizeKeytermPairs, summarizeProviderAgreement, summarizeReviews, summarizeSpeakers } from "./fileMetrics.mjs";
 import { manifestKey, readReviews } from "./fileReview.mjs";
 
 test("distinguishes missed correct targets from false credit", () => {
   assert.deepEqual(compareVectors([1, 1, 0], [1, 0, 1]),
     { falsePos: [2], falseNeg: [1], exact: false });
   assert.throws(() => compareVectors([1, 1], [1]));
+});
+
+test("agreement excludes whole trials on any disagreement, not on provider failure alone", () => {
+  const clips = ["agree", "disagree", "failed"].map((id) =>
+    ({ id, expected: [1, 0, 1], targetSource: "explicit" }));
+  const row = (clip, provider, vector) => ({
+    clipId: clip.id, provider, vector, differences: compareVectors(clip.expected, vector),
+  });
+  const [a, d, f] = clips;
+  const details = [row(a, "A", [0, 1, 1]), row(a, "B", [0, 1, 1]),
+    row(d, "A", [1, 0, 1]), row(d, "B", [0, 0, 1]), row(f, "A", [1, 0, 1]),
+    { clipId: f.id, provider: "B", vector: null, error: "transcriberFailure" },
+    { clipId: d.id, provider: "C", vector: null, error: "transcriberFailure" }];
+  const result = summarizeProviderAgreement(clips, details, "A", "B");
+  assert.deepEqual([result.eligible, result.paired, result.rejected, result.rejectedTargets], [3, 2, 1, 3]);
+  assert.deepEqual([result.first.falseNeg, result.second.falseNeg], [1, 2]);
+  assert.deepEqual([result.accepted.positives, result.accepted.negatives,
+    result.accepted.falseNeg, result.accepted.falsePos], [2, 1, 1, 1]);
+  assert.equal(summarizeProviderAgreement(clips, details, "A", "C").paired, 0);
 });
 
 test("review preserves raw counts, fixes reference and scoring separately, and excludes by quality", () => {

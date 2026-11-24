@@ -106,9 +106,11 @@ export async function replayClip(file, clipId, keys, accessCode, signal, nextTic
   for (const key of keys) {
     let ticketError;
     const getTicket = async () => {
-      await delay(Math.max(0, (nextTicketAt.get(key) ?? 0) - performance.now()), signal);
+      const now = performance.now();
+      const slot = Math.max(now, nextTicketAt.get(key) ?? 0);
+      nextTicketAt.set(key, slot + 2200);
+      await delay(slot - now, signal);
       signal.throwIfAborted();
-      nextTicketAt.set(key, performance.now() + 2200);
       try {
         return await ticket(key, accessCode, signal);
       } catch (error) {

@@ -24,7 +24,8 @@ export function createFileProgress() {
   const panel = get("panel"), bar = get("bar"), counts = get("counts"), clock = get("clock");
   const activity = get("activity"), active = get("active"), providers = get("providers");
   const log = get("log"), older = get("older"), newer = get("newer"), pageLabel = get("page");
-  let batch, current, latest = [], page = 0, timer;
+  let batch, latest = [], page = 0, timer;
+  const running = new Map();
   const stopClock = () => { clearInterval(timer); timer = undefined; };
 
   function renderClock() {
@@ -43,12 +44,14 @@ export function createFileProgress() {
   }
 
   function renderActive() {
-    active.replaceChildren(...[...current.states].map(([key, phase]) => {
-      const row = node("li");
-      row.dataset.phase = phase;
-      row.append(node("strong", replayProviders[key]), node("span", phases[phase]));
-      return row;
-    }));
+    active.replaceChildren(...[...running.values()].flatMap((current) =>
+      [...current.states].map(([key, phase]) => {
+        const row = node("li");
+        row.dataset.phase = phase;
+        row.append(node("strong", replayProviders[key]), node("span", phases[phase]),
+          node("small", current.file + " · keyterms " + terms(current.enabled).toLowerCase()));
+        return row;
+      })));
   }
 
   function renderLog() {
@@ -73,7 +76,8 @@ export function createFileProgress() {
     reset() {
       stopClock();
       panel.hidden = true;
-      batch = current = undefined;
+      batch = undefined;
+      running.clear();
       latest = [];
     },
     start(total, byProvider) {
@@ -82,6 +86,7 @@ export function createFileProgress() {
       batch = { total, providers: byProvider, success: 0, failed: 0, startedAt: now, lastUpdate: now };
       page = 0;
       latest = [];
+      running.clear();
       bar.max = total;
       active.replaceChildren();
       activity.textContent = "Starting batch…";
@@ -91,13 +96,14 @@ export function createFileProgress() {
       timer = setInterval(renderClock, 1000);
     },
     clip(file, enabled, keys, index, total) {
-      current = { file, enabled, states: new Map(keys.map((key) => [key, "decoding"])) };
+      running.set(index, { file, enabled, states: new Map(keys.map((key) => [key, "decoding"])) });
       batch.lastUpdate = Date.now();
       activity.textContent = `Run ${index} of ${total} · ${file} · keyterms ${terms(enabled).toLowerCase()}`;
       renderActive();
       renderClock();
     },
-    update(key, phase, row) {
+    update(index, key, phase, row) {
+      const current = running.get(index);
       batch.lastUpdate = Date.now();
       current.states.set(key, phase);
       renderActive();
@@ -111,18 +117,22 @@ export function createFileProgress() {
       }
       renderCounts();
     },
+    finishClip(index) {
+      running.delete(index);
+      renderActive();
+    },
     end(state) {
       stopClock();
       batch.endedAt = Date.now();
       activity.textContent = state;
-      if (current) {
+      for (const current of running.values()) {
         for (const [key, phase] of current.states) {
           if (phase !== "done" && phase !== "failed")
             current.states.set(key, state.startsWith("Cancelled") ? "cancelled" : "interrupted");
         }
-        renderActive();
       }
-      current = undefined;
+      renderActive();
+      running.clear();
       renderCounts();
     },
   };
