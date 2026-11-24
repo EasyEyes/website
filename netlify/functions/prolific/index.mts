@@ -17,9 +17,6 @@ export const prolificUpstreamFetch = async (
   }
 };
 
-const fetch = (url: string, options: Record<string, any>) =>
-  prolificUpstreamFetch(url, options);
-
 export const responseWrapper = (statusCode, body, upstreamHeaders?) => {
   const retryAfter = upstreamHeaders?.get?.("Retry-After");
   return {
@@ -39,7 +36,7 @@ export const responseWrapper = (statusCode, body, upstreamHeaders?) => {
   };
 };
 
-const handler = async (event, context) => {
+const handler = async (event, fetch: typeof prolificUpstreamFetch) => {
   let statusCode, data, upstreamHeaders;
 
   if (event.httpMethod === "OPTIONS") {
@@ -48,6 +45,36 @@ const handler = async (event, context) => {
 
   // 'users/me/' or 'studies/' or 'projects/id/studies'
   const task = event.path.replace("/.netlify/functions/prolific/", "");
+
+  if (event.httpMethod === "GET" && /^projects\/[a-f0-9]{24}\/$/i.test(task)) {
+    const authorization = event.headers.authorization;
+    if (!authorization) return responseWrapper(401, {});
+
+    try {
+      const response = await fetch(`https://api.prolific.com/api/v1/${task}`, {
+        method: "GET",
+        headers: { authorization },
+        redirect: "error",
+      });
+      if (!response.ok) return responseWrapper(response.status, {});
+
+      const project = await response.json();
+      const owner =
+        project?.owner && Array.isArray(project.users)
+          ? project.users.find((user) => user?.id === project.owner)
+          : undefined;
+      const result = responseWrapper(200, {
+        title: typeof project?.title === "string" ? project.title : undefined,
+        ownerEmail: typeof owner?.email === "string" ? owner.email : undefined,
+      });
+      return {
+        ...result,
+        headers: { ...result.headers, "Cache-Control": "no-store" },
+      };
+    } catch {
+      return responseWrapper(502, {});
+    }
+  }
 
   if (task.includes("users")) {
     // ! user
@@ -369,4 +396,11 @@ const handler = async (event, context) => {
   return responseWrapper(404, { error: "Endpoint not found" });
 };
 
-export default nativeHandler(handler);
+export const createProlificHandler = (fetchImpl?: typeof nodeFetch) =>
+  nativeHandler((event) =>
+    handler(event, (url, options) =>
+      prolificUpstreamFetch(url, options, fetchImpl),
+    ),
+  );
+
+export default createProlificHandler();
