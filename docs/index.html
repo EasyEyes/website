@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" class="redesign">
   <head>
     <meta charset="UTF-8" />
     <meta http-equiv="X-UA-Compatible" content="IE=edge" />
@@ -229,60 +229,913 @@
     <title>EasyEyes</title>
 
     <style>
-      #main-description {
-        margin: 5rem 0 2rem;
+      /* ---- Landing page ----
+         The same short letter as the original page, in the same order:
+         headline, welcome paragraph, citation, sign-off, authors. Added:
+         three buttons under the paragraph, a Copy button, and one big
+         screen beside the paragraph holding twelve small live screens of
+         things EasyEyes does. What they show is grounded in the Parameter Glossary
+         (version 39.1 when this was written). */
+      .hero {
+        padding: var(--space-5) 0 var(--space-4);
+      }
+      .hero h1 {
+        font-size: clamp(2.6rem, 6.4vw, 4.75rem);
+        letter-spacing: -0.03em;
+        line-height: 1.02;
+        margin: 0 0 var(--space-4);
+      }
+      .hero-cols {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 29rem);
+        gap: var(--space-4) var(--space-5);
+        align-items: start;
+      }
+      .welcome {
+        margin: 0 0 var(--space-4);
+        font-size: clamp(1.15rem, 1.7vw, 1.3rem);
+        line-height: 1.6;
+        color: var(--ink-2);
+      }
+      /* The three buttons stay on one row: slightly tighter padding than
+         elsewhere, and no wrapping. Only very narrow phones wrap. */
+      .hero .cta-row {
+        flex-wrap: nowrap;
+        gap: 0.5rem;
+      }
+      .hero .cta-row .btn-ee {
+        padding: 0.7em 0.95em;
+        white-space: nowrap;
+      }
+      .hero .cta-row .btn-ee-quiet {
+        padding-left: 0.6em;
+        padding-right: 0.6em;
+      }
+      /* Below 1140px the left column is too narrow for three buttons beside
+         the big screen, so the screen moves under the text. */
+      @media screen and (max-width: 1140px) {
+        .hero-cols {
+          grid-template-columns: minmax(0, 1fr);
+        }
+        .stage {
+          max-width: 34rem;
+        }
+      }
+      @media screen and (max-width: 460px) {
+        .hero .cta-row {
+          gap: 0.35rem;
+        }
+        .hero .cta-row .btn-ee {
+          padding: 0.7em 0.55em;
+          font-size: 0.9rem;
+        }
+        .hero .cta-row .btn-ee-quiet {
+          padding-left: 0.3em;
+          padding-right: 0.3em;
+        }
+      }
+      @media screen and (max-width: 374px) {
+        .hero .cta-row .btn-ee {
+          padding: 0.7em 0.45em;
+          font-size: 0.84rem;
+        }
+        .hero .cta-row .btn-ee-quiet {
+          padding-left: 0.2em;
+          padding-right: 0.2em;
+        }
+      }
+      @media screen and (max-width: 349px) {
+        .hero .cta-row {
+          flex-wrap: wrap;
+        }
       }
 
-      h1 {
-        margin-bottom: 2rem;
+      /* One big screen beside the welcome paragraph, holding twelve small
+         screens that all run at once: a glimpse of what EasyEyes does, not a
+         walkthrough. The big screen is a light gray frame (Gedion did not
+         like it black) and the small screens are white, so they read as lit
+         screens on it. The dot at the top is the webcam, which EasyEyes
+         uses. Each drawing is 480 by 300 units, cropped to its subject. */
+      .stage {
+        margin: 0.35rem 0 0;
       }
-
-      .description {
-        font-size: 1.5rem;
-        line-height: 170%;
-        color: #666;
+      .stage-screen {
+        position: relative;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+        gap: 10px;
+        padding: 24px 11px 12px;
+        border: 1px solid var(--rule);
+        border-radius: 22px;
+        background: #efeeea;
+        box-shadow: 0 30px 50px -38px rgba(0, 0, 0, 0.3);
       }
-
-      table {
-        border-collapse: collapse;
-        border-spacing: 0;
-        width: auto;
-        margin: 1rem 0;
+      .stage-screen::before,
+      .stage-screen::after {
+        content: "";
+        position: absolute;
+        border-radius: 50%;
       }
-
-      td,
-      th {
-        border-color: #f0f0f0;
-        border-width: 1px;
-        width: 4rem;
-        border-radius: 0.5rem;
-        font-size: 0.85rem;
+      .stage-screen::before {
+        top: 9px;
+        left: calc(50% - 3.5px);
+        width: 7px;
+        height: 7px;
+        background: #b9b7b0;
+      }
+      .stage-screen::after {
+        top: 11px;
+        left: calc(50% + 10px);
+        width: 3.5px;
+        height: 3.5px;
+        background: var(--green);
+      }
+      /* Each small screen has its name under it, so a first-time visitor
+         can tell what the big screen is showing. The names are the
+         Parameter Glossary's own terms, in plain words. They do not change
+         while a screen is moving. */
+      /* Three rows inside the big screen, one per category (setup, tests,
+         utilities). The rows are not labelled: each screen has its own name
+         and the grouping is left to speak for itself. A row shows three small
+         screens at a time and drifts slowly sideways in an endless loop;
+         neighboring rows go opposite ways. */
+      .wall-row {
+        display: grid;
+        gap: 5px;
+        min-width: 0;
+      }
+      /* The clip is 2px larger than the row all round, so the hairline ring
+         around each small screen is not cut off. */
+      .wall-clip {
+        margin: -2px;
+        padding: 2px;
         overflow: hidden;
-        padding: 0.1rem 0.2rem;
+      }
+      /* While the rows are drifting, their left and right edges fade out,
+         so a screen and its name dissolve in and out of view and are not
+         chopped off at the side of the frame. Not applied when nothing
+         moves, where the first three screens sit whole. */
+      .wall.live .wall-clip {
+        -webkit-mask-image: linear-gradient(
+          to right,
+          transparent 0,
+          #000 26px,
+          #000 calc(100% - 26px),
+          transparent 100%
+        );
+        mask-image: linear-gradient(
+          to right,
+          transparent 0,
+          #000 26px,
+          #000 calc(100% - 26px),
+          transparent 100%
+        );
+      }
+      .wall-track {
+        display: flex;
+        gap: 7px;
+        will-change: transform;
+      }
+      .wall-track > .tile {
+        flex: 0 0 calc((100% - 14px) / 3);
+      }
+      .tile {
+        display: grid;
+        gap: 4px;
+        min-width: 0;
+      }
+      /* Small and quiet, so the names inform without crowding the screens:
+         10px, regular weight, a softer gray (still 4.7:1 on the frame). Not
+         smaller than this: below 10px they stop being readable. */
+      .tile-name {
+        font-size: 0.625rem;
+        font-weight: 400;
+        line-height: 1.2;
+        letter-spacing: 0.02em;
         text-align: center;
-        word-break: normal;
+        white-space: nowrap;
+        color: #6a6964;
+      }
+      .mini {
+        display: block;
+        width: 100%;
+        height: auto;
+        border-radius: 7px;
+        background: #ffffff;
+        box-shadow: 0 0 0 1px rgba(17, 17, 17, 0.06);
+      }
+      .mini .ln {
+        fill: none;
+        stroke: #000;
+        stroke-width: 2;
+        stroke-linecap: round;
+      }
+      .mini text {
+        fill: #000;
+      }
+      .mini .sloan {
+        font-family: "Sloan", var(--mono);
+      }
+      .mini .mono {
+        font-family: "Roboto Mono", var(--mono);
+      }
+      .mini .ui,
+      .mini .ui text {
+        font-family: var(--sans);
+      }
+      /* uni.css sets a font on every element; lines inside a text block
+         must take the block's font. */
+      .mini tspan {
+        font-family: inherit;
+      }
+      .mini .g {
+        stroke: var(--green);
+      }
+      .mini .soft {
+        stroke: #a9a9a9;
       }
 
-      .left-td {
-        text-align: left !important;
-        width: 30rem;
+      /* Timing bars: black, or white while their element is present. */
+      .mini .tm {
+        fill: #000;
+        stroke: #000;
+        stroke-width: 2;
       }
-      .swal2-popup {
-        padding-bottom: 2.25rem !important;
-        border-radius: 0.7rem;
+      .mini .tm.w {
+        fill: #fff;
+      }
+      /* Only the screens that are having a turn (.on) move; the others hold
+         still where they stopped. */
+      .wall.live .mini.on .a-wave {
+        animation-play-state: running;
+      }
+      .wall.live .a-wave {
+        animation: wave-run 2.6s linear infinite;
+        animation-play-state: paused;
+      }
+      @keyframes wave-run {
+        to {
+          transform: translateX(-56px);
+        }
       }
 
-      .swal2-html-container {
-        line-height: 150%;
+      /* Screen size: the two measuring lines are simply drawn; no motion. */
+      .mini .dim {
+        stroke-linecap: butt;
+        stroke-width: 2.4;
       }
-      .popup-text-container {
-        text-align: left !important;
-        line-height: 150%;
-        &.smaller-text {
-          font-size: 1rem;
+
+      /* Keypad: the phone stays far from the screen. A key is pressed and
+         the signal ripples toward the screen. Without motion, the three
+         arcs are simply shown. */
+      .mini .key {
+        fill: #fff;
+        stroke: #000;
+        stroke-width: 2;
+      }
+      .mini .key.on {
+        fill: #000;
+      }
+      .wall.live .kp-typing .kp-arc {
+        animation: kp-arc 1.04s linear infinite;
+        animation-delay: calc(var(--i) * 0.17s);
+      }
+      @keyframes kp-arc {
+        0%,
+        45% {
+          opacity: 1;
+        }
+        60%,
+        100% {
+          opacity: 0;
+        }
+      }
+
+      /* Free-form question: the caret blinks in the answer box. */
+      .wall.live .mini.on .qa-caret {
+        animation: caret 1.1s steps(1) infinite;
+      }
+      @keyframes caret {
+        50% {
+          opacity: 0;
+        }
+      }
+      .wall.away * {
+        animation-play-state: paused !important;
+      }
+
+      /* After the letter's opening: the citation and the team side by side,
+         then the sign-off, which closes the page. */
+      .closing {
+        display: grid;
+        grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+        gap: var(--space-4) var(--space-5);
+        align-items: start;
+        margin-top: var(--space-5);
+      }
+      .how h2,
+      .closing h2 {
+        margin: 0 0 var(--space-3);
+        font-size: var(--text-xl);
+        font-weight: 600;
+        letter-spacing: -0.02em;
+        line-height: 1.15;
+        color: var(--ink);
+      }
+      .how .eyebrow {
+        margin-bottom: 0.6rem;
+      }
+      /* The words only: no green dot before "How it works" on this page. */
+      .how .eyebrow::before {
+        content: none;
+      }
+
+      /* How it works: three cards on a faint, zoomed-out spreadsheet grid
+         that fades away toward its edges. The grid is only a background, a
+         nod to the first step being a table; it is not a literal table. The
+         wording follows the original "How it works" popup, the Compiler's
+         own instructions and the Parameter Glossary. */
+      .how {
+        position: relative;
+        isolation: isolate;
+        margin-top: var(--space-3);
+        padding: var(--space-4) 0 var(--space-5);
+      }
+      .how::before {
+        content: "";
+        position: absolute;
+        z-index: -1;
+        inset: -2.5rem -5vw;
+        /* Cells wider than tall, like a sheet seen from a distance. */
+        background-image: linear-gradient(
+            to right,
+            var(--grid-line) 1px,
+            transparent 1px
+          ),
+          linear-gradient(to bottom, var(--grid-line) 1px, transparent 1px);
+        background-size: 72px 24px;
+        background-position: center top;
+        /* Full strength behind the cards, gone by every edge. */
+        -webkit-mask-image: radial-gradient(
+          ellipse 50% 50% at 50% 52%,
+          #000 80%,
+          transparent 100%
+        );
+        mask-image: radial-gradient(
+          ellipse 50% 50% at 50% 52%,
+          #000 80%,
+          transparent 100%
+        );
+        --grid-line: #d8d6cd;
+      }
+      .how h2 {
+        max-width: 22ch;
+        margin-bottom: var(--space-4);
+        font-size: clamp(1.75rem, 3vw, 2.25rem);
+        line-height: 1.1;
+      }
+      .steps {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: var(--space-3);
+        margin: 0;
+        padding: 0;
+        list-style: none;
+      }
+      .step {
+        display: flex;
+        flex-direction: column;
+        border: 1px solid var(--rule);
+        border-radius: 16px;
+        background: var(--paper);
+        box-shadow: 0 14px 30px -24px rgba(0, 0, 0, 0.28);
+        overflow: hidden;
+      }
+      /* Each card opens with a figure of its step, on a pale strip.
+         01: a real experiment table (the EasyEyes demo: parameters down
+             column A, the experiment in B, one condition per column from C).
+         02: our own Compiler page, with a file dropped on Select file, then
+             "Compiling ..." and "Compiled successfully." It loops.
+         03: one participant's screen beside a list of many participants,
+             who finish one after another. No service is named.
+         Thin lines, the page's grays, and green for the thing the step is
+         about. Nothing moves unless the cards are on screen, and nothing
+         moves at all for visitors who prefer reduced motion: the markup
+         itself is a sensible still picture. */
+      /* The figures sit directly on the white card, with only a hairline
+         under them. They used to sit on a strip of the same warm gray as
+         the big screen's frame at the top, and in gray the two looked like
+         the same thing when both were in view. --fig-bg is also what the
+         table fades into on its right edge. */
+      .step-fig {
+        --fig-bg: var(--paper);
+        margin: 0;
+        border-bottom: 1px solid var(--rule);
+        background: var(--fig-bg);
+      }
+      .step-fig svg {
+        display: block;
+        width: 100%;
+        height: auto;
+      }
+      .step-fig .ln {
+        fill: none;
+        stroke: var(--ink);
+        stroke-width: 1.25;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+        vector-effect: non-scaling-stroke;
+      }
+      .step-fig .hair {
+        fill: none;
+        stroke: #dbd9d0;
+        stroke-width: 1;
+        vector-effect: non-scaling-stroke;
+      }
+      .step-fig .soft {
+        stroke: #a9a79f;
+      }
+      .step-fig .g {
+        stroke: var(--green);
+      }
+      .step-fig .page {
+        fill: var(--paper);
+      }
+      .step-fig .head {
+        fill: var(--fill);
+      }
+      .step-fig .tint {
+        fill: var(--green-tint);
+      }
+      .step-fig .bar {
+        fill: none;
+        stroke: #d3d1c8;
+        stroke-width: 2.4;
+        stroke-linecap: round;
+      }
+      .step-fig .bar.on-green {
+        stroke: var(--green);
+        opacity: 0.38;
+      }
+      .step-fig .bar.on-button {
+        stroke: #fff;
+        opacity: 0.9;
+      }
+      .step-fig text {
+        fill: var(--ink);
+      }
+      .step-fig .t-mono {
+        font-family: var(--mono);
+        font-size: 8px;
+      }
+      .step-fig .t-sans {
+        font-family: var(--sans);
+        font-size: 8.5px;
+        font-weight: 600;
+      }
+      .step-fig .t-dim {
+        fill: var(--ink-3);
+      }
+      .step-fig .t-green {
+        fill: var(--accent-ink);
+      }
+      .step-fig .t-sloan {
+        font-family: Sloan, var(--mono);
+        font-size: 11px;
+        text-anchor: middle;
+      }
+      .step-fig .t-sloan.gt {
+        fill: var(--green);
+      }
+
+      /* 02: the Compiler. */
+      .cmp .btn-g {
+        fill: var(--green);
+      }
+      .cmp .btn-s {
+        fill: var(--secondary, #8a8a8a);
+      }
+      .cmp .t-btn {
+        font-family: var(--sans);
+        font-size: 7.5px;
+        font-weight: 600;
+        text-anchor: middle;
+        fill: #fff;
+      }
+      .cmp-ring {
+        fill: none;
+        stroke: var(--green);
+        stroke-width: 1.5;
+        stroke-dasharray: 4 3;
+        vector-effect: non-scaling-stroke;
+      }
+      .cmp-veil {
+        fill: rgba(255, 255, 255, 0.78);
+      }
+      .cmp-card {
+        fill: var(--paper);
+        stroke: #dbd9d0;
+        filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.12));
+      }
+      .cmp-track {
+        fill: var(--fill);
+      }
+      .cmp-bar {
+        fill: var(--green);
+        transform-box: fill-box;
+        transform-origin: left center;
+      }
+      .cmp-file {
+        transform-box: fill-box;
+        transform-origin: center;
+        /* Still picture: the file held over the page, about to be dropped. */
+        transform: translate(64px, 10px);
+      }
+      .cmp-file .sheet {
+        fill: var(--paper);
+        stroke: var(--ink);
+        stroke-width: 1.25;
+        stroke-linejoin: round;
+        vector-effect: non-scaling-stroke;
+      }
+      .cmp-file .cursor {
+        fill: var(--ink);
+        stroke: #fff;
+        stroke-width: 0.8;
+        stroke-linejoin: round;
+      }
+      .cmp-modal,
+      .cmp-done {
+        opacity: 0;
+      }
+      .steps.live .cmp-file {
+        animation: cmp-file 6.5s cubic-bezier(0.45, 0, 0.2, 1) infinite;
+      }
+      .steps.live .cmp-ring {
+        animation: cmp-ring 6.5s linear infinite;
+      }
+      .steps.live .cmp-modal {
+        animation: cmp-modal 6.5s linear infinite;
+      }
+      .steps.live .cmp-bar {
+        animation: cmp-bar 6.5s linear infinite;
+      }
+      .steps.live .cmp-working {
+        animation: cmp-working 6.5s linear infinite;
+      }
+      .steps.live .cmp-done {
+        animation: cmp-done 6.5s linear infinite;
+      }
+      @keyframes cmp-file {
+        0% {
+          transform: translate(200px, 46px);
+          opacity: 0;
+        }
+        8% {
+          opacity: 1;
+        }
+        30%,
+        34% {
+          transform: translate(0, 0);
+          opacity: 1;
+        }
+        38%,
+        100% {
+          transform: translate(0, 0) scale(0.7);
+          opacity: 0;
+        }
+      }
+      @keyframes cmp-ring {
+        0%,
+        22% {
+          opacity: 0;
+        }
+        28%,
+        36% {
+          opacity: 1;
+        }
+        42%,
+        100% {
+          opacity: 0;
+        }
+      }
+      @keyframes cmp-modal {
+        0%,
+        37% {
+          opacity: 0;
+        }
+        42%,
+        93% {
+          opacity: 1;
+        }
+        100% {
+          opacity: 0;
+        }
+      }
+      @keyframes cmp-bar {
+        0%,
+        42% {
+          transform: scaleX(0);
+        }
+        66%,
+        100% {
+          transform: scaleX(1);
+        }
+      }
+      @keyframes cmp-working {
+        0%,
+        66% {
+          opacity: 1;
+        }
+        70%,
+        100% {
+          opacity: 0;
+        }
+      }
+      @keyframes cmp-done {
+        0%,
+        68% {
+          opacity: 0;
+        }
+        73%,
+        100% {
+          opacity: 1;
+        }
+      }
+
+      /* 03: participants. */
+      .pt .scr {
+        fill: var(--paper);
+        stroke: #a9a79f;
+        stroke-width: 1.1;
+        vector-effect: non-scaling-stroke;
+        transition:
+          fill 0.25s,
+          stroke 0.25s;
+      }
+      .pt .cr {
+        fill: none;
+        stroke: #c9c7be;
+        stroke-width: 1.1;
+        stroke-linecap: round;
+        vector-effect: non-scaling-stroke;
+        transition: opacity 0.25s;
+      }
+      .pt .ck {
+        fill: none;
+        stroke: var(--green);
+        stroke-width: 1.7;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+        vector-effect: non-scaling-stroke;
+        opacity: 0;
+        transition: opacity 0.25s;
+      }
+      .pt.done .scr {
+        fill: var(--green-tint);
+        stroke: var(--green);
+      }
+      .pt.done .cr {
+        opacity: 0;
+      }
+      .pt.done .ck {
+        opacity: 1;
+      }
+      #pt-bar {
+        fill: var(--green);
+        transition: width 0.25s;
+      }
+      .step-body {
+        display: flex;
+        flex: 1;
+        flex-direction: column;
+        padding: var(--space-3);
+        /* The lower part of each card is a quiet gray (the To Apply gray),
+           with the usual dark text; the figure above it stays on white. */
+        background: var(--paper-2);
+      }
+      .step .num {
+        margin: 0 0 var(--space-2);
+        font-family: var(--mono);
+        font-size: var(--text-xs);
+        letter-spacing: 0.08em;
+        color: var(--accent-ink);
+      }
+      .step h3 {
+        margin: 0 0 0.6rem;
+        font-size: var(--text-lg);
+        font-weight: 600;
+        letter-spacing: -0.01em;
+        color: var(--ink);
+      }
+      .step p {
+        margin: 0;
+        font-size: 1rem;
+        line-height: 1.55;
+        color: var(--ink-2);
+      }
+      .step .links {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.25rem var(--space-2);
+        margin-top: auto;
+        padding-top: var(--space-3);
+        font-size: var(--text-sm);
+      }
+      .step .links a {
+        color: var(--accent-ink);
+        text-decoration: none;
+        cursor: pointer;
+      }
+      .step .links a:hover {
+        text-decoration: underline;
+      }
+
+      /* The citation: a card with a format switch, the reference, and the
+         Copy button under it (so it is plain what it copies). */
+      .cite-card {
+        border: 1px solid var(--rule);
+        border-radius: var(--radius-lg);
+        background: var(--paper);
+      }
+      .cite-bar {
+        padding: 0.6rem;
+        border-bottom: 1px solid var(--rule);
+      }
+      /* The format switch: a gray track with the chosen format in white. */
+      .cite-seg {
+        display: inline-flex;
+        gap: 2px;
+        padding: 3px;
+        border-radius: 9px;
+        background: var(--fill);
+      }
+      .cite-tab {
+        appearance: none;
+        padding: 0.45rem 0.85rem;
+        border: 0;
+        border-radius: 7px;
+        background: none;
+        font-family: var(--sans);
+        font-size: var(--text-sm);
+        font-weight: 500;
+        line-height: 1;
+        color: var(--ink-2);
+        cursor: pointer;
+      }
+      .cite-tab:hover {
+        color: var(--ink);
+      }
+      .cite-tab:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 1px;
+      }
+      .cite-tab[aria-selected="true"] {
+        background: var(--paper);
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.14);
+        color: var(--ink);
+        font-weight: 600;
+      }
+      .cite-body {
+        padding: var(--space-3) var(--space-3) var(--space-2);
+      }
+      .cite-body [hidden] {
+        display: none;
+      }
+      .cite-body p {
+        margin: 0;
+        font-size: 1.05rem;
+        line-height: 1.6;
+        color: var(--ink);
+      }
+      .cite-body pre {
+        margin: 0;
+        padding: 0;
+        border: 0;
+        background: none;
+        font-family: var(--mono);
+        font-size: var(--text-sm);
+        line-height: 1.6;
+        color: var(--ink);
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+      }
+      .cite-foot {
+        padding: 0 var(--space-3) var(--space-3);
+      }
+
+      /* The team: one row per person. A new member is one more .person. */
+      .team {
+        margin: 0;
+        padding: 0;
+        list-style: none;
+      }
+      .person {
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr);
+        column-gap: var(--space-2);
+        align-items: center;
+        padding: 0.9rem 0;
+        border-top: 1px solid var(--rule);
+      }
+      .person .mono-mark {
+        display: grid;
+        place-items: center;
+        width: 2.75rem;
+        height: 2.75rem;
+        border-radius: 50%;
+        background: var(--fill);
+        color: var(--ink-2);
+        font-size: var(--text-sm);
+        font-weight: 600;
+        letter-spacing: 0.02em;
+      }
+      .person p {
+        margin: 0;
+        font-size: var(--text-sm);
+        line-height: 1.5;
+        color: var(--ink-2);
+      }
+      .person .name {
+        font-size: 1.05rem;
+        font-weight: 600;
+        letter-spacing: -0.01em;
+        color: var(--ink);
+      }
+      .person .where {
+        color: var(--ink-3);
+        overflow-wrap: anywhere;
+      }
+      .person .where a {
+        color: var(--accent-ink);
+        text-decoration: none;
+      }
+      .person .where a:hover {
+        text-decoration: underline;
+      }
+
+      /* With five or more people the list is too tall to sit beside the
+         citation, so the team moves under it and runs in two columns. The
+         citation card then spans the full width, so its edges line up with
+         the step cards above and the team below. */
+      .closing:has(.person:nth-child(5)) {
+        grid-template-columns: minmax(0, 1fr);
+        row-gap: var(--space-5);
+      }
+      .closing:has(.person:nth-child(5)) .team {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(min(22rem, 100%), 1fr));
+        column-gap: var(--space-5);
+      }
+
+      .signoff {
+        margin-top: var(--space-6);
+        text-align: center;
+      }
+      .signoff p {
+        margin: 0;
+        font-size: var(--text-lg);
+        line-height: 1.45;
+        color: var(--ink-3);
+      }
+      .signoff p:first-child {
+        font-size: var(--text-xl);
+        font-weight: 600;
+        letter-spacing: -0.02em;
+        color: var(--ink);
+      }
+
+      @media screen and (max-width: 900px) {
+        .closing,
+        .steps {
+          grid-template-columns: minmax(0, 1fr);
+        }
+        .how h2 {
+          margin-bottom: var(--space-3);
+        }
+        .how {
+          padding-bottom: var(--space-4);
+        }
+      }
+      @media screen and (max-width: 640px) {
+        .signoff {
+          margin-top: var(--space-5);
         }
       }
     </style>
+    <link rel="stylesheet" href="fonts/fonts.css" />
+    <!-- Roboto Mono is the EasyEyes default font; the screen in the opening
+         uses it. IBM Plex Mono is the font of the small labels (--mono in
+         uni.css). -->
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400&display=swap"
+    />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&display=swap"
+    />
+    <script src="site.js" defer></script>
   </head>
 
   <body>
@@ -404,44 +1257,2295 @@
     </nav>
 
     <main>
-      <div id="main-description">
+      <section class="hero" id="main-description">
         <h1>EasyEyes <span class="headline-next">for Online Testing</span></h1>
-        <p class="description">
-          Welcome! The open-source EasyEyes web app is meant to help anyone test
-          vision online. EasyEyes measures screen size, and, with consent, uses
-          the webcam of the participant's computer to track the participant's
-          head and gaze positions. EasyEyes also enables use of any smartphone
-          to emulate a wireless keypad, to allow testing at long viewing
-          distances. We are using it with PsychoPy. You are welcome to use it
-          with any online testing software.
-        </p>
-        <p class="description">If you use it, please cite us.</p>
-        <p>
-          Jiang, P., Burchell, A., & Pelli, D. G. (2021, December). EasyEyes
-          aids online testing by emulating a wireless keyboard and tracking
-          viewing distance. In <em>PERCEPTION</em> (Vol. 50, No. 1_ SUPPL, pp.
-          7-7). 1 OLIVERS YARD, 55 CITY ROAD, LONDON EC1Y 1SP, ENGLAND: SAGE
-          PUBLICATIONS LTD.
-        </p>
-        <p class="description">Enjoy!</p>
-        <p class="description">The EasyEyes Team</p>
-      </div>
+        <div class="hero-cols">
+          <div>
+            <p class="welcome">
+              Welcome! The open-source EasyEyes web app is meant to help anyone
+              test vision online. EasyEyes measures screen size, and, with
+              consent, uses the webcam of the participant's computer to track
+              the participant's head and gaze positions. EasyEyes also enables
+              use of any smartphone to emulate a wireless keypad, to allow
+              testing at long viewing distances. We are using it with PsychoPy.
+              You are welcome to use it with any online testing software.
+            </p>
+            <div class="cta-row">
+              <a class="btn-ee btn-ee-primary" href="compiler/"
+                >Open the Compiler</a
+              >
+              <a class="btn-ee" href="#how-it-works">How it works</a>
+              <a
+                class="btn-ee btn-ee-quiet"
+                href="https://docs.google.com/document/u/1/d/e/2PACX-1vTTrqaSyva2afVupLchBjfTHc_YW5jAbEexGbudXMJ9xMKPBDA3nxQmHXa4wjnAoSVabeEA8T9CGIMa/pub"
+                target="_blank"
+                rel="noopener noreferrer"
+                >Manual &nearr;</a
+              >
+            </div>
+          </div>
 
-      <div id="author">
-        <p>
-          <b>Denis Pelli</b><br />Professor of Psychology & Neural Science, New
-          York University<br />denis.pelli AT nyu DOT edu
-        </p>
-        <p>
-          <b>Peiling Jiang</b><br />Research Assistant, New York University<br />goodjpl
-          AT nyu DOT edu
-        </p>
-        <p>
-          <b>Augustin Burchell</b><br />
-          Research Assistant, New York University<br />
-          augustin DOT burchell AT gmail DOT com
-        </p>
-      </div>
+          <!-- One big screen holding twelve small ones, all running at once:
+               a glimpse of what EasyEyes does. It is an illustration, so it
+               is hidden from screen readers; the paragraph beside it carries
+               the facts. -->
+          <figure class="stage" aria-hidden="true">
+            <div class="wall stage-screen" id="wall">
+              <!-- Three rows, one per category. Each row shows three screens at a time and drifts slowly sideways in an endless loop. Setup: what EasyEyes establishes before testing. Tests: what it measures. Utilities: what supports any test. The order within a row is Gedion's priority order: the first three are what shows when the page loads. -->
+              <div class="wall-row">
+                <div class="wall-clip">
+                  <div class="wall-track">
+                    <div class="tile">
+                      <svg
+                        class="mini"
+                        data-name="Screen size"
+                        viewBox="96 52 288 180"
+                        aria-hidden="true"
+                      >
+                        <!-- A screen with its width and height measured. The small card in the middle has a real credit card's proportions (85.6 by 53.98 mm): size is found by matching an image to a card. -->
+                        <rect
+                          class="ln"
+                          x="160"
+                          y="102"
+                          width="140"
+                          height="88"
+                          rx="5"
+                          stroke-width="2.4"
+                        />
+                        <path
+                          class="ln"
+                          d="M222 190v14M238 190v14M204 204h52"
+                          stroke-width="2.4"
+                        />
+                        <rect
+                          class="ln"
+                          x="213"
+                          y="135.3"
+                          width="34"
+                          height="21.4"
+                          rx="2.5"
+                          stroke-width="1.5"
+                        />
+                        <rect
+                          class="ln"
+                          x="217.5"
+                          y="141"
+                          width="6"
+                          height="5"
+                          rx="1"
+                          stroke-width="1.1"
+                        />
+                        <path
+                          class="ln"
+                          d="M217.5 151.5h16"
+                          stroke-width="1.1"
+                        />
+                        <path
+                          class="ln g dim"
+                          d="M160 78v12M160 84h140M300 78v12"
+                        />
+                        <path
+                          class="ln g dim"
+                          d="M314 102h12M320 102v88M314 190h12"
+                        />
+                      </svg>
+                      <span class="tile-name">Screen size</span>
+                    </div>
+                    <div class="tile">
+                      <svg
+                        class="mini"
+                        data-name="Gaze tracking"
+                        viewBox="80 53 320 200"
+                        aria-hidden="true"
+                      >
+                        <!-- The webcam (the small circle on the screen) watches the eye. From it EasyEyes estimates where on the screen the eye is looking: the green line of gaze, drawn inside a wedge as wide as the estimate is uncertain, landing on a spot, with the last two spots still marked. It also tracks viewing distance: the green line underneath, with its reading. -->
+                        <path
+                          class="ln"
+                          d="M128 84L208 66V196L128 178Z"
+                          stroke-width="2.6"
+                          stroke-linejoin="round"
+                        />
+                        <path
+                          class="ln"
+                          d="M168 187v19M150 206h36"
+                          stroke-width="2.6"
+                        />
+                        <circle
+                          class="ln"
+                          cx="168"
+                          cy="67"
+                          r="4"
+                          stroke-width="2.2"
+                        />
+                        <line
+                          class="ln soft"
+                          id="gz-cam"
+                          x1="173"
+                          y1="69"
+                          x2="320"
+                          y2="123"
+                          stroke-width="1.8"
+                          stroke-dasharray="3 6"
+                        />
+                        <polyline
+                          id="gz-trail"
+                          points="170,131 170,131 170,131"
+                          fill="none"
+                          stroke="#019267"
+                          stroke-opacity="0.4"
+                          stroke-width="1.5"
+                          stroke-linejoin="round"
+                        />
+                        <circle
+                          id="gz-old-2"
+                          cx="170"
+                          cy="131"
+                          r="3"
+                          fill="#019267"
+                          fill-opacity="0.3"
+                        />
+                        <circle
+                          id="gz-old-1"
+                          cx="170"
+                          cy="131"
+                          r="3.5"
+                          fill="#019267"
+                          fill-opacity="0.55"
+                        />
+                        <polygon
+                          id="gz-cone"
+                          points="330,131 170,116 170,146"
+                          fill="#019267"
+                          fill-opacity="0.12"
+                        />
+                        <line
+                          class="ln g"
+                          id="gz-line"
+                          x1="330"
+                          y1="131"
+                          x2="170"
+                          y2="131"
+                          stroke-width="2.4"
+                        />
+                        <g id="gz-dot" transform="translate(170 131)">
+                          <circle r="15" fill="#019267" fill-opacity="0.2" />
+                          <circle r="4.5" fill="#019267" />
+                        </g>
+                        <g id="gz-eye">
+                          <path
+                            d="M318 131c11-15 31-15 42 0c-11 15-31 15-42 0z"
+                            fill="#fff"
+                            stroke="#000"
+                            stroke-width="2.6"
+                            stroke-linejoin="round"
+                          />
+                          <circle
+                            id="gz-pupil"
+                            cx="330"
+                            cy="131"
+                            r="6.5"
+                            fill="#000"
+                          />
+                          <path
+                            class="ln g"
+                            d="M330 228v16"
+                            stroke-width="2.4"
+                          />
+                        </g>
+                        <path class="ln g" d="M168 228v16" stroke-width="2.4" />
+                        <line
+                          class="ln g"
+                          id="gz-dist"
+                          x1="168"
+                          y1="236"
+                          x2="330"
+                          y2="236"
+                          stroke-width="2.4"
+                          stroke-linecap="butt"
+                        />
+                        <text
+                          class="mono"
+                          id="gz-cm"
+                          x="249"
+                          y="226"
+                          font-size="19"
+                          text-anchor="middle"
+                        >
+                          50 cm
+                        </text>
+                      </svg>
+                      <span class="tile-name">Distance and gaze</span>
+                    </div>
+                    <div class="tile">
+                      <svg
+                        class="mini"
+                        id="kp"
+                        data-name="Keypad"
+                        viewBox="48 30 384 240"
+                        aria-hidden="true"
+                      >
+                        <!-- Far from the screen (the green line is the viewing distance), the participant's smartphone is the keypad: a key is pressed and the signal goes to the screen. -->
+                        <rect
+                          class="ln"
+                          x="70"
+                          y="112"
+                          width="80"
+                          height="52"
+                          rx="4"
+                          stroke-width="3"
+                        />
+                        <path
+                          class="ln"
+                          d="M104 164v12M116 164v12M94 176h32"
+                          stroke-width="3"
+                        />
+                        <path
+                          class="ln g"
+                          d="M110 242v16M110 250h268M378 242v16"
+                          stroke-width="3"
+                          stroke-linecap="butt"
+                        />
+                        <g transform="translate(150 0)">
+                          <path
+                            class="ln g kp-arc"
+                            style="--i: 0"
+                            d="M184 128a14 14 0 0 0 0 20"
+                            stroke-width="3"
+                          />
+                          <path
+                            class="ln g kp-arc"
+                            style="--i: 1"
+                            d="M174 119a26 26 0 0 0 0 38"
+                            stroke-width="3"
+                          />
+                          <path
+                            class="ln g kp-arc"
+                            style="--i: 2"
+                            d="M164 110a38 38 0 0 0 0 56"
+                            stroke-width="3"
+                          />
+                          <rect
+                            x="196"
+                            y="72"
+                            width="64"
+                            height="132"
+                            rx="10"
+                            fill="#fff"
+                            stroke="#000"
+                            stroke-width="3"
+                          />
+                          <path class="ln" d="M220 82h16" stroke-width="2.4" />
+                          <rect
+                            class="key"
+                            x="205"
+                            y="94"
+                            width="12"
+                            height="14"
+                            rx="2.5"
+                          />
+                          <rect
+                            class="key"
+                            x="222"
+                            y="94"
+                            width="12"
+                            height="14"
+                            rx="2.5"
+                          />
+                          <rect
+                            class="key"
+                            x="239"
+                            y="94"
+                            width="12"
+                            height="14"
+                            rx="2.5"
+                          />
+                          <rect
+                            class="key"
+                            x="205"
+                            y="114"
+                            width="12"
+                            height="14"
+                            rx="2.5"
+                          />
+                          <rect
+                            class="key"
+                            x="222"
+                            y="114"
+                            width="12"
+                            height="14"
+                            rx="2.5"
+                          />
+                          <rect
+                            class="key"
+                            x="239"
+                            y="114"
+                            width="12"
+                            height="14"
+                            rx="2.5"
+                          />
+                          <rect
+                            class="key"
+                            x="205"
+                            y="134"
+                            width="12"
+                            height="14"
+                            rx="2.5"
+                          />
+                          <rect
+                            class="key"
+                            x="222"
+                            y="134"
+                            width="12"
+                            height="14"
+                            rx="2.5"
+                          />
+                          <rect
+                            class="key"
+                            x="239"
+                            y="134"
+                            width="12"
+                            height="14"
+                            rx="2.5"
+                          />
+                          <rect
+                            class="key"
+                            x="205"
+                            y="154"
+                            width="12"
+                            height="14"
+                            rx="2.5"
+                          />
+                          <rect
+                            class="key"
+                            x="222"
+                            y="154"
+                            width="12"
+                            height="14"
+                            rx="2.5"
+                          />
+                          <rect
+                            class="key"
+                            x="239"
+                            y="154"
+                            width="12"
+                            height="14"
+                            rx="2.5"
+                          />
+                          <!-- SPACE and RETURN share the bottom row. -->
+                          <rect
+                            class="key"
+                            x="205"
+                            y="176"
+                            width="20.5"
+                            height="14"
+                            rx="2.5"
+                          />
+                          <rect
+                            class="key"
+                            x="230.5"
+                            y="176"
+                            width="20.5"
+                            height="14"
+                            rx="2.5"
+                          />
+                        </g>
+                      </svg>
+                      <span class="tile-name">Keypad</span>
+                    </div>
+                    <div class="tile">
+                      <svg
+                        class="mini"
+                        data-name="Language choice"
+                        viewBox="0 0 480 300"
+                        aria-hidden="true"
+                      >
+                        <!-- _languageSelectionByParticipantBool: on the Device Compatibility page the participant picks the language for the rest of the study from a pull-down menu of native names. The count is the number of languages _language accepts (42 in Glossary 41.0). -->
+                        <rect
+                          class="ln"
+                          x="112"
+                          y="28"
+                          width="256"
+                          height="48"
+                          rx="8"
+                        />
+                        <text
+                          class="ui"
+                          id="lc-now"
+                          x="132"
+                          y="61"
+                          font-size="26"
+                        >
+                          English
+                        </text>
+                        <path
+                          class="ln"
+                          d="M330 46l9 10 9-10"
+                          stroke-linejoin="round"
+                        />
+                        <rect
+                          class="ln soft"
+                          x="112"
+                          y="84"
+                          width="256"
+                          height="170"
+                          rx="8"
+                        />
+                        <rect
+                          id="lc-hi"
+                          x="118"
+                          y="90"
+                          width="244"
+                          height="38"
+                          rx="5"
+                          fill="#019267"
+                          fill-opacity="0.14"
+                          display="none"
+                        />
+                        <g class="ui" font-size="24">
+                          <text x="132" y="118">Deutsch</text>
+                          <text x="132" y="158">Español</text>
+                          <text x="132" y="198">日本語</text>
+                          <text x="132" y="238">العربية</text>
+                        </g>
+                        <text
+                          class="mono"
+                          x="240"
+                          y="284"
+                          font-size="19"
+                          text-anchor="middle"
+                          style="fill: #7d7b75"
+                        >
+                          42 languages
+                        </text>
+                      </svg>
+                      <span class="tile-name">Language choice</span>
+                    </div>
+                    <div class="tile">
+                      <svg
+                        class="mini"
+                        data-name="Sound calibration"
+                        viewBox="48 30 384 240"
+                        aria-hidden="true"
+                      >
+                        <!-- Before block 1, the computer's loudspeaker plays and the participant's pre-calibrated smartphone microphone listens (_calibrateSound1000HzBool: gain calibration at 1 kHz). -->
+                        <rect
+                          class="ln"
+                          x="70"
+                          y="112"
+                          width="80"
+                          height="52"
+                          rx="4"
+                          stroke-width="3"
+                        />
+                        <path
+                          class="ln"
+                          d="M104 164v12M116 164v12M94 176h32"
+                          stroke-width="3"
+                        />
+                        <path
+                          class="ln g"
+                          d="M176 128a14 14 0 0 1 0 20M190 119a26 26 0 0 1 0 38M204 110a38 38 0 0 1 0 56"
+                          stroke-width="3"
+                        />
+                        <text
+                          class="mono"
+                          x="262"
+                          y="146"
+                          font-size="22"
+                          text-anchor="middle"
+                        >
+                          1 kHz
+                        </text>
+                        <rect
+                          x="346"
+                          y="72"
+                          width="64"
+                          height="132"
+                          rx="10"
+                          fill="#fff"
+                          stroke="#000"
+                          stroke-width="3"
+                        />
+                        <path class="ln" d="M370 82h16" stroke-width="2.4" />
+                        <path
+                          class="ln"
+                          d="M378 118v22M368 132a10 10 0 0 0 20 0M378 142v10M370 152h16"
+                          stroke-width="3"
+                        />
+                        <rect
+                          class="ln"
+                          x="373"
+                          y="110"
+                          width="10"
+                          height="26"
+                          rx="5"
+                          stroke-width="3"
+                        />
+                      </svg>
+                      <span class="tile-name">Sound calibration</span>
+                    </div>
+                    <div class="tile">
+                      <svg
+                        class="mini"
+                        data-name="Compatibility"
+                        viewBox="60 37.5 360 225"
+                        aria-hidden="true"
+                      >
+                        <!-- The Device Compatibility page checks the participant's device against the study's needs (_needBrowser, _needDeviceType, _needScreenSizeMinimumPx) before asking for consent. -->
+                        <g class="ui">
+                          <text x="118" y="110" font-size="27">Browser</text>
+                          <text x="118" y="159" font-size="27">Device</text>
+                          <text x="118" y="208" font-size="27">Screen</text>
+                        </g>
+                        <path
+                          class="ln soft"
+                          d="M112 124h256M112 173h256"
+                          stroke-width="1.5"
+                        />
+                        <path
+                          class="ln g"
+                          d="M336 101l9 9 17-21M336 150l9 9 17-21M336 199l9 9 17-21"
+                          stroke-width="3.4"
+                          stroke-linejoin="round"
+                        />
+                      </svg>
+                      <span class="tile-name">Compatibility</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="wall-row">
+                <div class="wall-clip">
+                  <div class="wall-track">
+                    <div class="tile">
+                      <svg
+                        class="mini"
+                        data-name="Crowding"
+                        viewBox="70 40.6 350 218.75"
+                        aria-hidden="true"
+                      >
+                        <path class="ln" d="M106 150h28M120 136v28" />
+                        <text
+                          id="cr-a"
+                          x="236"
+                          y="172.9"
+                          font-size="45.7"
+                          text-anchor="middle"
+                          style="font-family: &quot;Sloan&quot;, monospace"
+                        >
+                          K
+                        </text>
+                        <text
+                          id="cr-t"
+                          x="300"
+                          y="172.9"
+                          font-size="45.7"
+                          text-anchor="middle"
+                          style="font-family: &quot;Sloan&quot;, monospace"
+                        >
+                          N
+                        </text>
+                        <text
+                          id="cr-b"
+                          x="364"
+                          y="172.9"
+                          font-size="45.7"
+                          text-anchor="middle"
+                          style="font-family: &quot;Sloan&quot;, monospace"
+                        >
+                          R
+                        </text>
+                      </svg>
+                      <span class="tile-name">Crowding</span>
+                    </div>
+                    <div class="tile">
+                      <svg
+                        class="mini"
+                        data-name="Acuity"
+                        viewBox="70 40.6 350 218.75"
+                        aria-hidden="true"
+                      >
+                        <path class="ln" d="M106 150h28M120 136v28" />
+                        <text
+                          class="sloan"
+                          id="ac-t"
+                          x="300"
+                          y="180"
+                          font-size="60"
+                          text-anchor="middle"
+                        >
+                          H
+                        </text>
+                      </svg>
+                      <span class="tile-name">Acuity</span>
+                    </div>
+                    <div class="tile">
+                      <svg
+                        class="mini"
+                        data-name="RSVP reading"
+                        viewBox="0 0 480 300"
+                        aria-hidden="true"
+                      >
+                        <!-- targetKind rsvpReading: several words are flashed one at a time, with a word duration that QUEST controls. Then the participant sees a row of lines, one per word, each with a list of possible words under it, and picks the word that was shown in each column. -->
+                        <text
+                          class="mono"
+                          id="rv-w"
+                          x="240"
+                          y="164"
+                          font-size="44"
+                          text-anchor="middle"
+                          display="none"
+                        >
+                          vision
+                        </text>
+                        <g
+                          id="rv-ans"
+                          class="mono"
+                          font-size="22"
+                          text-anchor="middle"
+                        >
+                          <path class="ln" d="M70 92h80" stroke-width="2.4" />
+                          <text x="110" y="134">anyone</text>
+                          <text x="110" y="172">online</text>
+                          <text x="110" y="210">screen</text>
+                          <path class="ln" d="M200 92h80" stroke-width="2.4" />
+                          <text x="240" y="134">gaze</text>
+                          <text x="240" y="172">head</text>
+                          <text x="240" y="210">test</text>
+                          <path class="ln" d="M330 92h80" stroke-width="2.4" />
+                          <text x="370" y="134">keypad</text>
+                          <text x="370" y="172">vision</text>
+                          <text x="370" y="210">webcam</text>
+                          <rect
+                            class="ln g"
+                            id="rv-box-0"
+                            x="62"
+                            y="110"
+                            width="96"
+                            height="34"
+                            rx="5"
+                            stroke-width="2.6"
+                          />
+                          <rect
+                            class="ln g"
+                            id="rv-box-1"
+                            x="192"
+                            y="186"
+                            width="96"
+                            height="34"
+                            rx="5"
+                            stroke-width="2.6"
+                          />
+                          <rect
+                            class="ln g"
+                            id="rv-box-2"
+                            x="322"
+                            y="148"
+                            width="96"
+                            height="34"
+                            rx="5"
+                            stroke-width="2.6"
+                          />
+                        </g>
+                      </svg>
+                      <span class="tile-name">RSVP reading</span>
+                    </div>
+                    <div class="tile">
+                      <svg
+                        class="mini"
+                        data-name="Reading"
+                        viewBox="0 0 480 300"
+                        aria-hidden="true"
+                      >
+                        <text class="mono" id="rd-page" font-size="15.5">
+                          <tspan id="rd-1" x="34" y="96">
+                            The open-source EasyEyes web app is meant to
+                          </tspan>
+                          <tspan id="rd-2" x="34" y="128">
+                            help anyone test vision online. EasyEyes
+                          </tspan>
+                          <tspan id="rd-3" x="34" y="160">
+                            measures screen size, and, with consent,
+                          </tspan>
+                          <tspan id="rd-4" x="34" y="192">
+                            uses the webcam of the participant's computer
+                          </tspan>
+                        </text>
+                      </svg>
+                      <span class="tile-name">Reading</span>
+                    </div>
+                    <div class="tile">
+                      <svg
+                        class="mini"
+                        data-name="Repeated letters"
+                        viewBox="0 0 480 300"
+                        aria-hidden="true"
+                      >
+                        <!-- targetKind repeatedLetter: many copies of two target letters alternating across the screen, on up to three lines, with neighboring lines complementary and a border character ($ by default) at both ends of each line. The observer reports both letters; no fixation is needed. -->
+                        <g
+                          class="mono"
+                          font-size="15"
+                          text-anchor="middle"
+                          style="letter-spacing: 4px"
+                        >
+                          <text id="rp-1" x="242" y="124">$KRKR$</text>
+                          <text id="rp-2" x="242" y="156">$RKRK$</text>
+                          <text id="rp-3" x="242" y="188">$KRKR$</text>
+                        </g>
+                      </svg>
+                      <span class="tile-name">Repeated letters</span>
+                    </div>
+                    <div class="tile">
+                      <svg
+                        class="mini"
+                        data-name="Question and answer"
+                        viewBox="50 31.25 380 237.5"
+                        aria-hidden="true"
+                      >
+                        <!-- The Glossary's two examples for questionAndAnswer: a multiple-choice question, a button for each answer, and a free-form question with a text box. -->
+                        <g id="qa-mc" class="ui">
+                          <text
+                            x="240"
+                            y="122"
+                            font-size="23"
+                            text-anchor="middle"
+                          >
+                            Which of the following is a fruit?
+                          </text>
+                          <g id="qa-row" font-size="17" text-anchor="middle">
+                            <g>
+                              <rect
+                                x="68"
+                                y="144"
+                                width="62"
+                                height="36"
+                                rx="5"
+                                fill="#fff"
+                                stroke="#000"
+                              />
+                              <text x="99" y="168">house</text>
+                            </g>
+                            <g>
+                              <rect
+                                x="138"
+                                y="144"
+                                width="46"
+                                height="36"
+                                rx="5"
+                                fill="#fff"
+                                stroke="#000"
+                              />
+                              <text x="161" y="168">sky</text>
+                            </g>
+                            <g>
+                              <rect
+                                x="192"
+                                y="144"
+                                width="62"
+                                height="36"
+                                rx="5"
+                                fill="#fff"
+                                stroke="#000"
+                              />
+                              <text x="223" y="168">apple</text>
+                            </g>
+                            <g>
+                              <rect
+                                x="262"
+                                y="144"
+                                width="66"
+                                height="36"
+                                rx="5"
+                                fill="#fff"
+                                stroke="#000"
+                              />
+                              <text x="295" y="168">father</text>
+                            </g>
+                            <g>
+                              <rect
+                                x="336"
+                                y="144"
+                                width="76"
+                                height="36"
+                                rx="5"
+                                fill="#fff"
+                                stroke="#000"
+                              />
+                              <text x="374" y="168">country</text>
+                            </g>
+                          </g>
+                        </g>
+                        <g id="qa-ff" class="ui" display="none">
+                          <text
+                            x="240"
+                            y="122"
+                            font-size="23"
+                            text-anchor="middle"
+                          >
+                            Describe a recent birthday.
+                          </text>
+                          <rect
+                            x="90"
+                            y="144"
+                            width="300"
+                            height="46"
+                            rx="5"
+                            fill="#fff"
+                            stroke="#000"
+                          />
+                          <path
+                            class="ln qa-caret"
+                            d="M104 155v24"
+                            stroke-width="1.6"
+                          />
+                        </g>
+                      </svg>
+                      <span class="tile-name">Question and answer</span>
+                    </div>
+                    <div class="tile">
+                      <svg
+                        class="mini"
+                        data-name="Reading retention"
+                        viewBox="30 18.75 420 262.5"
+                        aria-hidden="true"
+                      >
+                        <!-- readingNumberOfQuestions and readingNumberOfPossibleAnswers: after a passage, the participant is asked which of four words was in it. The words are in alphabetical order; one is right and the rest are foils. Here the passage is the welcome paragraph, so the answer is "keypad". -->
+                        <text
+                          class="ui"
+                          x="240"
+                          y="112"
+                          font-size="20.5"
+                          text-anchor="middle"
+                        >
+                          Which of these words did you read just now?
+                        </text>
+                        <g
+                          id="rt-row"
+                          class="ui"
+                          font-size="19"
+                          text-anchor="middle"
+                        >
+                          <g>
+                            <rect
+                              x="58"
+                              y="140"
+                              width="84"
+                              height="38"
+                              rx="5"
+                              fill="#fff"
+                              stroke="#000"
+                            />
+                            <text x="100" y="165">garden</text>
+                          </g>
+                          <g>
+                            <rect
+                              x="152"
+                              y="140"
+                              width="84"
+                              height="38"
+                              rx="5"
+                              fill="#fff"
+                              stroke="#000"
+                            />
+                            <text x="194" y="165">keypad</text>
+                          </g>
+                          <g>
+                            <rect
+                              x="246"
+                              y="140"
+                              width="84"
+                              height="38"
+                              rx="5"
+                              fill="#fff"
+                              stroke="#000"
+                            />
+                            <text x="288" y="165">ribbon</text>
+                          </g>
+                          <g>
+                            <rect
+                              x="340"
+                              y="140"
+                              width="84"
+                              height="38"
+                              rx="5"
+                              fill="#fff"
+                              stroke="#000"
+                            />
+                            <text x="382" y="165">window</text>
+                          </g>
+                        </g>
+                      </svg>
+                      <span class="tile-name">Reading retention</span>
+                    </div>
+                    <div class="tile">
+                      <svg
+                        class="mini"
+                        data-name="Image"
+                        viewBox="50 5 380 237.5"
+                        aria-hidden="true"
+                      >
+                        <!-- targetKind image: an image drawn at random from a folder is shown, and the observer can be asked to identify it by clicking one of several names. One name comes from the image file's name; the others are names of other images in the folder. -->
+                        <rect
+                          x="170"
+                          y="22"
+                          width="140"
+                          height="104"
+                          fill="#fff"
+                          stroke="#e2e2e2"
+                        />
+                        <rect
+                          x="170"
+                          y="22"
+                          width="140"
+                          height="62"
+                          fill="#c9d6e2"
+                        />
+                        <circle cx="272" cy="48" r="13" fill="#f1dfae" />
+                        <path
+                          d="M170 100l34-30 26 20 30-36 50 46v26h-140z"
+                          fill="#8a9a8f"
+                        />
+                        <path
+                          d="M170 126v-18l40-16 44 14 56-10v30z"
+                          fill="#5f6f66"
+                        />
+                        <g
+                          id="im-row"
+                          class="ui"
+                          font-size="18"
+                          text-anchor="middle"
+                        >
+                          <g>
+                            <rect
+                              x="92"
+                              y="156"
+                              width="84"
+                              height="36"
+                              rx="5"
+                              fill="#fff"
+                              stroke="#000"
+                            />
+                            <text x="134" y="180">beach</text>
+                          </g>
+                          <g>
+                            <rect
+                              x="184"
+                              y="156"
+                              width="84"
+                              height="36"
+                              rx="5"
+                              fill="#fff"
+                              stroke="#000"
+                            />
+                            <text x="226" y="180">forest</text>
+                          </g>
+                          <g>
+                            <rect
+                              x="276"
+                              y="156"
+                              width="112"
+                              height="36"
+                              rx="5"
+                              fill="#fff"
+                              stroke="#000"
+                            />
+                            <text x="332" y="180">mountain</text>
+                          </g>
+                        </g>
+                      </svg>
+                      <span class="tile-name">Image</span>
+                    </div>
+                    <div class="tile">
+                      <svg
+                        class="mini"
+                        data-name="Sound"
+                        viewBox="90 56 300 187.5"
+                        aria-hidden="true"
+                      >
+                        <defs>
+                          <clipPath id="wave-clip">
+                            <rect x="110" y="96" width="260" height="100" />
+                          </clipPath>
+                        </defs>
+                        <g clip-path="url(#wave-clip)">
+                          <path
+                            class="ln a-wave"
+                            stroke-width="2.2"
+                            d="M110 146q7-66 14 0t14 0q7-26 14 0t14 0q7-66 14 0t14 0q7-26 14 0t14 0q7-66 14 0t14 0q7-26 14 0t14 0q7-66 14 0t14 0q7-26 14 0t14 0q7-66 14 0t14 0q7-26 14 0t14 0q7-66 14 0t14 0q7-26 14 0t14 0"
+                          />
+                        </g>
+                      </svg>
+                      <span class="tile-name">Sound</span>
+                    </div>
+                    <div class="tile">
+                      <svg
+                        class="mini"
+                        data-name="Speech in noise"
+                        viewBox="0 0 480 300"
+                        aria-hidden="true"
+                      >
+                        <!-- targetKind vocoderPhrase: a target phrase ("Ready Baron GoTo #Color #Number Now") is played at the same time as a masker phrase spoken by a different talker. The color and the number change from trial to trial. -->
+                        <path
+                          class="ln soft"
+                          d="M30 110c14-52 22 52 36 0s22 60 36 0 20 44 34 0 22-58 36 0 22 52 36 0 20-44 34 0 22 60 36 0 22-50 36 0 20 44 34 0 22-52 36 0 22 48 36 0"
+                          stroke-width="2.6"
+                        />
+                        <path
+                          class="ln"
+                          d="M30 110c12 34 20-34 32 0s20 40 32 0 20-28 32 0 20 36 32 0 20-40 32 0 20 30 32 0 20-36 32 0 20 40 32 0 20-28 32 0 20 34 32 0 20-36 32 0 20 30 32 0 20-34 32 0"
+                          stroke-width="2.6"
+                        />
+                        <g class="ui" font-size="23">
+                          <text x="34" y="222">Ready Baron go to</text>
+                          <text x="434" y="222" text-anchor="end">now</text>
+                        </g>
+                        <rect
+                          class="ln g"
+                          x="232"
+                          y="196"
+                          width="72"
+                          height="36"
+                          rx="7"
+                          stroke-width="2.6"
+                        />
+                        <rect
+                          class="ln g"
+                          x="312"
+                          y="196"
+                          width="76"
+                          height="36"
+                          rx="7"
+                          stroke-width="2.6"
+                        />
+                        <g class="mono" font-size="17" text-anchor="middle">
+                          <text x="268" y="220">color</text>
+                          <text x="350" y="220">number</text>
+                        </g>
+                      </svg>
+                      <span class="tile-name">Speech in noise</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="wall-row">
+                <div class="wall-clip">
+                  <div class="wall-track">
+                    <div class="tile">
+                      <svg
+                        class="mini"
+                        data-name="Analyze"
+                        viewBox="0 0 480 300"
+                        aria-hidden="true"
+                      >
+                        <!-- The EasyEyes Analysis app (the Analyze link in the menu): the study's CSV files go in, and it offers Sessions, Stats, Plots and more. In its plots each point is one participant and each font has its own color. -->
+                        <g class="ui" font-size="21">
+                          <text x="34" y="44">Sessions</text>
+                          <text x="150" y="44">Stats</text>
+                          <text x="226" y="44">Plots</text>
+                          <text x="306" y="44">ANOVA</text>
+                        </g>
+                        <path
+                          class="ln soft"
+                          d="M24 58h432"
+                          stroke-width="1.5"
+                        />
+                        <path class="ln" d="M222 58h56" stroke-width="3.4" />
+                        <path class="ln" d="M112 84v156h320" />
+                        <path
+                          class="ln soft"
+                          d="M132 226L424 96"
+                          stroke-width="1.6"
+                          stroke-dasharray="5 6"
+                        />
+                        <g id="an-dots">
+                          <circle cx="150" cy="214" r="6.5" fill="#000" />
+                          <circle cx="176" cy="196" r="6.5" fill="#019267" />
+                          <circle cx="198" cy="204" r="6.5" fill="#000" />
+                          <circle cx="222" cy="176" r="6.5" fill="#000" />
+                          <circle cx="244" cy="184" r="6.5" fill="#019267" />
+                          <circle cx="268" cy="158" r="6.5" fill="#000" />
+                          <circle cx="292" cy="166" r="6.5" fill="#019267" />
+                          <circle cx="314" cy="138" r="6.5" fill="#000" />
+                          <circle cx="338" cy="146" r="6.5" fill="#019267" />
+                          <circle cx="362" cy="120" r="6.5" fill="#000" />
+                          <circle cx="386" cy="126" r="6.5" fill="#019267" />
+                          <circle cx="408" cy="104" r="6.5" fill="#000" />
+                        </g>
+                      </svg>
+                      <span class="tile-name">Analyze</span>
+                    </div>
+                    <div class="tile">
+                      <svg
+                        class="mini"
+                        data-name="Fonts"
+                        viewBox="0 0 480 300"
+                        aria-hidden="true"
+                      >
+                        <!-- One glyph, set in turn in fonts EasyEyes can use (fontSource: file, google, adobe, morisawa, browser). -->
+                        <text
+                          id="ft-g"
+                          x="240"
+                          y="196"
+                          font-size="130"
+                          text-anchor="middle"
+                          style="font-family: &quot;Sloan&quot;, monospace"
+                        >
+                          R
+                        </text>
+                      </svg>
+                      <span class="tile-name">Fonts</span>
+                    </div>
+                    <div class="tile">
+                      <svg
+                        class="mini"
+                        data-name="Nudging"
+                        viewBox="60 60 360 225"
+                        aria-hidden="true"
+                      >
+                        <!-- The nudger: when the participant is nearer or farther than the allowed range around the desired viewing distance (the green band), testing pauses and they are encouraged to move back into it. -->
+                        <path
+                          class="ln"
+                          d="M100 96v108"
+                          stroke-width="5"
+                          stroke-linecap="butt"
+                        />
+                        <path class="ln" d="M86 204h28" stroke-width="3" />
+                        <rect
+                          x="304"
+                          y="100"
+                          width="45"
+                          height="100"
+                          rx="5"
+                          fill="#019267"
+                          fill-opacity="0.16"
+                        />
+                        <g id="ng-eye" transform="translate(259 150)">
+                          <path
+                            d="M-12 0c11-15 31-15 42 0c-11 15-31 15-42 0z"
+                            fill="#fff"
+                            stroke="#000"
+                            stroke-width="2.6"
+                            stroke-linejoin="round"
+                          />
+                          <circle r="6.5" fill="#000" />
+                        </g>
+                        <path
+                          class="ln g"
+                          id="ng-arrow"
+                          d="M252 186h58M300 177l11 9-11 9"
+                          stroke-width="3"
+                          stroke-linejoin="round"
+                        />
+                        <path class="ln g" d="M100 232v16" stroke-width="2.4" />
+                        <line
+                          class="ln g"
+                          id="ng-dist"
+                          x1="100"
+                          y1="240"
+                          x2="259"
+                          y2="240"
+                          stroke-width="2.4"
+                          stroke-linecap="butt"
+                        />
+                        <path
+                          class="ln g"
+                          id="ng-tick"
+                          d="M0 232v16"
+                          stroke-width="2.4"
+                          transform="translate(259 0)"
+                        />
+                        <text
+                          class="mono"
+                          id="ng-cm"
+                          x="180"
+                          y="268"
+                          font-size="20"
+                          text-anchor="middle"
+                        >
+                          36 cm
+                        </text>
+                      </svg>
+                      <span class="tile-name">Nudging</span>
+                    </div>
+                    <div class="tile">
+                      <svg
+                        class="mini"
+                        data-name="Consent form"
+                        viewBox="0 0 480 300"
+                        aria-hidden="true"
+                      >
+                        <!-- _consentForm: a brief description of the study that asks the participant for informed consent, yes or no, before taking part. -->
+                        <rect
+                          class="ln"
+                          x="118"
+                          y="20"
+                          width="244"
+                          height="260"
+                          rx="6"
+                        />
+                        <path class="ln" d="M144 56h104" stroke-width="6" />
+                        <path
+                          class="ln soft"
+                          d="M144 90h192M144 112h176M144 134h192M144 156h150M144 178h188M144 200h112"
+                          stroke-width="5"
+                        />
+                        <rect
+                          x="144"
+                          y="226"
+                          width="88"
+                          height="36"
+                          rx="7"
+                          fill="#000"
+                        />
+                        <text
+                          class="ui"
+                          x="188"
+                          y="252"
+                          font-size="23"
+                          text-anchor="middle"
+                          style="fill: #fff"
+                        >
+                          Yes
+                        </text>
+                        <rect
+                          class="ln"
+                          x="248"
+                          y="226"
+                          width="88"
+                          height="36"
+                          rx="7"
+                        />
+                        <text
+                          class="ui"
+                          x="292"
+                          y="252"
+                          font-size="23"
+                          text-anchor="middle"
+                        >
+                          No
+                        </text>
+                      </svg>
+                      <span class="tile-name">Consent form</span>
+                    </div>
+                    <div class="tile">
+                      <svg
+                        class="mini"
+                        data-name="Color"
+                        viewBox="90 56 300 187.5"
+                        aria-hidden="true"
+                      >
+                        <!-- Words flashed one at a time, as in the reading screen, each in a different font color (fontColorRGBA). The screen color does not change. -->
+                        <text
+                          class="mono"
+                          id="cl-w"
+                          x="240"
+                          y="164"
+                          font-size="40"
+                          text-anchor="middle"
+                        >
+                          vision
+                        </text>
+                      </svg>
+                      <span class="tile-name">Color</span>
+                    </div>
+                    <div class="tile">
+                      <svg
+                        class="mini"
+                        data-name="Simulation"
+                        viewBox="0 0 480 300"
+                        aria-hidden="true"
+                      >
+                        <!-- simulateParticipantBool: a software model of the observer (here the "ideal" one) gives the responses, so the test runs without a person. Its choice is boxed in the character set. -->
+                        <rect
+                          class="ln soft"
+                          x="20"
+                          y="18"
+                          width="104"
+                          height="38"
+                          rx="8"
+                        />
+                        <text
+                          class="mono"
+                          x="72"
+                          y="45"
+                          font-size="24"
+                          text-anchor="middle"
+                        >
+                          ideal
+                        </text>
+                        <path class="ln" d="M106 140h28M120 126v28" />
+                        <text
+                          class="sloan"
+                          id="sm-t"
+                          x="300"
+                          y="176"
+                          font-size="72"
+                          text-anchor="middle"
+                        >
+                          K
+                        </text>
+                        <g class="sloan" font-size="26" text-anchor="middle">
+                          <text x="96" y="264">D</text>
+                          <text x="132" y="264">H</text>
+                          <text x="168" y="264">K</text>
+                          <text x="204" y="264">N</text>
+                          <text x="240" y="264">O</text>
+                          <text x="276" y="264">R</text>
+                          <text x="312" y="264">S</text>
+                          <text x="348" y="264">V</text>
+                          <text x="384" y="264">Z</text>
+                        </g>
+                        <rect
+                          class="ln g"
+                          id="sm-box"
+                          x="151"
+                          y="232"
+                          width="34"
+                          height="38"
+                          rx="4"
+                          stroke-width="3"
+                        />
+                      </svg>
+                      <span class="tile-name">Simulation</span>
+                    </div>
+                    <div class="tile">
+                      <svg
+                        class="mini"
+                        data-name="Grid"
+                        viewBox="0 0 480 300"
+                        aria-hidden="true"
+                      >
+                        <!-- showGrid: a full-screen grid, here in degrees with its origin at fixation, for checking where things are and how big. It is for checking stimuli, not for testing people. -->
+                        <path
+                          class="ln soft"
+                          d="M40 0v300 M90 0v300 M140 0v300 M190 0v300 M290 0v300 M340 0v300 M390 0v300 M440 0v300 M0 50h480 M0 100h480 M0 200h480 M0 250h480"
+                          stroke-width="1.2"
+                        />
+                        <path
+                          class="ln"
+                          d="M240 0v300M0 150h480"
+                          stroke-width="1.8"
+                        />
+                        <g class="mono" font-size="19" text-anchor="middle">
+                          <text x="290" y="172">1</text>
+                          <text x="340" y="172">2</text>
+                          <text x="390" y="172">3</text>
+                          <text x="440" y="172">4</text>
+                        </g>
+                        <text class="mono" x="12" y="288" font-size="24">
+                          deg
+                        </text>
+                        <text
+                          class="sloan"
+                          x="390"
+                          y="120"
+                          font-size="40"
+                          text-anchor="middle"
+                        >
+                          R
+                        </text>
+                      </svg>
+                      <span class="tile-name">Grid</span>
+                    </div>
+                    <div class="tile">
+                      <svg
+                        class="mini"
+                        data-name="Take a break"
+                        viewBox="0 0 480 300"
+                        aria-hidden="true"
+                      >
+                        <!-- showTakeABreakCreditBool: a black box at the bottom of the screen fills from the bottom up with green as the trials go by; when it is full the participant takes a break. -->
+                        <path class="ln" d="M226 100h28M240 86v28" />
+                        <rect
+                          x="208"
+                          y="188"
+                          width="64"
+                          height="92"
+                          fill="#000"
+                        />
+                        <rect
+                          id="tb-fill"
+                          x="213"
+                          y="237"
+                          width="54"
+                          height="38"
+                          fill="#12b981"
+                        />
+                      </svg>
+                      <span class="tile-name">Take a break</span>
+                    </div>
+                    <div class="tile">
+                      <svg
+                        class="mini"
+                        data-name="Responses"
+                        viewBox="0 0 480 300"
+                        aria-hidden="true"
+                      >
+                        <!-- responseClickedBool and responseTypedBool: the participant answers by clicking the letter in the character set, or by pressing its key. -->
+                        <g class="sloan" font-size="30" text-anchor="middle">
+                          <text x="80" y="100">D</text>
+                          <text x="120" y="100">H</text>
+                          <text x="160" y="100">K</text>
+                          <text x="200" y="100">N</text>
+                          <text x="240" y="100">O</text>
+                          <text x="280" y="100">R</text>
+                          <text x="320" y="100">S</text>
+                          <text x="360" y="100">V</text>
+                          <text x="400" y="100">Z</text>
+                        </g>
+                        <rect
+                          class="ln g"
+                          id="rs-box"
+                          x="140"
+                          y="62"
+                          width="40"
+                          height="46"
+                          rx="4"
+                          stroke-width="3"
+                        />
+                        <path
+                          id="rs-cur"
+                          d="M0 0v30l8-7 6 13 6-3-6-13 11-1z"
+                          fill="#000"
+                          stroke="#fff"
+                          stroke-width="1.6"
+                          stroke-linejoin="round"
+                          transform="translate(166 96)"
+                        />
+                        <rect
+                          class="ln"
+                          x="194"
+                          y="170"
+                          width="92"
+                          height="92"
+                          rx="13"
+                          stroke-width="3"
+                        />
+                        <text
+                          class="ui"
+                          id="rs-key"
+                          x="240"
+                          y="234"
+                          font-size="50"
+                          text-anchor="middle"
+                        >
+                          K
+                        </text>
+                      </svg>
+                      <span class="tile-name">Responses</span>
+                    </div>
+                    <div class="tile">
+                      <svg
+                        class="mini"
+                        data-name="Timing bars"
+                        viewBox="0 0 480 300"
+                        aria-hidden="true"
+                      >
+                        <!-- showTimingBarsBool: four bars along the left edge, each white while its element is present and black while it is absent: Gap, Fixation, Target request, Target. A photocell resting on a bar measures the timing of the stimulus. -->
+                        <rect
+                          class="tm"
+                          id="tm-0"
+                          x="14"
+                          y="20"
+                          width="78"
+                          height="50"
+                        />
+                        <rect
+                          class="tm w"
+                          id="tm-1"
+                          x="14"
+                          y="88"
+                          width="78"
+                          height="50"
+                        />
+                        <rect
+                          class="tm"
+                          id="tm-2"
+                          x="14"
+                          y="156"
+                          width="78"
+                          height="50"
+                        />
+                        <rect
+                          class="tm"
+                          id="tm-3"
+                          x="14"
+                          y="224"
+                          width="78"
+                          height="50"
+                        />
+                        <g class="ui" font-size="25">
+                          <text x="108" y="54">Gap</text>
+                          <text x="108" y="122">Fixation</text>
+                          <text x="108" y="190">Target request</text>
+                          <text x="108" y="258">Target</text>
+                        </g>
+                        <path class="ln" d="M386 150h28M400 136v28" />
+                      </svg>
+                      <span class="tile-name">Timing bars</span>
+                    </div>
+                    <div class="tile">
+                      <svg
+                        class="mini"
+                        data-name="Cursor recording"
+                        viewBox="0 0 480 300"
+                        aria-hidden="true"
+                      >
+                        <!-- _saveCursorPositionBool: the positions of the cursor and the crosshair are recorded at every display frame and saved as a table (time, x, y). -->
+                        <path class="ln" d="M326 76h28M340 62v28" />
+                        <path
+                          class="ln g"
+                          d="M52 150C96 60 150 190 210 120S296 96 322 86"
+                          stroke-width="4.5"
+                          stroke-dasharray="0.1 11"
+                        />
+                        <path
+                          d="M0 0v30l8-7 6 13 6-3-6-13 11-1z"
+                          fill="#000"
+                          stroke="#fff"
+                          stroke-width="1.6"
+                          stroke-linejoin="round"
+                          transform="translate(324 84)"
+                        />
+                        <rect
+                          class="ln soft"
+                          x="250"
+                          y="170"
+                          width="204"
+                          height="110"
+                          rx="5"
+                        />
+                        <path
+                          class="ln soft"
+                          d="M250 200h204M318 170v110M386 170v110"
+                          stroke-width="1.4"
+                        />
+                        <g class="mono" font-size="20" text-anchor="middle">
+                          <text x="284" y="192">t</text>
+                          <text x="352" y="192">x</text>
+                          <text x="420" y="192">y</text>
+                        </g>
+                        <path
+                          class="ln soft"
+                          d="M268 220h32M336 220h32M404 220h32M268 242h32M336 242h32M404 242h32M268 264h32M336 264h32M404 264h32"
+                          stroke-width="4"
+                        />
+                      </svg>
+                      <span class="tile-name">Cursor recording</span>
+                    </div>
+                    <div class="tile">
+                      <svg
+                        class="mini"
+                        data-name="Color check"
+                        viewBox="0 0 480 300"
+                        aria-hidden="true"
+                      >
+                        <!-- _screenColorCheckBool: the photocell of a photometer rests on a marked spot on the screen and measures the colors shown, to check color management. -->
+                        <rect
+                          x="66"
+                          y="70"
+                          width="100"
+                          height="100"
+                          rx="5"
+                          fill="#ff0000"
+                        />
+                        <rect
+                          x="190"
+                          y="70"
+                          width="100"
+                          height="100"
+                          rx="5"
+                          fill="#00b000"
+                        />
+                        <rect
+                          x="314"
+                          y="70"
+                          width="100"
+                          height="100"
+                          rx="5"
+                          fill="#0000ff"
+                        />
+                        <circle
+                          cx="240"
+                          cy="120"
+                          r="30"
+                          fill="none"
+                          stroke="#fff"
+                          stroke-width="7"
+                        />
+                        <circle
+                          cx="240"
+                          cy="120"
+                          r="30"
+                          fill="none"
+                          stroke="#000"
+                          stroke-width="2.6"
+                        />
+                        <path
+                          class="ln"
+                          d="M240 150c0 70 70 70 90 150"
+                          stroke-width="3"
+                        />
+                      </svg>
+                      <span class="tile-name">Color check</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </figure>
+        </div>
+      </section>
+
+      <section class="how reveal" id="how-it-works">
+        <p class="eyebrow">How it works</p>
+        <h2>From a table to an online study, in three steps.</h2>
+        <ol class="steps">
+          <li class="step">
+            <figure class="step-fig" aria-hidden="true">
+              <!-- A real experiment table (the EasyEyes demo): parameter names down column A, the experiment's own settings in B, then one condition per column from C. Column C, the first condition, is picked out. More columns run off to the right. -->
+              <svg viewBox="0 0 320 170">
+                <defs>
+                  <clipPath id="tb-clip">
+                    <rect x="14" y="14" width="330" height="146" rx="5" />
+                  </clipPath>
+                  <clipPath id="tb-b">
+                    <rect x="110" y="14" width="66" height="146" />
+                  </clipPath>
+                  <linearGradient id="tb-fade" x1="0" x2="1">
+                    <stop
+                      offset="0"
+                      style="stop-color: var(--fig-bg)"
+                      stop-opacity="0"
+                    />
+                    <stop offset="1" style="stop-color: var(--fig-bg)" />
+                  </linearGradient>
+                </defs>
+                <g clip-path="url(#tb-clip)">
+                  <rect class="page" x="14" y="14" width="330" height="146" />
+                  <rect class="head" x="14" y="14" width="330" height="20" />
+                  <rect class="tint" x="180" y="14" width="76" height="146" />
+                  <path
+                    class="hair"
+                    d="M14 34h320 M14 52h320 M14 70h320 M14 88h320 M14 106h320 M14 124h320 M14 142h320 M110 14v146M180 14v146M256 14v146"
+                  />
+                </g>
+                <rect
+                  class="hair"
+                  x="14"
+                  y="14"
+                  width="330"
+                  height="146"
+                  rx="5"
+                />
+                <rect class="ln g" x="180" y="14" width="76" height="146" />
+                <text class="t-sans" x="20" y="27.5">Parameter</text>
+                <text class="t-sans t-dim" x="116" y="27.5">B</text>
+                <text class="t-sans t-green" x="186" y="27.5">C</text>
+                <text class="t-sans t-dim" x="262" y="27.5">D</text>
+                <text class="t-mono" x="20" y="46">_about</text>
+                <text
+                  class="t-mono t-dim"
+                  x="116"
+                  y="46"
+                  clip-path="url(#tb-b)"
+                >
+                  Demo of EasyEyes.
+                </text>
+                <text class="t-mono" x="20" y="64">block</text>
+                <text class="t-mono" x="186" y="64">1</text>
+                <text class="t-mono t-dim" x="262" y="64">1</text>
+                <text class="t-mono" x="20" y="82">conditionName</text>
+                <text class="t-mono" x="186" y="82">printLetters</text>
+                <text class="t-mono t-dim" x="262" y="82">printString</text>
+                <text class="t-mono" x="20" y="100">conditionTrials</text>
+                <text class="t-mono" x="186" y="100">3</text>
+                <text class="t-mono t-dim" x="262" y="100">3</text>
+                <text class="t-mono" x="20" y="118">font</text>
+                <text class="t-mono" x="186" y="118">Sloan.woff2</text>
+                <text class="t-mono t-dim" x="262" y="118">
+                  Auckland Optotype
+                </text>
+                <text class="t-mono" x="20" y="136">fontCharacterSet</text>
+                <text class="t-mono" x="186" y="136">DHKNORSVZ</text>
+                <text class="t-mono t-dim" x="262" y="136">123456789</text>
+                <text class="t-mono" x="20" y="154">fontSource</text>
+                <text class="t-mono" x="186" y="154">file</text>
+                <text class="t-mono t-dim" x="262" y="154">file</text>
+                <rect
+                  x="270"
+                  y="0"
+                  width="50"
+                  height="170"
+                  fill="url(#tb-fade)"
+                />
+              </svg>
+            </figure>
+            <div class="step-body">
+              <p class="num">01</p>
+              <h3>Write a spreadsheet</h3>
+              <p>
+                Create your experiment table in any spreadsheet app, e.g.,
+                Excel. Each row is a parameter and each condition is a column.
+              </p>
+              <p class="links">
+                <a
+                  href="https://docs.google.com/document/u/1/d/e/2PACX-1vTTrqaSyva2afVupLchBjfTHc_YW5jAbEexGbudXMJ9xMKPBDA3nxQmHXa4wjnAoSVabeEA8T9CGIMa/pub"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  >Manual &nearr;</a
+                >
+                <a
+                  href="https://docs.google.com/spreadsheets/d/e/2PACX-1vQ8QswX_5h_oNS2Ly6VgoONGIxJHqDFjdZqWY_HUxH2Nr_LNkGDBL8FXz74l9BxVNR2AIXGhHir9GAd/pubhtml?gid=1287694458&amp;single=true"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  >Parameter Glossary &nearr;</a
+                >
+              </p>
+            </div>
+          </li>
+          <li class="step">
+            <figure class="step-fig" aria-hidden="true">
+              <!-- Our Compiler page: title, account lines, the green instructions, Select file and the two gray buttons, the resource chips. A file is dropped on Select file; then "Compiling ..." and "Compiled successfully." (the Compiler's own words). -->
+              <svg class="cmp" viewBox="0 0 320 170">
+                <rect
+                  class="hair page"
+                  x="22"
+                  y="12"
+                  width="276"
+                  height="146"
+                  rx="6"
+                />
+                <text class="t-sans" x="34" y="30" font-size="9.5">
+                  EasyEyes Compiler
+                </text>
+                <rect
+                  class="hair"
+                  x="34"
+                  y="37"
+                  width="252"
+                  height="19"
+                  rx="3"
+                />
+                <path class="hair" d="M34 46.5h252" />
+                <path
+                  class="bar"
+                  d="M41 41.8h32M86 41.8h56M41 51.3h28M86 51.3h70"
+                />
+                <rect
+                  class="tint"
+                  x="34"
+                  y="61"
+                  width="252"
+                  height="42"
+                  rx="3"
+                />
+                <path
+                  class="bar on-green"
+                  d="M41 68.5h50M48 75.5h150M41 82.5h84M48 89.5h196M48 96.5h118"
+                />
+                <rect
+                  class="btn-g"
+                  x="34"
+                  y="109"
+                  width="80"
+                  height="17"
+                  rx="3"
+                />
+                <text class="t-btn" x="74" y="120.2">Select file</text>
+                <rect
+                  class="btn-s"
+                  x="118"
+                  y="109"
+                  width="78"
+                  height="17"
+                  rx="3"
+                />
+                <path class="bar on-button" d="M136 117.5h42" />
+                <rect
+                  class="btn-s"
+                  x="200"
+                  y="109"
+                  width="86"
+                  height="17"
+                  rx="3"
+                />
+                <path class="bar on-button" d="M215 117.5h56" />
+                <path
+                  class="hair"
+                  d="M39.5 133h23a5.5 5.5 0 010 11h-23a5.5 5.5 0 010-11zM77.5 133h23a5.5 5.5 0 010 11h-23a5.5 5.5 0 010-11zM115.5 133h19a5.5 5.5 0 010 11h-19a5.5 5.5 0 010-11zM149.5 133h27a5.5 5.5 0 010 11h-27a5.5 5.5 0 010-11zM191.5 133h19a5.5 5.5 0 010 11h-19a5.5 5.5 0 010-11z"
+                />
+                <rect
+                  class="cmp-ring"
+                  x="30.5"
+                  y="105.5"
+                  width="87"
+                  height="24"
+                  rx="5"
+                />
+                <g class="cmp-modal">
+                  <rect
+                    class="cmp-veil"
+                    x="22"
+                    y="12"
+                    width="276"
+                    height="146"
+                    rx="6"
+                  />
+                  <rect
+                    class="cmp-card"
+                    x="88"
+                    y="50"
+                    width="144"
+                    height="66"
+                    rx="7"
+                  />
+                  <g class="cmp-working">
+                    <text
+                      class="t-sans"
+                      x="160"
+                      y="76"
+                      font-size="9.5"
+                      text-anchor="middle"
+                    >
+                      Compiling ...
+                    </text>
+                    <rect
+                      class="cmp-track"
+                      x="108"
+                      y="88"
+                      width="104"
+                      height="5"
+                      rx="2.5"
+                    />
+                    <rect
+                      class="cmp-bar"
+                      x="108"
+                      y="88"
+                      width="104"
+                      height="5"
+                      rx="2.5"
+                    />
+                  </g>
+                  <g class="cmp-done">
+                    <circle class="tint" cx="160" cy="74" r="9.5" />
+                    <path
+                      class="ln g"
+                      d="M155.3 74.3l3.3 3.3 6.2-7.2"
+                      stroke-width="1.7"
+                    />
+                    <text
+                      class="t-sans"
+                      x="160"
+                      y="101"
+                      font-size="9"
+                      text-anchor="middle"
+                    >
+                      Compiled successfully.
+                    </text>
+                  </g>
+                </g>
+                <g class="cmp-file">
+                  <path class="sheet" d="M58 96h14l7 7v21h-21z" />
+                  <path class="ln" d="M72 96v7h7" />
+                  <path
+                    class="ln g"
+                    d="M62 109h13M62 114h13M62 119h13M68.5 109v10"
+                  />
+                  <path
+                    class="cursor"
+                    d="M79 118v14.5l3.8-3.5 2.9 6.1 2.5-1.2-2.9-6 5-.3z"
+                  />
+                </g>
+              </svg>
+            </figure>
+            <div class="step-body">
+              <p class="num">02</p>
+              <h3>Compile it</h3>
+              <p>
+                Sign in with your Pavlovia account and select your table. The
+                Compiler checks it and turns it into a participant web app.
+              </p>
+              <p class="links">
+                <a href="compiler/">Open the Compiler</a>
+              </p>
+            </div>
+          </li>
+          <li class="step">
+            <figure class="step-fig" aria-hidden="true">
+              <!-- Left: one participant's screen during a trial (webcam dot, fixation cross, a target letter between two others). Right: many participants, each a small screen that turns green when that participant has finished. No recruitment service is named. -->
+              <svg viewBox="0 0 320 170">
+                <rect
+                  class="ln page"
+                  x="18"
+                  y="32"
+                  width="126"
+                  height="84"
+                  rx="5"
+                />
+                <circle cx="81" cy="38" r="1.4" fill="#a9a79f" />
+                <path class="ln" d="M81 116v12M61 128h40" />
+                <path class="ln" d="M38 76h12M44 70v12" />
+                <text class="t-sloan" x="84" y="80">H</text>
+                <text class="t-sloan gt" x="104" y="80">K</text>
+                <text class="t-sloan" x="124" y="80">N</text>
+                <rect
+                  class="hair page"
+                  x="164"
+                  y="22"
+                  width="140"
+                  height="126"
+                  rx="6"
+                />
+                <text class="t-sans" x="175" y="39.5">Participants</text>
+                <text
+                  class="t-mono t-dim"
+                  id="pt-count"
+                  x="293"
+                  y="39.5"
+                  text-anchor="end"
+                >
+                  7 of N
+                </text>
+                <rect
+                  class="cmp-track"
+                  x="175"
+                  y="46"
+                  width="118"
+                  height="4"
+                  rx="2"
+                />
+                <rect
+                  id="pt-bar"
+                  x="175"
+                  y="46"
+                  width="68.8"
+                  height="4"
+                  rx="2"
+                />
+                <g class="pt done" transform="translate(175.0 60)">
+                  <rect class="scr" width="24" height="17" rx="2.5" />
+                  <path class="cr" d="M9 8.5h6M12 5.5v6" />
+                  <path class="ck" d="M7.5 8.8l3 3 6-7" />
+                </g>
+                <g class="pt done" transform="translate(206.3 60)">
+                  <rect class="scr" width="24" height="17" rx="2.5" />
+                  <path class="cr" d="M9 8.5h6M12 5.5v6" />
+                  <path class="ck" d="M7.5 8.8l3 3 6-7" />
+                </g>
+                <g class="pt done" transform="translate(237.7 60)">
+                  <rect class="scr" width="24" height="17" rx="2.5" />
+                  <path class="cr" d="M9 8.5h6M12 5.5v6" />
+                  <path class="ck" d="M7.5 8.8l3 3 6-7" />
+                </g>
+                <g class="pt" transform="translate(269.0 60)">
+                  <rect class="scr" width="24" height="17" rx="2.5" />
+                  <path class="cr" d="M9 8.5h6M12 5.5v6" />
+                  <path class="ck" d="M7.5 8.8l3 3 6-7" />
+                </g>
+                <g class="pt" transform="translate(175.0 87)">
+                  <rect class="scr" width="24" height="17" rx="2.5" />
+                  <path class="cr" d="M9 8.5h6M12 5.5v6" />
+                  <path class="ck" d="M7.5 8.8l3 3 6-7" />
+                </g>
+                <g class="pt done" transform="translate(206.3 87)">
+                  <rect class="scr" width="24" height="17" rx="2.5" />
+                  <path class="cr" d="M9 8.5h6M12 5.5v6" />
+                  <path class="ck" d="M7.5 8.8l3 3 6-7" />
+                </g>
+                <g class="pt" transform="translate(237.7 87)">
+                  <rect class="scr" width="24" height="17" rx="2.5" />
+                  <path class="cr" d="M9 8.5h6M12 5.5v6" />
+                  <path class="ck" d="M7.5 8.8l3 3 6-7" />
+                </g>
+                <g class="pt done" transform="translate(269.0 87)">
+                  <rect class="scr" width="24" height="17" rx="2.5" />
+                  <path class="cr" d="M9 8.5h6M12 5.5v6" />
+                  <path class="ck" d="M7.5 8.8l3 3 6-7" />
+                </g>
+                <g class="pt" transform="translate(175.0 114)">
+                  <rect class="scr" width="24" height="17" rx="2.5" />
+                  <path class="cr" d="M9 8.5h6M12 5.5v6" />
+                  <path class="ck" d="M7.5 8.8l3 3 6-7" />
+                </g>
+                <g class="pt done" transform="translate(206.3 114)">
+                  <rect class="scr" width="24" height="17" rx="2.5" />
+                  <path class="cr" d="M9 8.5h6M12 5.5v6" />
+                  <path class="ck" d="M7.5 8.8l3 3 6-7" />
+                </g>
+                <g class="pt done" transform="translate(237.7 114)">
+                  <rect class="scr" width="24" height="17" rx="2.5" />
+                  <path class="cr" d="M9 8.5h6M12 5.5v6" />
+                  <path class="ck" d="M7.5 8.8l3 3 6-7" />
+                </g>
+                <g class="pt" transform="translate(269.0 114)">
+                  <rect class="scr" width="24" height="17" rx="2.5" />
+                  <path class="cr" d="M9 8.5h6M12 5.5v6" />
+                  <path class="ck" d="M7.5 8.8l3 3 6-7" />
+                </g>
+              </svg>
+            </figure>
+            <div class="step-body">
+              <p class="num">03</p>
+              <h3>Run it</h3>
+              <p>
+                Test yourself, and people you personally recruit, with just a
+                Pavlovia account. To recruit participants online, add a service
+                such as Prolific.
+              </p>
+              <p class="links">
+                <a onclick="onCompatibilityClick()">Compatibility</a>
+              </p>
+            </div>
+          </li>
+        </ol>
+      </section>
+
+      <section class="closing reveal">
+        <div>
+          <h2>If you use it, please cite us.</h2>
+          <div class="cite-card">
+            <div class="cite-bar">
+              <div class="cite-seg" role="tablist" aria-label="Citation format">
+                <button
+                  class="cite-tab"
+                  type="button"
+                  role="tab"
+                  id="tab-original"
+                  aria-controls="cite-original"
+                  aria-selected="true"
+                  onclick="showCitation('original')"
+                >
+                  APA 6
+                </button>
+                <button
+                  class="cite-tab"
+                  type="button"
+                  role="tab"
+                  id="tab-apa"
+                  aria-controls="cite-apa"
+                  aria-selected="false"
+                  onclick="showCitation('apa')"
+                >
+                  APA 7
+                </button>
+                <button
+                  class="cite-tab"
+                  type="button"
+                  role="tab"
+                  id="tab-bibtex"
+                  aria-controls="cite-bibtex"
+                  aria-selected="false"
+                  onclick="showCitation('bibtex')"
+                >
+                  BibTeX
+                </button>
+              </div>
+            </div>
+            <div class="cite-body">
+              <!-- The same reference as the original homepage (Perception, Vol. 50, No. 1_SUPPL, p. 7, December 2021, SAGE), set in two standard formats. -->
+              <p id="cite-apa" role="tabpanel" aria-labelledby="tab-apa" hidden>
+                Jiang, P., Burchell, A., &amp; Pelli, D. G. (2021). EasyEyes
+                aids online testing by emulating a wireless keyboard and
+                tracking viewing distance. <em>Perception, 50</em>(1_suppl), 7.
+              </p>
+              <pre
+                id="cite-bibtex"
+                role="tabpanel"
+                aria-labelledby="tab-bibtex"
+                hidden
+              >
+@article{jiang2021easyeyes,
+  author    = {Jiang, Peiling and Burchell, Augustin and Pelli, Denis G.},
+  title     = {{EasyEyes} aids online testing by emulating a wireless keyboard and tracking viewing distance},
+  journal   = {Perception},
+  volume    = {50},
+  number    = {1\_suppl},
+  pages     = {7},
+  year      = {2021},
+  month     = dec,
+  publisher = {SAGE Publications}
+}</pre
+              >
+              <!-- Denis's wording, exactly as on the original homepage. It has the APA 6th-edition form for a paper in published proceedings (month, "In ...", place: publisher), so the tab is named for that. Do not edit the text. -->
+              <p
+                id="cite-original"
+                role="tabpanel"
+                aria-labelledby="tab-original"
+              >
+                Jiang, P., Burchell, A., &amp; Pelli, D. G. (2021, December).
+                EasyEyes aids online testing by emulating a wireless keyboard
+                and tracking viewing distance. In <em>PERCEPTION</em> (Vol. 50,
+                No. 1_ SUPPL, pp. 7-7). 1 OLIVERS YARD, 55 CITY ROAD, LONDON
+                EC1Y 1SP, ENGLAND: SAGE PUBLICATIONS LTD.
+              </p>
+            </div>
+            <div class="cite-foot">
+              <button
+                class="btn-ee btn-ee-sm"
+                type="button"
+                onclick="copyCitation(this)"
+              >
+                Copy
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div id="author">
+          <h2>EasyEyes Team</h2>
+          <ul class="team">
+            <li class="person">
+              <span class="mono-mark" aria-hidden="true">DP</span>
+              <div>
+                <p class="name">Denis Pelli</p>
+                <p>Professor of Psychology &amp; Neural Science</p>
+                <p class="where">
+                  New York University ·
+                  <a href="mailto:denis.pelli@nyu.edu">denis.pelli@nyu.edu</a>
+                </p>
+              </div>
+            </li>
+            <li class="person">
+              <span class="mono-mark" aria-hidden="true">PJ</span>
+              <div>
+                <p class="name">Peiling Jiang</p>
+                <p>HCI PhD Candidate</p>
+                <p class="where">
+                  Foundation Interface Lab / UC San Diego ·
+                  <a href="mailto:goodjpl@nyu.edu">goodjpl@nyu.edu</a> ·
+                  <a
+                    href="https://github.com/peilingjiang"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    >GitHub</a
+                  >
+                </p>
+              </div>
+            </li>
+            <li class="person">
+              <span class="mono-mark" aria-hidden="true">AB</span>
+              <div>
+                <p class="name">Augustin Burchell</p>
+                <p>Research Software Engineer</p>
+                <p class="where">
+                  Pelli Lab - NYU Psychology ·
+                  <a href="mailto:augustin.burchell@gmail.com"
+                    >augustin.burchell@gmail.com</a
+                  >
+                  ·
+                  <a
+                    href="https://github.com/aburchell"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    >GitHub</a
+                  >
+                </p>
+              </div>
+            </li>
+            <li class="person">
+              <span class="mono-mark" aria-hidden="true">NT</span>
+              <div>
+                <p class="name">Nati Tsegaye</p>
+                <p>Engineering team</p>
+                <p class="where">
+                  <a href="mailto:nati.tsegaye@easyeyes.app"
+                    >nati.tsegaye@easyeyes.app</a
+                  >
+                  ·
+                  <a
+                    href="https://github.com/NatiTsegaye"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    >GitHub</a
+                  >
+                </p>
+              </div>
+            </li>
+            <li class="person">
+              <span class="mono-mark" aria-hidden="true">SL</span>
+              <div>
+                <p class="name">Simon Liao</p>
+                <p>Engineering team</p>
+                <p class="where">
+                  <a href="mailto:simon.liao@easyeyes.app"
+                    >simon.liao@easyeyes.app</a
+                  >
+                  ·
+                  <a
+                    href="https://github.com/simonliao98"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    >GitHub</a
+                  >
+                </p>
+              </div>
+            </li>
+            <li class="person">
+              <span class="mono-mark" aria-hidden="true">GA</span>
+              <div>
+                <p class="name">Gedion Alemayehu</p>
+                <p>Engineering team</p>
+                <p class="where">
+                  <a href="mailto:gedion.alemayehu@easyeyes.app"
+                    >gedion.alemayehu@easyeyes.app</a
+                  >
+                  ·
+                  <a
+                    href="https://github.com/Gedion-Alemayehu"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    >GitHub</a
+                  >
+                </p>
+              </div>
+            </li>
+            <li class="person">
+              <span class="mono-mark" aria-hidden="true">YW</span>
+              <div>
+                <p class="name">Yonathan Wagaye</p>
+                <p>Engineering team</p>
+                <p class="where">
+                  <a href="mailto:yonathan.wagaye@easyeyes.app"
+                    >yonathan.wagaye@easyeyes.app</a
+                  >
+                  ·
+                  <a
+                    href="https://github.com/Yonathan-Wagaye"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    >GitHub</a
+                  >
+                </p>
+              </div>
+            </li>
+            <li class="person">
+              <span class="mono-mark" aria-hidden="true">MK</span>
+              <div>
+                <p class="name">Mohammadreza Khahani</p>
+                <p>Engineering team</p>
+                <p class="where">
+                  <a href="mailto:mohammadreza.khahani@easyeyes.app"
+                    >mohammadreza.khahani@easyeyes.app</a
+                  >
+                  ·
+                  <a
+                    href="https://github.com/khahani"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    >GitHub</a
+                  >
+                </p>
+              </div>
+            </li>
+          </ul>
+        </div>
+      </section>
+
+      <section class="signoff reveal">
+        <p>Enjoy!</p>
+        <p>The EasyEyes Team</p>
+      </section>
     </main>
 
     <footer>
@@ -453,5 +3557,772 @@
         New York University<br />Created by Denis Pelli and the EasyEyes team
       </p>
     </footer>
+    <script>
+      // The citation card: switch between the two formats, and copy
+      // whichever one is showing.
+      var CITE_FORMATS = ["apa", "bibtex", "original"];
+      function showCitation(which) {
+        CITE_FORMATS.forEach(function (name) {
+          var on = name === which;
+          document.getElementById("cite-" + name).hidden = !on;
+          document
+            .getElementById("tab-" + name)
+            .setAttribute("aria-selected", on ? "true" : "false");
+        });
+      }
+      function copyCitation(button) {
+        var shown = CITE_FORMATS.map(function (name) {
+          return document.getElementById("cite-" + name);
+        }).filter(function (el) {
+          return !el.hidden;
+        })[0];
+        // BibTeX keeps its line breaks; the two prose formats become one line.
+        var text =
+          shown.tagName === "PRE"
+            ? shown.textContent.trim()
+            : shown.innerText.replace(/\s+/g, " ").trim();
+        navigator.clipboard.writeText(text).then(function () {
+          button.textContent = "Copied";
+          setTimeout(function () {
+            button.textContent = "Copy";
+          }, 1600);
+        });
+      }
+
+      // "How it works" figures. While they are live the three cards carry
+      // the class "live", which runs the Compiler loop (CSS), and the
+      // participants in the third figure finish one after another, in a
+      // scattered order, then start over. Nothing runs off screen or for
+      // visitors who prefer reduced motion.
+      (function () {
+        var steps = document.querySelector(".steps");
+        var tiles = steps ? steps.querySelectorAll(".pt") : [];
+        if (!tiles.length || !("IntersectionObserver" in window)) return;
+        if (window.matchMedia("(prefers-reduced-motion: reduce)").matches)
+          return;
+        var count = document.getElementById("pt-count");
+        var bar = document.getElementById("pt-bar");
+        var ORDER = [0, 5, 2, 9, 7, 1, 10, 4, 11, 3, 6, 8];
+        var n = tiles.length;
+        var k = 0;
+        var timer = null;
+        function show(done) {
+          for (var i = 0; i < n; i++)
+            tiles[ORDER[i]].classList.toggle("done", i < done);
+          // "of N", not "of 12": the twelve screens drawn are not a limit.
+          count.textContent = done + " of N";
+          bar.setAttribute("width", ((118 * done) / n).toFixed(1));
+        }
+        function tick() {
+          // k runs 0..n to fill the list, holds full for a few beats, repeats.
+          show(Math.min(k, n));
+          k = (k + 1) % (n + 5);
+        }
+        // They run while the cards are in view and the big screen at the top
+        // is not running, so only one region of the page moves at a time. On
+        // a very tall window that shows both in full, both run.
+        var ratio = 0;
+        function update() {
+          var wall = window.easyEyesWall || { busy: false, ratio: 0 };
+          var on =
+            ratio >= 0.2 &&
+            (!wall.busy || (wall.ratio >= 0.95 && ratio >= 0.95));
+          steps.classList.toggle("live", on);
+          if (on && !timer) {
+            tick();
+            timer = setInterval(tick, 520);
+          } else if (!on && timer) {
+            clearInterval(timer);
+            timer = null;
+          }
+        }
+        new IntersectionObserver(
+          function (entries) {
+            ratio = entries[0].intersectionRatio;
+            update();
+          },
+          { threshold: [0, 0.2, 0.95] },
+        ).observe(steps);
+        document.addEventListener("easyeyes-wall", update);
+      })();
+
+      // The big screen beside the welcome paragraph. Each small screen runs a
+      // loop of a different thing EasyEyes does. The numbers follow the
+      // Glossary: spacing and size step by 0.1 log unit, as QUEST homes in;
+      // letter size (width) is spacing / 1.4 (spacingOverSizeRatio) in every
+      // font; a reading page has 4 lines (readingLinesPerPage); the two
+      // questions are the Glossary's own examples; the card on the measured
+      // screen has a real credit card's proportions.
+      // Gedion found the version before this one too busy, so each screen
+      // has one calm motion and nothing changes the screen color. He then
+      // found twelve screens moving at once too much as well, and one at a
+      // time too little, so now a few move at once in overlapping turns, at
+      // an unhurried pace, and never while "How it works" is moving.
+      // Nothing runs off screen, or when the visitor prefers reduced motion.
+      (function () {
+        var wall = document.getElementById("wall");
+        if (!wall || !("IntersectionObserver" in window)) return;
+        if (window.matchMedia("(prefers-reduced-motion: reduce)").matches)
+          return;
+        wall.classList.add("live");
+
+        function $(id) {
+          return document.getElementById(id);
+        }
+        var STEP = Math.pow(10, -0.1); // 0.1 log unit
+        var SLOAN = "CDHKNORSVZ";
+        var CHARSET = "DHKNORSVZ"; // the demo table's fontCharacterSet
+        var WORDS =
+          "The open-source EasyEyes web app is meant to help anyone test vision online".split(
+            " ",
+          );
+        var PAGES = [
+          [
+            "The open-source EasyEyes web app is meant to",
+            "help anyone test vision online. EasyEyes",
+            "measures screen size, and, with consent,",
+            "uses the webcam of the participant's computer",
+          ],
+          [
+            "to track the participant's head and gaze",
+            "positions. EasyEyes also enables use of any",
+            "smartphone to emulate a wireless keypad, to",
+            "allow testing at long viewing distances.",
+          ],
+        ];
+        function pick(n, set) {
+          var pool = (set || SLOAN).split(""),
+            out = [];
+          while (out.length < n)
+            out.push(
+              pool.splice(Math.floor(Math.random() * pool.length), 1)[0],
+            );
+          return out;
+        }
+        function letter(id, ch, x, size) {
+          var el = $(id);
+          el.textContent = ch;
+          el.setAttribute("x", x.toFixed(1));
+          el.setAttribute("y", (150 + size / 2).toFixed(1));
+          el.setAttribute("font-size", size.toFixed(1));
+        }
+        // The crowding screen changes font with every change of size. For
+        // each font: the characters used, and, measured in the browser as a
+        // fraction of the font size, the widest character (w) and how far the
+        // ink reaches above (up) and below (down) the baseline. With these,
+        // a character is drawn "width" wide and centered on the fixation line.
+        var FACES = [
+          { family: "'Sloan', monospace", set: SLOAN, w: 1, up: 1, down: 0 },
+          {
+            family: "Georgia, 'Times New Roman', serif",
+            set: SLOAN,
+            w: 0.747,
+            up: 0.709,
+            down: 0.017,
+          },
+          {
+            family: "'Pelli', monospace",
+            set: "123456789",
+            w: 0.2,
+            up: 1,
+            down: 0,
+          },
+          {
+            family: "'Roboto Mono', monospace",
+            set: "abcdefghijklmnopqrstuvwxyz",
+            w: 0.558,
+            up: 0.771,
+            down: 0.213,
+          },
+          {
+            family: "'Auckland Optotype', monospace",
+            set: "0123456789",
+            w: 0.793,
+            up: 0.707,
+            down: 0.065,
+          },
+        ];
+        function glyph(id, ch, x, width, face) {
+          var el = $(id),
+            size = width / face.w;
+          el.textContent = ch;
+          el.style.fontFamily = face.family;
+          el.setAttribute("x", x.toFixed(1));
+          el.setAttribute(
+            "y",
+            (150 + (size * (face.up - face.down)) / 2).toFixed(1),
+          );
+          el.setAttribute("font-size", size.toFixed(1));
+        }
+        function choose(row, which) {
+          Array.prototype.forEach.call(row.children, function (g, i) {
+            g.firstElementChild.setAttribute(
+              "fill",
+              i === which ? "#000" : "#fff",
+            );
+            g.lastElementChild.setAttribute(
+              "fill",
+              i === which ? "#fff" : "#000",
+            );
+          });
+        }
+
+        // Gaze: where the line of gaze lands on the screen, in turn, and the
+        // viewing distance read at that moment (the head is never quite
+        // still). 162 units from the screen to the eye stand for 50 cm, so
+        // the eye moves 3.24 units for each cm. The line, the wedge, the
+        // landing spot, the eye and the distance line glide there together.
+        var GAZE = [
+          [146, 106, 50],
+          [190, 90, 52],
+          [170, 131, 49],
+          [148, 160, 51],
+          [190, 172, 48],
+        ];
+        var gaze = {
+          x: 170,
+          y: 131,
+          cm: 50,
+          frame: 0,
+          past: [
+            [170, 131],
+            [170, 131],
+          ],
+        };
+        function set(id, attrs) {
+          for (var a in attrs)
+            $(id).setAttribute(
+              a,
+              typeof attrs[a] === "number" ? attrs[a].toFixed(1) : attrs[a],
+            );
+        }
+        function lookAt(x, y, cm) {
+          // If the last glide was cut short (a background tab draws no
+          // frames), start from where it was going.
+          cancelAnimationFrame(gaze.frame);
+          if (gaze.to) {
+            gaze.x = gaze.to[0];
+            gaze.y = gaze.to[1];
+            gaze.cm = gaze.to[2];
+          }
+          gaze.to = [x, y, cm];
+          var x0 = gaze.x,
+            y0 = gaze.y,
+            c0 = gaze.cm,
+            t0 = null;
+          gaze.past = [gaze.past[1], [x0, y0]];
+          set("gz-old-2", { cx: gaze.past[0][0], cy: gaze.past[0][1] });
+          set("gz-old-1", { cx: x0, cy: y0 });
+          function draw(now) {
+            if (t0 === null) t0 = now;
+            var p = Math.min(1, (now - t0) / 550),
+              e = p * p * (3 - 2 * p);
+            gaze.x = x0 + (x - x0) * e;
+            gaze.y = y0 + (y - y0) * e;
+            gaze.cm = c0 + (cm - c0) * e;
+            var ex = 330 + (gaze.cm - 50) * 3.24,
+              ey = 131 + (gaze.y - 131) * 0.07;
+            // The wedge ends as wide as the landing spot (radius 15).
+            var dx = gaze.x - ex,
+              dy = gaze.y - ey,
+              len = Math.sqrt(dx * dx + dy * dy),
+              nx = (-dy / len) * 15,
+              ny = (dx / len) * 15;
+            set("gz-line", { x1: ex, y1: ey, x2: gaze.x, y2: gaze.y });
+            set("gz-cone", {
+              points: [
+                ex,
+                ey,
+                gaze.x + nx,
+                gaze.y + ny,
+                gaze.x - nx,
+                gaze.y - ny,
+              ]
+                .map(function (v) {
+                  return v.toFixed(1);
+                })
+                .join(" "),
+            });
+            set("gz-trail", {
+              points: gaze.past[0]
+                .concat(gaze.past[1], [gaze.x.toFixed(1), gaze.y.toFixed(1)])
+                .join(" "),
+            });
+            set("gz-dot", {
+              transform:
+                "translate(" +
+                gaze.x.toFixed(1) +
+                " " +
+                gaze.y.toFixed(1) +
+                ")",
+            });
+            set("gz-eye", {
+              transform: "translate(" + (ex - 330).toFixed(1) + " 0)",
+            });
+            set("gz-pupil", { cy: ey });
+            set("gz-cam", { x2: ex - 10 });
+            set("gz-dist", { x2: ex });
+            set("gz-cm", { x: (168 + ex) / 2 });
+            $("gz-cm").textContent = Math.round(gaze.cm) + " cm";
+            if (p < 1) gaze.frame = requestAnimationFrame(draw);
+          }
+          gaze.frame = requestAnimationFrame(draw);
+        }
+
+        // Keypad: which key is pressed at each step.
+        var KEYS = wall.querySelectorAll("#kp .key");
+        var PRESSES = [4, 9, 1, 13, 6, 11, 2, 7, 12, 13];
+
+        // Color: font colors for the flashed words. Saturated ones are given
+        // in display-p3 too, for displays that can show them. The last is
+        // black at 40% opacity.
+        var INKS = [
+          ["#000000", 1],
+          ["#ff0000", 1, "color(display-p3 1 0 0)"],
+          ["#0000ff", 1, "color(display-p3 0 0 1)"],
+          ["#00a000", 1, "color(display-p3 0 0.62 0)"],
+          ["#f07000", 1],
+          ["#8a00c8", 1],
+          ["#000000", 0.4],
+        ];
+
+        // One act per small screen that moves. tile: the screen's data-name.
+        // every: ms per step. steps: steps in a full cycle. turn: steps played
+        // in one turn (a whole cycle if absent). resume: carry on next turn
+        // from where this one stopped. hold: for a screen moved by CSS alone,
+        // how long its turn lasts. rest: tidy up when the turn ends.
+        var LOOPS = [
+          // A new font with every new size. Width is spacing / 1.4 in each.
+          {
+            tile: "Crowding",
+            every: 1400,
+            steps: 5,
+            step: function (k) {
+              var spacing = 64 * Math.pow(STEP, k),
+                width = spacing / 1.4,
+                face = FACES[k],
+                l = pick(3, face.set);
+              glyph("cr-a", l[0], 300 - spacing, width, face);
+              glyph("cr-t", l[1], 300, width, face);
+              glyph("cr-b", l[2], 300 + spacing, width, face);
+            },
+          },
+
+          {
+            tile: "Acuity",
+            every: 1300,
+            steps: 5,
+            step: function (k) {
+              letter("ac-t", pick(1)[0], 300, 60 * Math.pow(STEP, k));
+            },
+          },
+
+          // One glyph in five of the fonts EasyEyes ships or can fetch.
+          {
+            tile: "Fonts",
+            every: 1500,
+            steps: 5,
+            step: function (k) {
+              var f = [
+                ["R", "'Sloan', monospace", 130],
+                ["5", "'Pelli', monospace", 190],
+                ["3", "'Auckland Optotype', monospace", 150],
+                ["g", "'Roboto Mono', monospace", 170],
+                ["a", "Georgia, 'Times New Roman', serif", 190],
+              ][k];
+              var el = $("ft-g");
+              el.textContent = f[0];
+              el.style.fontFamily = f[1];
+              el.setAttribute("font-size", f[2]);
+            },
+          },
+          // The simulated observer: a new target, and the model picks it.
+          {
+            tile: "Simulation",
+            every: 1400,
+            steps: 4,
+            step: function () {
+              var i = Math.floor(Math.random() * CHARSET.length);
+              $("sm-t").textContent = CHARSET[i];
+              $("sm-box").setAttribute("x", 96 + 36 * i - 17);
+            },
+          },
+          // The break box fills from the bottom, holds full, and starts again.
+          {
+            tile: "Take a break",
+            every: 900,
+            steps: 8,
+            step: function (k) {
+              var h = (82 * Math.min(k, 6)) / 6;
+              $("tb-fill").setAttribute("y", (275 - h).toFixed(1));
+              $("tb-fill").setAttribute("height", h.toFixed(1));
+            },
+          },
+          // A response by click and by key: the same letter in both.
+          {
+            tile: "Responses",
+            every: 1500,
+            steps: 4,
+            step: function () {
+              var i = Math.floor(Math.random() * CHARSET.length),
+                x = 80 + 40 * i;
+              $("rs-box").setAttribute("x", x - 20);
+              $("rs-cur").setAttribute(
+                "transform",
+                "translate(" + (x + 6) + " 96)",
+              );
+              $("rs-key").textContent = CHARSET[i];
+            },
+          },
+          // Gap, Fixation, Target request, Target through one trial: waiting,
+          // the gap after the fixation task, the target shown, and after it.
+          {
+            tile: "Timing bars",
+            every: 1100,
+            steps: 4,
+            step: function (k) {
+              var on = [
+                [0, 1, 0, 0],
+                [1, 1, 0, 0],
+                [0, 1, 1, 1],
+                [0, 1, 0, 0],
+              ][k];
+              on.forEach(function (white, i) {
+                $("tm-" + i).classList.toggle("w", !!white);
+              });
+            },
+          },
+          // Too near (36 cm), then nudged back into the allowed range (50 cm).
+          {
+            tile: "Nudging",
+            every: 1700,
+            steps: 3,
+            step: function (k) {
+              var x = k === 0 ? 259 : 326;
+              $("ng-eye").setAttribute("transform", "translate(" + x + " 150)");
+              $("ng-tick").setAttribute("transform", "translate(" + x + " 0)");
+              $("ng-dist").setAttribute("x2", x);
+              $("ng-cm").setAttribute("x", (100 + x) / 2);
+              $("ng-cm").textContent = k === 0 ? "36 cm" : "50 cm";
+              $("ng-arrow").setAttribute(
+                "display",
+                k === 0 ? "inline" : "none",
+              );
+            },
+          },
+          // Repeated letters: a new pair of letters each trial, alternating
+          // along the lines, with the lines complementary.
+          {
+            tile: "Repeated letters",
+            every: 1600,
+            steps: 4,
+            step: function () {
+              // Four letters a line: a small block in the middle of the screen.
+              var l = pick(2),
+                ab = l[0] + l[1] + l[0] + l[1],
+                ba = l[1] + l[0] + l[1] + l[0];
+              $("rp-1").textContent = "$" + ab + "$";
+              $("rp-2").textContent = "$" + ba + "$";
+              $("rp-3").textContent = "$" + ab + "$";
+            },
+          },
+          // Analyze: the participants' points come in two at a time.
+          {
+            tile: "Analyze",
+            every: 800,
+            steps: 7,
+            step: function (k) {
+              var shown = Math.min(2 * (k + 1), 12);
+              Array.prototype.forEach.call(
+                $("an-dots").children,
+                function (dot, i) {
+                  dot.setAttribute("display", i < shown ? "inline" : "none");
+                },
+              );
+            },
+          },
+          // RSVP reading: three words flashed, then the answer screen, where
+          // the word shown is picked in each column in turn.
+          {
+            tile: "RSVP reading",
+            every: 900,
+            steps: 8,
+            step: function (k) {
+              var flashing = k < 3;
+              $("rv-w").setAttribute("display", flashing ? "inline" : "none");
+              $("rv-ans").setAttribute("display", flashing ? "none" : "inline");
+              if (flashing)
+                $("rv-w").textContent = ["anyone", "test", "vision"][k];
+              for (var c = 0; c < 3; c++)
+                $("rv-box-" + c).setAttribute(
+                  "display",
+                  k >= 4 + c ? "inline" : "none",
+                );
+            },
+          },
+          // The retention question, then its answer.
+          {
+            tile: "Reading retention",
+            every: 1500,
+            steps: 3,
+            step: function (k) {
+              choose($("rt-row"), k === 0 ? -1 : 1);
+            },
+          },
+          // The image, then its name is clicked.
+          {
+            tile: "Image",
+            every: 1500,
+            steps: 3,
+            step: function (k) {
+              choose($("im-row"), k === 0 ? -1 : 2);
+            },
+          },
+          // The participant's language menu: each language is picked in turn.
+          {
+            tile: "Language choice",
+            every: 1400,
+            steps: 5,
+            step: function (k) {
+              $("lc-now").textContent = [
+                "English",
+                "Deutsch",
+                "Español",
+                "日本語",
+                "العربية",
+              ][k];
+              $("lc-hi").setAttribute("display", k === 0 ? "none" : "inline");
+              $("lc-hi").setAttribute("y", 90 + 40 * (k - 1));
+            },
+          },
+          { tile: "Sound", hold: 6000 },
+          {
+            tile: "Gaze tracking",
+            every: 2000,
+            steps: GAZE.length,
+            turn: 3,
+            resume: true,
+            step: function (k) {
+              lookAt(GAZE[k][0], GAZE[k][1], GAZE[k][2]);
+            },
+          },
+          // Two pages of four lines (readingLinesPerPage).
+          {
+            tile: "Reading",
+            every: 2600,
+            steps: 2,
+            step: function (k) {
+              PAGES[k].forEach(function (line, i) {
+                $("rd-" + (i + 1)).textContent = line;
+              });
+            },
+          },
+          // Ten key presses, then the keys are released.
+          {
+            tile: "Keypad",
+            every: 560,
+            steps: 11,
+            step: function (k) {
+              $("kp").classList.toggle("kp-typing", k < 10);
+              Array.prototype.forEach.call(KEYS, function (key, i) {
+                key.classList.toggle("on", i === PRESSES[k]);
+              });
+            },
+            rest: function () {
+              $("kp").classList.remove("kp-typing");
+              Array.prototype.forEach.call(KEYS, function (key) {
+                key.classList.remove("on");
+              });
+            },
+          },
+          // The multiple-choice question, then its answer, then the free-form one.
+          {
+            tile: "Question and answer",
+            every: 1500,
+            steps: 5,
+            step: function (k) {
+              $("qa-mc").setAttribute("display", k < 3 ? "inline" : "none");
+              $("qa-ff").setAttribute("display", k < 3 ? "none" : "inline");
+              choose($("qa-row"), k === 0 ? -1 : 2);
+            },
+          },
+          // Thirteen words and seven colors, so the pairing keeps changing.
+          {
+            tile: "Color",
+            every: 950,
+            steps: WORDS.length * INKS.length,
+            turn: 7,
+            resume: true,
+            step: function (k) {
+              var ink = INKS[k % INKS.length],
+                w = $("cl-w");
+              w.textContent = WORDS[k % WORDS.length];
+              w.style.fill = ink[0];
+              if (ink[2]) w.style.fill = ink[2];
+              w.style.fillOpacity = ink[1];
+            },
+          },
+        ];
+        if (document.fonts && document.fonts.load) {
+          document.fonts.load('16px "Pelli"', "5");
+          document.fonts.load('16px "Auckland Optotype"', "3");
+        }
+        // Every screen starts on its first frame.
+        LOOPS.forEach(function (loop) {
+          loop.el = wall.querySelector('.mini[data-name="' + loop.tile + '"]');
+          loop.cell = loop.el.parentNode;
+          loop.k = 0;
+          if (loop.step) loop.step(0);
+        });
+
+        // Which screens move. AT_ONCE of the screens in view are moving at
+        // any moment, in overlapping turns dealt at random: when one
+        // finishes it rests and another starts a moment later.
+        var AT_ONCE = 4;
+        var active = [],
+          waits = [],
+          running = false,
+          lastEnded = null;
+
+        // Is this screen showing? The rows drift, so a screen counts while
+        // at least 60% of it is inside its row's window.
+        function inView(loop) {
+          var track = loop.cell.parentNode;
+          var step = track.step || 1,
+            wide = step - GAP_PX;
+          var left =
+            Array.prototype.indexOf.call(track.children, loop.cell) * step -
+            (track.offset || 0);
+          return left > -0.4 * wide && left + 0.6 * wide < 3 * step - GAP_PX;
+        }
+        function draw() {
+          var free = LOOPS.filter(function (loop) {
+            return active.indexOf(loop) < 0 && inView(loop);
+          });
+          var fresh = free.filter(function (loop) {
+            return loop !== lastEnded;
+          });
+          var pool = fresh.length ? fresh : free;
+          return pool[Math.floor(Math.random() * pool.length)];
+        }
+        function later(fn, ms) {
+          var id = setTimeout(function () {
+            waits.splice(waits.indexOf(id), 1);
+            fn();
+          }, ms);
+          waits.push(id);
+        }
+        function launch() {
+          var act = draw();
+          if (!act) {
+            later(launch, 1200);
+            return;
+          }
+          active.push(act);
+          act.el.classList.add("on");
+          if (!act.step) {
+            act.timer = setTimeout(function () {
+              finish(act);
+            }, act.hold);
+            return;
+          }
+          var left = act.turn || act.steps;
+          if (!act.resume) act.k = -1;
+          (function beat() {
+            act.k = (act.k + 1) % act.steps;
+            act.step(act.k);
+            left -= 1;
+            act.timer = setTimeout(
+              left > 0
+                ? beat
+                : function () {
+                    finish(act);
+                  },
+              act.every,
+            );
+          })();
+        }
+        function rest(act) {
+          clearTimeout(act.timer);
+          act.el.classList.remove("on");
+          if (act.rest) act.rest();
+        }
+        function finish(act) {
+          rest(act);
+          active.splice(active.indexOf(act), 1);
+          lastEnded = act;
+          later(launch, 500 + Math.random() * 1000);
+        }
+
+        // The rows drift sideways, continuously and slowly, in an endless
+        // loop, and neighboring rows go opposite ways: the first and third to
+        // the left, the second to the right. When a screen has gone fully out
+        // of view on one side it joins the line on the other, and the row
+        // carries on without a jump. A screen that is leaving finishes its
+        // turn first.
+        var TRACKS = wall.querySelectorAll(".wall-track");
+        var GAP_PX = 7;
+        var SPEED = 13; // px per second
+        var frame = 0,
+          before = 0;
+
+        function drift(now) {
+          var dt = Math.min((now - before) / 1000, 0.1);
+          before = now;
+          Array.prototype.forEach.call(TRACKS, function (track, n) {
+            if (track.children.length <= 3) return;
+            var way = n % 2 ? -1 : 1; // 1: to the left. -1: to the right.
+            track.step = track.firstElementChild.offsetWidth + GAP_PX;
+            track.offset = (track.offset || 0) + way * SPEED * dt;
+            if (track.offset >= track.step) {
+              track.offset -= track.step;
+              track.appendChild(track.firstElementChild);
+            } else if (track.offset < 0) {
+              track.offset += track.step;
+              track.insertBefore(
+                track.lastElementChild,
+                track.firstElementChild,
+              );
+            }
+            active.slice().forEach(function (act) {
+              if (act.cell.parentNode === track && !inView(act)) finish(act);
+            });
+            track.style.transform =
+              "translateX(" + (-track.offset).toFixed(2) + "px)";
+          });
+          frame = requestAnimationFrame(drift);
+        }
+
+        function start() {
+          running = true;
+          for (var n = 0; n < AT_ONCE; n++) later(launch, 300 + n * 800);
+          before = performance.now();
+          frame = requestAnimationFrame(drift);
+        }
+        function stop() {
+          running = false;
+          cancelAnimationFrame(frame);
+          waits.forEach(clearTimeout);
+          waits = [];
+          active.forEach(rest);
+          active = [];
+        }
+        // The big screen runs while at least half of it is in view. Once
+        // the visitor scrolls on, it stops and tells the page, so that the
+        // "How it works" figures take over: one moving region at a time.
+        new IntersectionObserver(
+          function (entries) {
+            var ratio = entries[0].intersectionRatio;
+            var busy = ratio >= 0.5;
+            wall.classList.toggle("away", !busy);
+            if (busy && !running) start();
+            if (!busy && running) stop();
+            window.easyEyesWall = { busy: busy, ratio: ratio };
+            document.dispatchEvent(new Event("easyeyes-wall"));
+          },
+          { threshold: [0, 0.5, 0.95] },
+        ).observe(wall);
+      })();
+    </script>
   </body>
 </html>
