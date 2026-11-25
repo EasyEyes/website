@@ -58,9 +58,9 @@ export function createFileProgress() {
     const start = Math.max(0, latest.length - (page + 1) * logPageSize);
     const end = latest.length - page * logPageSize;
     log.replaceChildren(latest.length ? table(
-      ["Time", "File", "Keyterms", "Provider", "Outcome", "Final transcript / error"],
+      ["Time", "File", "Keyterms / tail", "Provider", "Outcome", "Final transcript / error"],
       latest.slice(start, end).reverse().map((item) => [
-        item.time, item.file, terms(item.enabled), replayProviders[item.key],
+        item.time, item.file, terms(item.enabled) + (item.tailMs === undefined ? "" : ` · ${item.tailMs} ms`), replayProviders[item.key],
         item.row.error ? "Failed" : "Transcribed",
         item.row.error ?? (item.row.transcript || "(empty transcript)"),
       ]),
@@ -95,10 +95,11 @@ export function createFileProgress() {
       panel.hidden = false;
       timer = setInterval(renderClock, 1000);
     },
-    clip(file, enabled, keys, index, total) {
-      running.set(index, { file, enabled, states: new Map(keys.map((key) => [key, "decoding"])) });
+    clip(file, enabled, keys, index, total, tailMs) {
+      running.set(index, { file, enabled, tailMs, states: new Map(keys.map((key) => [key, "decoding"])) });
       batch.lastUpdate = Date.now();
-      activity.textContent = `Run ${index} of ${total} · ${file} · keyterms ${terms(enabled).toLowerCase()}`;
+      activity.textContent = `Run ${index} of ${total} · ${file} · keyterms ${terms(enabled).toLowerCase()}` +
+        (tailMs === undefined ? "" : ` · tail ${tailMs} ms`);
       renderActive();
       renderClock();
     },
@@ -111,7 +112,7 @@ export function createFileProgress() {
         const field = row.error ? "failed" : "success";
         batch[field]++;
         batch.providers.get(key)[field]++;
-        latest.push({ file: current.file, enabled: current.enabled, key, row,
+        latest.push({ file: current.file, enabled: current.enabled, tailMs: current.tailMs, key, row,
           time: shortTime(batch.lastUpdate - batch.startedAt) });
         renderLog();
       }

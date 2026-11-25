@@ -142,6 +142,7 @@ try {
       send(data) {
         if (typeof data !== "string") {
           window.testAudio[this.deepgram ? "deepgram" : "chirp3"].push(Array.from(new Uint8Array(data)));
+          this.bytes = (this.bytes ?? 0) + data.byteLength;
           return;
         }
         const message = JSON.parse(data);
@@ -162,12 +163,14 @@ try {
             sampleRate: 16000, languageCode: "en-US",
           });
         } else if (!this.deepgram && message.type === "finish") {
-          this.reply({ type: "segment", utteranceId: this.utteranceId, text: "Call my stone." });
-          const bytes = window.testAudio.chirp3.reduce((n, chunk) => n + chunk.length, 0);
+          const bytes = this.bytes;
+          const text = window.testTailProbe && bytes === 16000 ? "Call my" : "Call my stone.";
+          this.reply({ type: "segment", utteranceId: this.utteranceId, text });
           this.reply({
             type: "complete",
             utteranceId: this.utteranceId,
-            trace: { receivedBytes: bytes, writtenBytes: bytes, finalCount: 1 },
+            trace: { receivedBytes: bytes, writtenBytes: bytes, finalCount: 1,
+              grpcStatus: 0, results: [{ atMs: 510, endOffsetMs: 500, isFinal: true, text }] },
           });
         } else if (this.deepgram && message.type === "CloseStream") {
           this.reply({
@@ -408,6 +411,31 @@ try {
   });
   await page.locator("#file-cancel").click();
   await page.getByText("Cancelled · finished results are saved in this tab", { exact: true }).waitFor();
+  await page.locator("#file-manifest").setInputFiles(jsonFile("manifest.json", { version: 1, clips }));
+  await page.getByText(/2 clips · 2 matching audio files/).waitFor();
+  await page.evaluate(() => { window.testTailProbe = true; });
+  await page.locator("#file-keyterms").selectOption("on");
+  await page.locator("#file-tail-test").check();
+  await page.locator("#file-consent").check();
+  await page.locator("#file-run").click();
+  await page.getByText(/Run ended after 4 clip runs/).waitFor({ timeout: 22000 });
+  const tail = page.locator("#file-tail-summary");
+  assert.match(await tail.innerText(), /Complete pairs: 2\/2.*2 at 0 ms → 0 at 800 ms/);
+  assert.match(await tail.innerText(), /4 matched, 0 mismatched, 0 unavailable/);
+  await tail.locator("summary").click();
+  assert.match(await tail.innerText(), /16000 \/ 16000 \/ 16000 \/ 16000 · matched/);
+  assert.match(await tail.innerText(), /41600 \/ 41600 \/ 41600 \/ 41600 · matched/);
+  const tailDownload = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Export results JSON" }).click();
+  const tailData = JSON.parse(await readFile(await (await tailDownload).path(), "utf8"));
+  assert.equal(tailData.reports.original.summary.length, 0);
+  assert.equal(tailData.results.length, 4);
+  assert.equal(tailData.results[0].evidence.relay.results[0].endOffsetMs, 500);
+  assert.match(tailData.results[0].evidence.originalPcmSha256, /^[a-f0-9]{64}$/);
+  for (const clip of clips) {
+    const pair = tailData.results.filter(({ clipId }) => clipId === clip.id);
+    assert.equal(pair[0].evidence.originalPcmSha256, pair[1].evidence.originalPcmSha256);
+  }
   assert.deepEqual(errors, []);
   console.log(
     "Preview UI passed: live comparison and complete same-audio RSVP dataset replay.",

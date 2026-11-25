@@ -4,6 +4,7 @@ import { fileKeyterms, fileRsvpScorer, makeRsvpCases } from "./fileRsvpScore.js"
 import { manifestKey, qualityLabels, readReviews } from "./fileReview.mjs";
 import { csvMetricRows, node, renderFileReport, table } from "./fileReport.js";
 import { createFileProgress } from "./fileProgress.js";
+import { byteAgreement, isTailLabel, summarizeTailPairs, tailLabel, tailVariants } from "./fileDiagnostics.mjs";
 
 const keytermVariants = Object.entries(replayProviders).map(([key, provider]) => ({
   provider, off: replayLabel(key, false), on: replayLabel(key, true),
@@ -58,6 +59,40 @@ export function setupFileBenchmark() {
   $("show-live").onclick = () => showFiles(false);
   $("show-files").onclick = () => showFiles(true);
   const resultRows = () => [...results.values()].flatMap((group) => [...group.values()]);
+  const tailReports = () => {
+    const rows = [...results].filter(([label]) => isTailLabel(label)).flatMap(([, group]) => [...group.values()]);
+    if (!rows.length) return [];
+    const targets = new Map(clips.map((clip) => [clip.id, clip.targets.length]));
+    return [false, true].map((keyterms) => ({ keyterms, ...summarizeTailPairs(rows, targets,
+      ...tailVariants.map((ms) => tailLabel(replayLabel("chirp3", keyterms), ms))) }))
+      .filter((report) => report.attempted);
+  };
+
+  function drawTailReport() {
+    const output = $("file-tail-summary");
+    const report = tailReports();
+    output.hidden = !report.length;
+    output.replaceChildren();
+    for (const r of report) {
+      output.append(node("h3", "Chirp 3 tail silence · keyterms " + (r.keyterms ? "on" : "off")),
+        node("p", `Complete pairs: ${r.paired}/${r.attempted}. Fewer words than targets: ${r.beforeShort} at 0 ms → ${r.afterShort} at 800 ms (paired only). Recovered count: ${r.recovered}. New short outputs: ${r.regressed}. Word count does not prove accuracy.`),
+        node("p", `Byte checks across both runs: ${r.byteMatches} matched, ${r.byteMismatches} mismatched, ${r.byteUnavailable} unavailable. A missing server trace means the relay may not have tracing enabled; browser data are still saved.`));
+      const details = node("details");
+      details.append(node("summary", "Compare file transcripts and byte counts"), table(
+        ["File", "0 ms text", "800 ms text", "0 ms · bytes", "800 ms · bytes"],
+        r.details.map(({ id, before, after }) => {
+          const result = (row) => row?.error ?? row?.transcript ?? "—";
+          const bytes = (row) => {
+            const e = row?.evidence;
+            return e ? [e.expectedPcmBytes, e.browserSentBytes, e.relay?.receivedBytes, e.relay?.writtenBytes]
+              .map((n) => n ?? "—").join(" / ") + " · " + byteAgreement(e) : "—";
+          };
+          return [id, result(before), result(after), bytes(before), bytes(after)];
+        }),
+      ));
+      output.append(node("p", "Bytes are shown as expected / browser sent / relay received / gRPC written. Full segments, offsets and timing are in the JSON export."), details);
+    }
+  }
 
   function refreshReport() {
     if (!manifest) return;
@@ -68,14 +103,16 @@ export function setupFileBenchmark() {
       if (!memo.has(key)) memo.set(key, scorer(targets, transcript));
       return memo.get(key);
     };
-    computed = summarizeReviews(clips, results, cachedScore, reviews, ignoreOrder());
+    const normal = new Map([...results].filter(([label]) => !isTailLabel(label)));
+    computed = summarizeReviews(clips, normal, cachedScore, reviews, ignoreOrder());
     for (const report of Object.values(computed.reports))
       report.keytermPairs = summarizeKeytermPairs(report.clips, report.details, keytermVariants);
     const hasResults = !!results.size;
-    $("file-export-csv").disabled = !!controller || !hasResults;
+    $("file-export-csv").disabled = !!controller || !normal.size;
     $("file-export-json").disabled = !hasResults && !reviews.size;
-    $("file-scope-label").hidden = !hasResults;
+    $("file-scope-label").hidden = !normal.size;
     drawReport();
+    drawTailReport();
     refreshClipList(true);
   }
 
@@ -337,6 +374,7 @@ export function setupFileBenchmark() {
     settings: { ignoreOrder: ignoreOrder() },
     results: resultRows(),
     reviews: [...reviews.values()],
+    tailDiagnostics: controller ? undefined : tailReports().map(({ details, ...summary }) => summary),
     quality: controller ? undefined : computed.quality,
     reports: controller ? undefined : Object.fromEntries(Object.entries(computed.reports).map(([key, report]) =>
       [key, { summary: report.summary, keytermPairs: report.keytermPairs,
@@ -353,22 +391,25 @@ export function setupFileBenchmark() {
     if (controller) return;
     if (!manifest) return status("Load a reference manifest first.");
     const accessCode = $("file-code").value.trim() || $("access-code").value.trim();
-    const keys = [...document.querySelectorAll('input[name="file-provider"]:checked')].map((input) => input.value);
+    const diagnostic = $("file-tail-test").checked;
+    const keys = diagnostic ? ["chirp3"] : [...document.querySelectorAll('input[name="file-provider"]:checked')].map((input) => input.value);
     if (!$("file-consent").checked || !/^[0-9a-f]{64}$/i.test(accessCode) || !keys.length)
       return status("Confirm you can send these files, enter the preview code, and choose providers.");
     const mode = $("file-keyterms").value;
-    const variants = mode === "both" ? [false, true] : [mode === "on"];
-    const missingResults = (clip, providers, enabled) => providers.filter((key) =>
-      typeof results.get(replayLabel(key, enabled))?.get(clip.id)?.transcript !== "string");
+    const variants = (mode === "both" ? [false, true] : [mode === "on"]).flatMap((enabled) =>
+      (diagnostic ? tailVariants : [undefined]).map((tailMs) => ({ enabled, tailMs })));
+    const label = (key, { enabled, tailMs }) =>
+      tailMs === undefined ? replayLabel(key, enabled) : tailLabel(replayLabel(key, enabled), tailMs);
+    const missingResults = ({ clip, ...variant }, providers) => providers.filter((key) =>
+      typeof results.get(label(key, variant))?.get(clip.id)?.transcript !== "string");
     const remaining = clips.flatMap((clip) => variants
-      .filter((enabled) => missingResults(clip, keys, enabled).length)
-      .map((enabled) => ({ clip, enabled })));
-    const attemptedBefore = ({ clip, enabled }) => missingResults(clip, keys, enabled).every((key) =>
-      results.get(replayLabel(key, enabled))?.has(clip.id));
+      .map((variant) => ({ clip, ...variant })).filter((run) => missingResults(run, keys).length));
+    const attemptedBefore = (run) => missingResults(run, keys).every((key) =>
+      results.get(label(key, run))?.has(run.clip.id));
     remaining.sort((a, b) => Number(attemptedBefore(a)) - Number(attemptedBefore(b)));
     const limit = $("file-batch-limit").value;
     const pending = (limit === "all" ? remaining : remaining.slice(0, Number(limit)))
-      .map((run) => ({ ...run, providers: missingResults(run.clip, keys, run.enabled) }));
+      .map((run) => ({ ...run, providers: missingResults(run, keys) }));
     if (!pending.length) return status("All selected providers have results for this dataset.");
     const missingFiles = [...new Set(pending.map(({ clip }) => clip.file).filter((file) => !files.has(file)))];
     if (missingFiles.length) return status(
@@ -377,37 +418,37 @@ export function setupFileBenchmark() {
 
     controller = new AbortController();
     const { signal } = controller;
-    const controls = ["file-manifest", "file-audio", "file-results", "file-run", "file-ignore-order", "file-keyterms", "file-batch-limit", "file-workers"];
+    const controls = ["file-manifest", "file-audio", "file-results", "file-run", "file-ignore-order", "file-keyterms", "file-batch-limit", "file-workers", "file-tail-test"];
     for (const id of controls) $(id).disabled = true;
     $("file-cancel").disabled = false;
     $("file-export-csv").disabled = true;
     const byProvider = new Map(keys.map((key) => {
-      const success = variants.reduce((sum, enabled) => sum +
-        clips.filter((clip) => !missingResults(clip, [key], enabled).length).length, 0);
+      const success = variants.reduce((sum, variant) => sum +
+        clips.filter((clip) => !missingResults({ clip, ...variant }, [key]).length).length, 0);
       return [key, { total: clips.length * variants.length, success, failed: 0 }];
     }));
     progress.start(pending.reduce((total, run) => total + run.providers.length, 0), byProvider);
-    const stopped = new Set();
+    const stopped = new Map();
     let warning = false, attempted = 0, cursor = 0;
     let batchState = "Batch finished";
     const worker = async () => {
       while (cursor < pending.length && !signal.aborted && stopped.size < keys.length) {
         const index = cursor++;
-        const { clip, enabled, providers } = pending[index];
+        const { clip, enabled, tailMs, providers } = pending[index];
         const selected = providers.filter((key) => !stopped.has(key));
         if (!selected.length) continue;
         const terms = enabled ? fileKeyterms(clip.targets) : null;
         status(`Processing run ${index + 1} of ${pending.length} · ${clip.file}`);
-        progress.clip(clip.file, enabled, selected, index + 1, pending.length);
+        progress.clip(clip.file, enabled, selected, index + 1, pending.length, tailMs);
         const output = await replayClip(files.get(clip.file), clip.id, selected, accessCode,
           signal, nextTicketAt, terms, (key, phase, row) => {
             if (row) {
               merge(readResults({ version: 1, results: [row] }, [clip]));
               $("file-export-json").disabled = false;
-              if (/^Ticket HTTP (401|403|429|502|503)$/.test(row.error ?? "")) stopped.add(key);
+              if (/^Ticket HTTP (401|403|429|502|503)\b/.test(row.error ?? "")) stopped.set(key, row.error);
             }
             progress.update(index + 1, key, phase, row);
-          });
+          }, tailMs);
         warning ||= output.warning;
         if (signal.aborted) break;
         attempted++;
@@ -422,13 +463,16 @@ export function setupFileBenchmark() {
       }));
       const failure = outcomes.find((outcome) => outcome.status === "rejected");
       if (failure) throw failure.reason;
-      const suffix = stopped.size ? " Paused providers: " + [...stopped].join(", ") + ". Check the error in the clip report and run again to resume." : "";
-      const unit = mode === "both" ? " clip runs." : " clips.";
-      const left = remaining.filter(({ clip, enabled }) => missingResults(clip, keys, enabled).length).length;
+      const suffix = stopped.size ? " Paused providers: " + [...stopped]
+        .map(([key, error]) => replayProviders[key] + " (" + error + ")").join(", ") +
+        ". Run again to resume." : "";
+      const unit = mode === "both" || diagnostic ? " clip runs." : " clips.";
+      const left = remaining.filter((run) => missingResults(run, keys).length).length;
+      const jobsLeft = remaining.reduce((sum, run) => sum + missingResults(run, keys).length, 0);
       if (signal.aborted) batchState = "Cancelled · finished results are saved in this tab";
-      else if (stopped.size) batchState = "Batch paused for " + [...stopped].map((key) => replayProviders[key]).join(", ");
+      else if (stopped.size) batchState = "Batch paused for " + [...stopped.keys()].map((key) => replayProviders[key]).join(", ");
       status((signal.aborted ? "Cancelled after " : "Run ended after ") + attempted + unit +
-        (left ? ` ${left} runs still need results. Export JSON to keep progress.` : " Results are kept in this tab.") + suffix);
+        (left ? ` ${left} runs still need results (${jobsLeft} provider jobs). Export JSON to keep progress.` : " Results are kept in this tab.") + suffix);
     } catch (error) {
       batchState = "Batch stopped: " + error.message;
       status(error.message);

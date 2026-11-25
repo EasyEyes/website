@@ -14,6 +14,7 @@ const { values } = parseArgs({ options: {
   batch: { type: "string", default: "all" },
   keyterms: { type: "string", default: "on" },
   "strict-order": { type: "boolean" },
+  "tail-test": { type: "boolean" },
   "allow-provider-upload": { type: "boolean" },
 } });
 const preview = "https://deploy-preview-169--easyeyes.netlify.app/";
@@ -100,6 +101,7 @@ try {
   await page.locator("#file-code").fill(accessCode);
   await page.locator("#file-workers").selectOption(values.workers);
   await page.locator("#file-batch-limit").selectOption(values.batch);
+  await page.locator("#file-tail-test").setChecked(!!values["tail-test"]);
   await page.locator("#file-keyterms").selectOption(values.keyterms);
   for (const p of ["chirp3", "elevenlabs", "deepgram"])
     await page.locator(`input[name="file-provider"][value="${p}"]`).setChecked(providers.includes(p));
@@ -121,7 +123,9 @@ try {
     await delay(5000);
   }
   if (interrupted) await page.locator("#file-cancel:disabled").waitFor({ state: "attached", timeout: 30000 });
-  console.log(await page.locator("#file-status").textContent());
+  const finalStatus = await page.locator("#file-status").textContent();
+  console.log(finalStatus);
+  if (finalStatus.includes("Paused providers:")) process.exitCode = 2;
 } finally {
   try { if (started) await checkpoint(); }
   finally {

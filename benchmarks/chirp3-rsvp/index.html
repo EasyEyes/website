@@ -54,6 +54,8 @@
             <label class="check"><input type="checkbox" value="chirp3" name="file-provider" checked /> Chirp 3</label>
             <label class="check"><input type="checkbox" value="elevenlabs" name="file-provider" checked /> ElevenLabs</label>
             <label class="check"><input type="checkbox" value="deepgram" name="file-provider" /> Deepgram</label>
+            <label class="check"><input type="checkbox" id="file-tail-test" /> Chirp 3 diagnostic: compare 0 vs. 800 ms trailing silence</label>
+            <small>Diagnostic mode runs only Chirp 3; each file is streamed twice per keyterms setting.</small>
           </div>
           <div>
             <label>Maximum runs this batch
@@ -111,6 +113,7 @@
           </select>
         </label>
         <div id="file-summary"></div>
+        <section id="file-tail-summary" class="file-chart-panel" hidden></section>
         <details id="file-review" hidden>
           <summary>Listen to and review individual clips</summary>
           <p>Listen locally, verify or correct the human reference, then check how each provider's text was scored. Export the results JSON to keep your decisions.</p>

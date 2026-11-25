@@ -1,3 +1,5 @@
+import { readReplayEvidence } from "./fileDiagnostics.mjs";
+
 export function readManifest(data) {
   if (data?.version !== 1 || !Array.isArray(data.clips) ||
       data.clips.length < 1 || data.clips.length > 10_000)
@@ -41,9 +43,11 @@ export function readResults(data, clips) {
     const collection = byProvider.get(row.provider) ?? new Map();
     if (collection.has(row.clipId))
       throw new Error("Duplicate clip and provider result.");
-    collection.set(row.clipId, typeof row.transcript === "string"
+    const evidence = readReplayEvidence(row.evidence);
+    const result = typeof row.transcript === "string"
       ? { clipId: row.clipId, provider: row.provider, transcript: row.transcript }
-      : { clipId: row.clipId, provider: row.provider, error: row.error });
+      : { clipId: row.clipId, provider: row.provider, error: row.error };
+    collection.set(row.clipId, evidence ? { ...result, evidence } : result);
     byProvider.set(row.provider, collection);
   }
   return byProvider;

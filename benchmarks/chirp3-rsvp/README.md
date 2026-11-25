@@ -40,6 +40,20 @@ side's clock, and Google's original final segments with offsets when present.
 These counts verify the path through the relay, not Google's internal decoder.
 The relay does not persist this trace or write the transcript to Cloud Logging.
 
+For file replay, enable **Chirp 3 diagnostic: compare 0 vs. 800 ms trailing
+silence**. Each clip gets two Chirp streams under the selected keyterms
+setting, one unmodified and one with 800 ms of zero-valued PCM appended.
+The table compares raw transcripts and byte counts; the results JSON also
+contains timing and final segments. A missing relay trace is reported as
+unavailable, not as dropped audio. Use `--tail-test` for an unattended
+run. Tail results are kept out of the ordinary provider score report.
+
+`prepare-chirp-tail.mjs --manifest MANIFEST --results RESULTS --out DIRECTORY`
+copies the original WAVs for all three-target cases where Chirp (keyterms on)
+successfully returned fewer than three words, including unreviewed or
+flagged clips. Run it with Node. The audit distinguishes the source
+reference from any edited reference. No audio is uploaded by preparation.
+
 ## Run a trial
 
 1. Enter the preview code. Select a scenario, set keyterms and order, and
