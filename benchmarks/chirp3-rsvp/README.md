@@ -134,13 +134,18 @@ the expected decisions; it does not change the targets or provider text. A
 provider-side override corrects an automatic scoring mistake, not a word the
 provider genuinely misrecognized. The reviewed report excludes invalid and
 unintelligible clips. The third view also excludes difficult-but-intelligible
-audio; it still includes unreviewed clips. Use the reference-difference filter
-to prioritize review when a reference does not match the task targets.
+audio; it still includes unreviewed clips. Pick a model or run setting to
+filter its transcript differences, short outputs, missed targets, false
+credit, or errors no other imported model made. Each filter displays the
+number of matching clips. The short-output filter counts words against
+the current human reference; it does not prove a word was dropped.
 
 Export JSON to retain transcripts, the original and reviewed decisions and
-the saved reviews. Import the JSON with the same manifest to resume. CSV
-contains target-level counts and percentages for all views, including separate
-participant rows. No audio is included in either export.
+the saved reviews. Import the JSON with the same manifest to resume. Clip and
+model notes and model-specific deletion checks are saved separately from
+score overrides. Export the review annotations CSV for those checks and notes,
+or the metrics CSV for target counts and percentages across views and
+participants. Neither export includes audio.
 
 To prepare candidates from ACAD without any external requests:
 

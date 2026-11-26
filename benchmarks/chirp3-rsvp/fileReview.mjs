@@ -8,24 +8,103 @@ export const qualityLabels = {
   invalid: "Wrong task or invalid recording",
 };
 
-const transcriptWords = (text) => (text.normalize("NFC").toLowerCase()
-  .replace(/\u2019/g, "'").match(/[\p{L}\p{M}\p{N}]+(?:'[\p{L}\p{M}\p{N}]+)*/gu) ?? []).join(" ");
+export const reviewFilters = {
+  all: "All clips",
+  "transcript-disagreement": "Transcript differs from the human review",
+  "model-disagreement": "Model transcripts disagree with each other",
+  "pending-disagreement": "Transcript differs · deletion not reviewed",
+  short: "Fewer words than the human transcript",
+  "pending-short": "Shorter output · deletion not reviewed",
+  error: "Any scoring error",
+  missed: "Missed correct target (1 → 0)",
+  "false-credit": "False credit (0 → 1)",
+  exclusive: "Only the selected model has a scoring error",
+  confirmed: "Human-confirmed word deletion",
+  flagged: "Difficult, unclear or invalid audio",
+  diff: "Reference or target needs review",
+  failed: "Missing or failed STT result",
+  notes: "Saved notes",
+};
 
-export function transcriptDisagreements(clips, results) {
-  const providers = [...results].filter(([label]) =>
-    !isTailLabel(label) && /^(?:Chirp 3|ElevenLabs)\b/.test(label));
-  const ready = providers.some(([label]) => label.startsWith("Chirp 3")) &&
-    providers.some(([label]) => label.startsWith("ElevenLabs"));
-  const ids = new Set();
+export const providerReviewFor = (review, provider, transcript) =>
+  review?.providerReviews?.find((entry) => entry.provider === provider && entry.transcript === transcript);
+
+export function buildReviewQueue(clips, results, details, reviews, selected, tokenize) {
+  const providerRows = [...results].filter(([label]) => !isTailLabel(label));
+  const summaries = providerRows.map(([provider]) => ({
+    provider, returned: 0, shorter: 0, referenceWords: 0, wordGap: 0, checked: 0, confirmed: 0, noted: 0,
+  }));
+  const scored = new Map();
+  for (const row of details)
+    if (row.differences) {
+      if (!scored.has(row.provider)) scored.set(row.provider, new Map());
+      scored.get(row.provider).set(row.clipId, row.differences);
+    }
+  const lists = new Map(Object.keys(reviewFilters).map((filter) => [filter, []]));
+  const annotations = [];
   let compared = 0;
-  if (ready) for (const clip of clips) {
-    const texts = providers.map(([, entries]) => entries.get(clip.id)?.transcript);
-    if (texts.some((text) => typeof text !== "string")) continue;
-    compared++;
-    const reference = transcriptWords(clip.reference);
-    if (texts.some((text) => transcriptWords(text) !== reference)) ids.add(clip.id);
+  for (const clip of clips) {
+    const review = reviews.get(clip.id);
+    const reference = review?.reference ?? clip.reference;
+    const words = tokenize(reference), text = words.join(" ");
+    const quality = review?.quality ?? "unreviewed";
+    const excluded = quality === "invalid" || quality === "unclear";
+    const rows = providerRows.map(([provider, entries], i) => {
+      const row = entries.get(clip.id), returned = typeof row?.transcript === "string";
+      const transcript = returned ? row.transcript : null;
+      const actual = returned ? tokenize(transcript) : null;
+      const normalized = actual?.join(" ");
+      const annotation = row && providerReviewFor(review, provider, transcript);
+      const shorter = !excluded && returned && actual.length < words.length;
+      const summary = summaries[i];
+      if (!excluded && returned) {
+        summary.returned++;
+        summary.referenceWords += words.length;
+        if (shorter) summary.shorter++;
+        if (shorter) summary.wordGap += words.length - actual.length;
+        if (typeof annotation?.deletion === "boolean") summary.checked++;
+        if (annotation?.deletion === true) summary.confirmed++;
+      }
+      if (annotation?.note) summary.noted++;
+      if (annotation) annotations.push({
+        clip, quality, reference, provider, transcript, annotation,
+        referenceWords: words.length, outputWords: actual?.length ?? null,
+        outcome: returned ? "returned" : "failed", included: !excluded,
+      });
+      return { provider, returned, shorter, differs: returned && normalized !== text, normalized,
+        diff: scored.get(provider)?.get(clip.id), annotation };
+    });
+    if (review?.note) annotations.push({ clip, quality, reference, annotation: { note: review.note },
+      referenceWords: words.length, included: !excluded });
+    const active = selected ? rows.filter(({ provider }) => provider === selected) : rows;
+    const comparable = !excluded && active.length > 0 && active.every(({ returned }) => returned);
+    const modelsComparable = !excluded && rows.length > 1 && rows.every(({ returned }) => returned);
+    if (comparable) compared++;
+    const unique = selected && rows.length > 1 && active[0]?.diff?.exact === false &&
+      rows.filter(({ provider }) => provider !== selected).every(({ diff }) => diff?.exact === true);
+    const matches = {
+      all: true,
+      "transcript-disagreement": comparable && active.some(({ differs }) => differs),
+      "model-disagreement": modelsComparable && active.length > 0 &&
+        rows.some(({ normalized }) => normalized !== active[0].normalized),
+      "pending-disagreement": comparable && active.some(({ differs, annotation }) =>
+        differs && typeof annotation?.deletion !== "boolean"),
+      short: active.some(({ shorter }) => shorter),
+      "pending-short": active.some(({ shorter, annotation }) => shorter && typeof annotation?.deletion !== "boolean"),
+      error: active.some(({ diff }) => diff?.exact === false),
+      missed: active.some(({ diff }) => diff?.falseNeg.length),
+      "false-credit": active.some(({ diff }) => diff?.falsePos.length),
+      exclusive: unique,
+      confirmed: !excluded && active.some(({ annotation }) => annotation?.deletion === true),
+      flagged: ["difficult", "unclear", "invalid"].includes(quality),
+      diff: quality === "unreviewed" && (clip.referenceStatus === "needsReview" || clip.expected.includes(0)),
+      failed: active.some(({ returned }) => !returned),
+      notes: active.some(({ annotation }) => annotation?.note) || (!selected && review?.note),
+    };
+    for (const [filter, match] of Object.entries(matches))
+      if (match) lists.get(filter).push(clip);
   }
-  return { ready, compared, ids };
+  return { lists, summaries, annotations, compared, providers: providerRows.map(([label]) => label) };
 }
 
 export const manifestKey = (clips) => JSON.stringify(clips.map((c) =>
@@ -42,7 +121,10 @@ export function readReviews(data, clips) {
     const clip = byId.get(row?.clipId);
     if (!clip || result.has(row.clipId) || !Object.hasOwn(qualityLabels, row.quality) ||
         (row.reference !== undefined && (!clip.targets || typeof row.reference !== "string" || row.reference.length > 1500)) ||
-        !Array.isArray(row.predictions) || row.predictions.length > 32)
+        !Array.isArray(row.predictions) || row.predictions.length > 32 ||
+        (row.note !== undefined && !validNote(row.note)) ||
+        (row.providerReviews !== undefined &&
+          (!Array.isArray(row.providerReviews) || row.providerReviews.length > 100)))
       throw new Error("Invalid or duplicated clip review.");
     const seen = new Set();
     for (const item of row.predictions) {
@@ -55,7 +137,18 @@ export function readReviews(data, clips) {
         throw new Error("Invalid target decision in a clip review.");
       seen.add(key);
     }
+    const annotated = new Set();
+    for (const item of row.providerReviews ?? []) {
+      if (typeof item?.provider !== "string" || !item.provider.trim() || item.provider.length > 100 ||
+          (item.transcript !== null && (typeof item.transcript !== "string" || item.transcript.length > 3000)) ||
+          ![null, false, true].includes(item.deletion) || (item.transcript === null && item.deletion !== null) ||
+          (item.note !== undefined && !validNote(item.note)) || annotated.has(item.provider))
+        throw new Error("Invalid or duplicated provider annotation.");
+      annotated.add(item.provider);
+    }
     result.set(row.clipId, row);
   }
   return result;
 }
+
+const validNote = (note) => typeof note === "string" && note.length <= 2000;

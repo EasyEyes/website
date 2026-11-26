@@ -1,11 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readManifest, readResults, compareVectors, summarizeFiles, summarizeKeytermPairs, summarizeProviderAgreement, summarizeReviews, summarizeSpeakers } from "./fileMetrics.mjs";
-import { manifestKey, readReviews, transcriptDisagreements } from "./fileReview.mjs";
+import { buildReviewQueue, manifestKey, readReviews } from "./fileReview.mjs";
 
-test("transcript review compares all loaded Chirp and ElevenLabs settings in manifest order", () => {
-  const clips = ["repeat", "format", "order", "failed", "empty", "missing"].map((id) =>
-    ({ id, reference: "boat lake" }));
+test("review filters include every imported model except diagnostic tails", () => {
+  const clips = ["repeat", "format", "order", "failed", "empty", "missing", "excluded"].map((id) =>
+    ({ id, reference: "boat lake", expected: [1, 1] }));
   const rows = (values) => new Map(clips.flatMap(({ id }, index) =>
     values[index] === undefined ? [] : [[id, typeof values[index] === "string"
       ? { transcript: values[index] } : { error: "unavailable" }]]));
@@ -15,14 +15,49 @@ test("transcript review compares all loaded Chirp and ElevenLabs settings in man
   const results = new Map([
     ["Chirp 3 SHORT", short], ["Chirp 3", standard], ["ElevenLabs Scribe v2", eleven],
     ["Chirp 3 · tail 800 ms", rows(clips.map(() => "other"))],
-    ["Deepgram Nova-3", rows(clips.map(() => "other"))],
+    ["Gemini Live", rows(["boat lake", "boat", "Boat lake", "boat lake", "boat lake", "boat", "boat"])],
   ]);
-  const result = transcriptDisagreements(clips, results);
-  assert.deepEqual({ ...result, ids: [...result.ids] },
-    { ready: true, compared: 4, ids: ["repeat", "order", "empty"] });
-  results.delete("ElevenLabs Scribe v2");
-  assert.deepEqual(transcriptDisagreements(clips, results),
-    { ready: false, compared: 0, ids: new Set() });
+  const tokenizer = (text) => text.toLowerCase().match(/[a-z]+/g) ?? [];
+  const reviews = new Map([["excluded", { quality: "unclear" }], ["format", {
+    quality: "clear", providerReviews: [{ provider: "Gemini Live", transcript: "boat", deletion: true, note: "lake" }],
+  }]]);
+  const d = (clipId, provider, falseNeg, falsePos = []) => ({
+    clipId, provider, differences: { exact: falseNeg.length + falsePos.length === 0, falseNeg, falsePos },
+  });
+  const details = [d("format", "Gemini Live", [1]), d("format", "Chirp 3", []),
+    d("format", "Chirp 3 SHORT", []), d("format", "ElevenLabs Scribe v2", []),
+    d("missing", "Gemini Live", [1], [0])];
+  const get = (q, filter) => q.lists.get(filter).map(({ id }) => id);
+  const global = buildReviewQueue(clips, results, details, reviews, "", tokenizer);
+  assert.equal(global.compared, 4);
+  assert.deepEqual(get(global, "transcript-disagreement"), ["repeat", "format", "order", "empty"]);
+  assert.deepEqual(get(global, "model-disagreement"), ["repeat", "format", "order", "empty"]);
+  assert.deepEqual(get(global, "short"), ["format", "empty", "missing"]);
+  const focus = buildReviewQueue(clips, results, details, reviews, "Gemini Live", tokenizer);
+  assert.deepEqual(get(focus, "short"), ["format", "missing"]);
+  assert.deepEqual(get(focus, "pending-short"), ["missing"]);
+  assert.deepEqual(get(focus, "confirmed"), ["format"]);
+  assert.deepEqual(get(focus, "exclusive"), ["format"]);
+  assert.deepEqual(get(focus, "missed"), ["format", "missing"]);
+  assert.deepEqual(get(focus, "false-credit"), ["missing"]);
+  assert.equal(focus.annotations[0].annotation.note, "lake");
+  assert.equal(focus.summaries.find((s) => s.provider === "Gemini Live").wordGap, 2);
+});
+
+test("annotations round-trip without altering the original score and are tied to the current result", () => {
+  const clip = { id: "one", file: "one.wav", reference: "a b", targets: ["a", "b"], expected: [1, 1] };
+  const row = { clipId: "one", quality: "clear", predictions: [], note: "clip context",
+    providerReviews: [{ provider: "Gemini", transcript: "a", deletion: false, note: "checked" }] };
+  const data = JSON.parse(JSON.stringify({ manifestKey: manifestKey([clip]), reviews: [row] }));
+  const reviews = readReviews(data, [clip]);
+  assert.deepEqual(reviews.get("one"), row);
+  const results = new Map([["Gemini", new Map([["one", { transcript: "a b" }]])]]);
+  const queue = buildReviewQueue([clip], results, [], reviews, "Gemini", (text) => text.split(" "));
+  assert.equal(queue.summaries[0].checked, 0);
+  assert.equal(queue.annotations.length, 1);
+  assert.equal(queue.annotations[0].annotation.note, "clip context");
+  data.reviews[0].providerReviews[0].transcript = null;
+  assert.throws(() => readReviews(data, [clip]), /provider annotation/);
 });
 
 test("distinguishes missed correct targets from false credit", () => {

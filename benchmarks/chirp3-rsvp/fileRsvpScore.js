@@ -4,6 +4,9 @@ import { analyze } from "./evidence.js";
 export const fileKeyterms = (targets) => [...new Set(targets.flatMap((target) =>
   tokenizeSpeechTranscript(target, "en-US").tokens.map(({ normalized }) => normalized)))];
 
+export const fileTranscriptWords = (text) =>
+  tokenizeSpeechTranscript(text, "en-US").tokens.map(({ comparisonKey }) => comparisonKey);
+
 // Keep files out of the live trial controller and QUEST; reuse only its scoring.
 export const fileRsvpScorer = (ignoreOrder) => (targets, transcript) =>
   analyze(targets, transcript, { ignoreOrder, phrase: "" });

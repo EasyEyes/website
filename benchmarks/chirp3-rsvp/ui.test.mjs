@@ -440,29 +440,70 @@ try {
     id, file: id + ".wav", reference: "boat lake tree", targets: ["boat", "lake", "tree"],
   }));
   const variants = ["Chirp 3 · with keyterms", "Chirp 3 SHORT · with keyterms",
-    "ElevenLabs Scribe v2 Realtime · with keyterms"];
+    "ElevenLabs Scribe v2 Realtime · with keyterms", "Gemini 3.5 Transcribe Live · with keyterms"];
   const reviewResults = reviewClips.flatMap(({ id }) => variants.map((provider, index) => ({
     clipId: id, provider, ...(id === "incomplete" && index === 1 ? { error: "transcriberFailure" } : {
       transcript: id === "third" && index === 1 ? "boat boat lake tree" :
-        id === "first" && index === 2 ? "lake boat tree" : "Boat, lake TREE.",
+        id === "first" && index === 2 ? "lake boat tree" :
+        id === "formatted" && index === 3 ? "boat tree" : "Boat, lake TREE.",
     }),
   })));
   const requestsBeforeReview = ticketRequests;
   await page.locator("#file-manifest").setInputFiles(jsonFile("review-manifest.json", { version: 1, clips: reviewClips }));
   await page.getByText(/^4 clips/).waitFor();
   await page.locator("#file-review-filter").selectOption("transcript-disagreement");
-  const disagreementCount = page.locator("#file-transcript-disagreement-count");
-  assert.match(await disagreementCount.innerText(), /Load results from both Chirp and ElevenLabs/);
+  const reviewCount = page.locator("#file-review-count");
+  assert.match(await reviewCount.innerText(), /0 of 4 clips/);
   await page.locator("#file-results").setInputFiles(jsonFile("review-results.json", { version: 1, results: reviewResults }));
-  await page.getByText(/2 of 3 compared clips/).waitFor();
-  assert.match(await disagreementCount.innerText(), /1 skipped/);
+  await page.getByText(/3 of 4 clips.*3 comparable/).waitFor();
   assert.deepEqual(await page.locator("#file-clip option").evaluateAll((options) =>
-    options.map((option) => option.value)), ["third", "first"]);
+    options.map((option) => option.value)), ["third", "formatted", "first"]);
   assert.equal(await page.locator("#file-clip").inputValue(), "third");
   await page.locator("#file-next").click();
-  assert.equal(await page.locator("#file-clip").inputValue(), "first");
-  await page.locator("#file-review-filter").selectOption("all");
-  assert.equal(await disagreementCount.isVisible(), false);
+  assert.equal(await page.locator("#file-clip").inputValue(), "formatted");
+  await page.locator("#file-review-provider").selectOption(variants[3]);
+  await page.locator("#file-review-filter").selectOption("exclusive");
+  assert.match(await reviewCount.innerText(), /1 of 4 clips/);
+  const geminiReview = page.locator('#file-item-results details[data-provider^="Gemini"]');
+  assert.match(await geminiReview.innerText(), /Output words: 2 · Human words: 3/);
+  const originalTotals = await page.locator("#file-summary").innerText();
+  await page.getByLabel("Clip note (optional)").fill("Listen again if needed");
+  await geminiReview.getByLabel("Confirmed that STT dropped a spoken word").check();
+  await geminiReview.getByLabel("Model note (optional)").fill("Dropped lake");
+  await geminiReview.getByRole("button", { name: "Save model review" }).click();
+  assert.match(await geminiReview.locator("summary").innerText(), /deletion confirmed/);
+  assert.equal(await page.getByLabel("Clip note (optional)").inputValue(), "Listen again if needed");
+  await page.getByRole("button", { name: "Save audio / reference review" }).click();
+  assert.equal(await page.locator("#file-summary").innerText(), originalTotals);
+  await page.locator("#file-review-filter").selectOption("pending-short");
+  assert.match(await reviewCount.innerText(), /0 of 4 clips/);
+  await page.locator("#file-review-filter").selectOption("confirmed");
+  assert.match(await reviewCount.innerText(), /1 of 4 clips/);
+  const annotationCsv = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Export review notes and deletion checks CSV" }).click();
+  assert.match(await readFile(await (await annotationCsv).path(), "utf8"), /"confirmed","Dropped lake"/);
+  const annotatedDownload = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Export results JSON" }).click();
+  const annotatedPath = await (await annotatedDownload).path();
+  const annotated = JSON.parse(await readFile(annotatedPath, "utf8"));
+  assert.equal(annotated.reviews[0].note, "Listen again if needed");
+  assert.equal(annotated.reviews[0].providerReviews[0].deletion, true);
+  await page.locator("#file-manifest").setInputFiles(jsonFile("review-manifest.json", { version: 1, clips: reviewClips }));
+  await page.locator("#file-results").setInputFiles(annotatedPath);
+  await page.locator("#file-review-provider").selectOption(variants[3]);
+  await page.locator("#file-review-filter").selectOption("confirmed");
+  assert.equal(await page.locator("#file-clip").inputValue(), "formatted");
+  assert.equal(await geminiReview.getByLabel("Model note (optional)").inputValue(), "Dropped lake");
+  if (process.env.EE_BENCH_FINAL_MANIFEST && process.env.EE_BENCH_FINAL_RESULTS) {
+    await page.locator("#file-manifest").setInputFiles(process.env.EE_BENCH_FINAL_MANIFEST);
+    await page.locator("#file-status").getByText(/^2200 clips/).waitFor();
+    await page.locator("#file-results").setInputFiles(process.env.EE_BENCH_FINAL_RESULTS);
+    await page.locator("#file-review-provider").selectOption(variants[3], { timeout: 20000 });
+    await page.locator("#file-review-filter").selectOption("short");
+    assert.match(await reviewCount.innerText(), /122 of 2200 clips/);
+    await page.locator("#file-clip").selectOption("acad-wordlists-1251");
+    assert.match(await geminiReview.innerText(), /Output words: 9 · Human words: 10/);
+  }
   assert.equal(ticketRequests, requestsBeforeReview);
   assert.deepEqual(errors, []);
   console.log(

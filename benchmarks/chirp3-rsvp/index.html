@@ -116,16 +116,13 @@
         <section id="file-tail-summary" class="file-chart-panel" hidden></section>
         <details id="file-review" hidden>
           <summary>Listen to and review individual clips</summary>
-          <p>Listen locally, verify or correct the human reference, then check how each provider's text was scored. Export the results JSON to keep your decisions.</p>
+          <p>Listen locally, verify the human transcript, and review each model. A shorter transcript is a clue, not proof of deletion. Export results JSON to keep your review decisions.</p>
           <div class="file-review-controls">
+            <label>Model or run setting
+              <select id="file-review-provider"><option value="">All models</option></select>
+            </label>
             <label>Show clips
-              <select id="file-review-filter">
-                <option value="all">All clips</option>
-                <option value="transcript-disagreement">Transcript disagreements only</option>
-                <option value="diff">Unreviewed reference / target differences</option>
-                <option value="error">Provider disagrees with the reference</option>
-                <option value="flagged">Difficult, unclear or invalid audio</option>
-              </select>
+              <select id="file-review-filter"><option value="all">All clips</option></select>
             </label>
             <label>Clip<select id="file-clip"></select></label>
             <div class="actions">
@@ -133,7 +130,12 @@
               <button id="file-next" type="button">Next</button>
             </div>
           </div>
-          <p id="file-transcript-disagreement-count" class="hint" role="status" hidden></p>
+          <p id="file-review-count" class="hint" role="status"></p>
+          <details>
+            <summary>Review coverage by model</summary>
+            <div id="file-review-coverage"></div>
+          </details>
+          <button id="file-export-annotations" type="button" disabled>Export review notes and deletion checks CSV</button>
           <audio id="file-player" controls preload="none" hidden></audio>
           <p id="file-player-status" class="hint"></p>
           <p id="file-review-status" role="status"></p>

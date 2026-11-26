@@ -179,6 +179,12 @@ select:focus-visible {
 .file-review-form { display: grid; gap: .75rem; margin-block: .8rem; }
 .file-review-form select { width: fit-content; }
 .file-review-form button { justify-self: start; }
+.file-provider-review {
+  padding: .75rem;
+  background: #f5f9fc;
+  border-radius: .45rem;
+}
+.file-provider-review fieldset { padding: .5rem .75rem; }
 .file-review-form textarea {
   width: 100%;
   min-height: 4.4rem;

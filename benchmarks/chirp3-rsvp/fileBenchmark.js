@@ -1,8 +1,8 @@
 import { readManifest, readResults, summarizeReviews, summarizeKeytermPairs } from "./fileMetrics.mjs";
 import { replayClip, replayProviders, replayLabel } from "./fileReplay.js";
-import { fileKeyterms, fileRsvpScorer, makeRsvpCases } from "./fileRsvpScore.js";
-import { manifestKey, qualityLabels, readReviews, transcriptDisagreements } from "./fileReview.mjs";
-import { csvMetricRows, node, renderFileReport, table } from "./fileReport.js";
+import { fileKeyterms, fileRsvpScorer, fileTranscriptWords, makeRsvpCases } from "./fileRsvpScore.js";
+import { buildReviewQueue, manifestKey, providerReviewFor, qualityLabels, readReviews, reviewFilters } from "./fileReview.mjs";
+import { csvMetricRows, node, pct, renderFileReport, table } from "./fileReport.js";
 import { createFileProgress } from "./fileProgress.js";
 import { byteAgreement, isTailLabel, summarizeTailPairs, tailLabel, tailVariants } from "./fileDiagnostics.mjs";
 
@@ -33,13 +33,23 @@ async function readJson(file, maxMB) {
   return JSON.parse(await file.text());
 }
 
+function noteField(title, value) {
+  const label = node("label", title);
+  const input = node("textarea");
+  input.maxLength = 2000;
+  input.value = value ?? "";
+  label.append(input);
+  return { label, input };
+}
+
 export function setupFileBenchmark() {
   let manifest;
   let clips = [];
   let files = new Map();
   let results = new Map();
   let reviews = new Map();
-  let computed, selectedProvider, overlap, audioUrl, audioClip, audioFile, reviewedClip;
+  const drafts = new Map();
+  let computed, queue, selectedProvider, overlap, audioUrl, audioClip, audioFile, reviewedClip;
   let controller;
   const progress = createFileProgress();
   const status = (message) => { $("file-status").textContent = message; };
@@ -113,7 +123,7 @@ export function setupFileBenchmark() {
     $("file-scope-label").hidden = !normal.size;
     drawReport();
     drawTailReport();
-    refreshClipList(true);
+    refreshReviewQueue();
   }
 
   const drawReport = () => renderFileReport($("file-summary"), computed, $("file-scope").value,
@@ -135,33 +145,49 @@ export function setupFileBenchmark() {
     $("file-player-status").textContent = clip && !file ? "Select the matching audio file to listen here." : "";
   }
 
-  function refreshClipList(keepCurrent = false) {
+  function refreshReviewQueue() {
+    const model = $("file-review-provider");
+    const selected = model.value;
+    const normal = [...results.keys()].filter((label) => !isTailLabel(label));
+    if (model.options.length !== normal.length + 1 ||
+        normal.some((label, index) => model.options[index + 1].value !== label)) {
+      model.replaceChildren(...["", ...normal].map((label) => {
+        const option = node("option", label || "All models");
+        option.value = label;
+        return option;
+      }));
+    }
+    model.value = normal.includes(selected) ? selected : "";
+    model.disabled = !normal.length;
+    queue = buildReviewQueue(clips, results, computed.reports.adjudicated.details,
+      reviews, model.value, fileTranscriptWords);
+    const coverage = $("file-review-coverage");
+    coverage.replaceChildren(
+      node("p", "Word shortfall sums only positive gaps from the current human reference. Human confirmation is separate. Unclear and invalid audio are excluded except from note counts."),
+      ...(queue.summaries.length ? [table(["Model / setting", "Clips with text result", "Shorter output",
+        "Word shortfall", "Deletion checked", "Deletion confirmed", "Notes saved"], queue.summaries.map((s) =>
+        [s.provider, s.returned, s.shorter, `${s.wordGap}/${s.referenceWords} (${pct(s.wordGap, s.referenceWords)})`,
+          s.checked, s.confirmed, s.noted]))] : []),
+    );
+    $("file-export-annotations").disabled = !queue.annotations.length;
+    refreshClipList();
+  }
+
+  function refreshClipList() {
     const picker = $("file-clip");
     const previous = picker.value;
-    const filter = $("file-review-filter").value;
-    const disagreement = filter === "transcript-disagreement" ? transcriptDisagreements(clips, results) : null;
-    const count = $("file-transcript-disagreement-count");
-    count.hidden = !disagreement;
-    count.textContent = disagreement ? disagreement.ready
-      ? `${disagreement.ids.size} of ${disagreement.compared} compared clips have transcript differences. ` +
-        `${clips.length - disagreement.compared} skipped for missing or failed results. ` +
-        "Compares the original human transcript with all loaded Chirp and ElevenLabs settings; case and punctuation do not count."
-      : "Load results from both Chirp and ElevenLabs to compare transcripts."
-      : "";
-    const errors = filter === "error" ? new Set(computed.reports.adjudicated.details
-      .filter((row) => row.differences && !row.differences.exact).map((row) => row.clipId)) : null;
-    const visible = clips.filter((clip) => {
-      if (disagreement) return disagreement.ids.has(clip.id);
-      const quality = reviews.get(clip.id)?.quality ?? "unreviewed";
-      if (filter === "diff") return quality === "unreviewed" &&
-        (clip.referenceStatus === "needsReview" || clip.expected.includes(0));
-      if (filter === "flagged") return ["difficult", "unclear", "invalid"].includes(quality);
-      return !errors || errors.has(clip.id);
-    });
-    if (!disagreement && keepCurrent && previous && !visible.some((clip) => clip.id === previous)) {
-      const clip = clips.find((clip) => clip.id === previous);
-      if (clip) visible.unshift(clip);
-    }
+    const priorIndex = picker.selectedIndex;
+    const selector = $("file-review-filter");
+    const filter = selector.value || "all";
+    const model = $("file-review-provider").value;
+    selector.replaceChildren(...Object.entries(reviewFilters).map(([key, label]) => {
+      const option = node("option", `${label} (${queue.lists.get(key).length})`);
+      option.value = key;
+      option.disabled = key === "exclusive" && (!model || queue.providers.length < 2);
+      return option;
+    }));
+    selector.value = selector.querySelector(`option[value="${filter}"]`)?.disabled ? "all" : filter;
+    const visible = queue.lists.get(selector.value);
     picker.replaceChildren(...visible.map((clip) => {
       const tag = [clip.file, clip.speakerGroup, clip.referenceStatus === "needsReview" ? "check reference" : null].filter(Boolean);
       const option = node("option", tag.join(" · "));
@@ -169,17 +195,71 @@ export function setupFileBenchmark() {
       return option;
     }));
     if (visible.some((clip) => clip.id === previous)) picker.value = previous;
+    else if (visible.length && priorIndex >= 0) picker.selectedIndex = Math.min(priorIndex, visible.length - 1);
     picker.disabled = !visible.length;
     refreshClip();
   }
 
   function saveReview(clip, review, message) {
     const updated = { clipId: clip.id, ...review };
-    if (updated.quality === "unreviewed" && updated.reference === undefined && !updated.predictions.length)
+    const old = reviews.get(clip.id);
+    if (updated.quality === "unreviewed" && updated.reference === undefined &&
+        !updated.predictions.length && !updated.note && !updated.providerReviews?.length)
       reviews.delete(clip.id);
     else reviews.set(clip.id, updated);
-    refreshReport();
-    $("file-review-status").textContent = message;
+    if ((old?.quality ?? "unreviewed") !== updated.quality || old?.reference !== updated.reference ||
+        JSON.stringify(old?.predictions ?? []) !== JSON.stringify(updated.predictions)) refreshReport();
+    else {
+      $("file-export-json").disabled = !results.size && !reviews.size;
+      refreshReviewQueue();
+    }
+    $("file-review-status").textContent = message + " Export results JSON to keep it after closing the tab.";
+  }
+
+  function providerReviewForm(clip, row, annotation) {
+    const form = node("form");
+    form.className = "file-review-form file-provider-review";
+    const draftKey = JSON.stringify([clip.id, row.provider, row.transcript]);
+    const initial = drafts.get(draftKey) ?? annotation;
+    const note = noteField("Model note (optional)", initial?.note);
+    const checked = node("input"), deleted = node("input");
+    const hasTranscript = typeof row.transcript === "string";
+    if (hasTranscript) {
+      const deletionCheck = node("fieldset");
+      deletionCheck.append(node("legend", "Listen for missing words"));
+      for (const [control, labelText] of [[checked, "Checked against audio"], [deleted, "Confirmed that STT dropped a spoken word"]]) {
+        control.type = "checkbox";
+        const label = node("label");
+        label.className = "check";
+        label.append(control, document.createTextNode(" " + labelText));
+        deletionCheck.append(label);
+      }
+      checked.checked = typeof initial?.deletion === "boolean";
+      deleted.checked = initial?.deletion === true;
+      checked.onchange = () => { if (!checked.checked) deleted.checked = false; };
+      deleted.onchange = () => { if (deleted.checked) checked.checked = true; };
+      deletionCheck.append(node("small", "Leave both unchecked if unsure. If you listened and found no deletion, check only the first box. A wrong replacement is not a deletion."));
+      form.append(deletionCheck);
+    }
+    const getDraft = () => ({
+      deletion: hasTranscript && (checked.checked || deleted.checked) ? deleted.checked : null,
+      note: note.input.value,
+    });
+    form.oninput = form.onchange = () => drafts.set(draftKey, getDraft());
+    const save = node("button", "Save model review");
+    save.type = "submit";
+    form.append(note.label, save);
+    form.onsubmit = (event) => {
+      event.preventDefault();
+      const current = reviews.get(clip.id) ?? { quality: "unreviewed", predictions: [] };
+      const providerReviews = (current.providerReviews ?? []).filter((entry) => entry.provider !== row.provider);
+      const { deletion, note } = getDraft();
+      if (deletion !== null || note.trim())
+        providerReviews.push({ provider: row.provider, transcript: row.transcript, deletion, note: note.trim() || undefined });
+      drafts.delete(draftKey);
+      saveReview(clip, { ...current, providerReviews }, "Model review saved. Scores are unchanged.");
+    };
+    return form;
   }
 
   function refreshClip() {
@@ -195,14 +275,24 @@ export function setupFileBenchmark() {
     setAudio(clip);
     $("file-prev").disabled = picker.selectedIndex <= 0;
     $("file-next").disabled = !clip || picker.selectedIndex >= picker.length - 1;
+    const filter = $("file-review-filter").value;
+    const note = filter === "transcript-disagreement" || filter === "pending-disagreement"
+      ? ` · ${queue.compared} comparable (all selected results returned)`
+      : filter === "model-disagreement" ? " · Requires results from all loaded models"
+      : filter === "exclusive" ? " · All other loaded models must have a correct score"
+      : filter === "short" || filter === "pending-short" ? " · Compared with the current human transcript" : "";
+    $("file-review-count").textContent = `${picker.length} of ${clips.length} clips` +
+      (clip ? ` · Clip ${picker.selectedIndex + 1} of ${picker.length}` : "") + note;
     if (!clip) return item.append(node("p", "No clips match this filter."));
     const review = reviews.get(clip.id) ?? { quality: "unreviewed", predictions: [] };
     const reference = review.reference ?? clip.reference;
+    const clipDraft = drafts.get(clip.id);
     const expected = review.reference === undefined ? clip.expected : score()(clip.targets, reference).vector;
     item.append(
       node("p", [clip.speakerGroup ?? "Participant not supplied", clip.session, clip.list && "Task " + clip.list].filter(Boolean).join(" · ")),
       node("p", "Targets: " + clip.targets.join(", ") + " · Expected: " + expected.join("")),
       node("p", "Original human transcript: " + (clip.reference || "(empty)")),
+      node("p", `Word count: ${fileTranscriptWords(reference).length} in the current human transcript · ${clip.targets.length} targets`),
     );
     const form = node("form");
     form.className = "file-review-form";
@@ -214,10 +304,10 @@ export function setupFileBenchmark() {
       option.value = key;
       quality.append(option);
     }
-    quality.value = review.quality;
+    quality.value = clipDraft?.quality ?? review.quality;
     const field = node("textarea");
     field.maxLength = 1500;
-    field.value = reference;
+    field.value = clipDraft?.reference ?? reference;
     const correction = node("label", "Human transcript · edit only if the original is wrong");
     correction.append(field, node("small", "Leave empty only if no words were spoken. Targets do not change."));
     const save = node("button", "Save audio / reference review");
@@ -225,12 +315,18 @@ export function setupFileBenchmark() {
     form.append(qualityLabel);
     if (clip.targetSource === "explicit") form.append(correction);
     else form.append(node("p", "Supply explicit targets in the manifest to edit the reference or review individual target decisions."));
-    form.append(save);
+    const draftKey = clip.id;
+    const clipNote = noteField("Clip note (optional)", clipDraft?.note ?? review.note);
+    form.oninput = form.onchange = () => drafts.set(draftKey,
+      { quality: quality.value, reference: field.value, note: clipNote.input.value });
+    form.append(clipNote.label, save);
     form.onsubmit = (event) => {
       event.preventDefault();
       const text = field.value.trim();
       const changed = clip.targetSource === "explicit" && text !== clip.reference.trim();
-      saveReview(clip, { ...review, quality: quality.value, reference: changed ? text : undefined }, "Audio / reference review saved.");
+      drafts.delete(draftKey);
+      saveReview(clip, { ...reviews.get(clip.id), predictions: review.predictions, quality: quality.value,
+        reference: changed ? text : undefined, note: clipNote.input.value.trim() || undefined }, "Audio / reference review saved.");
     };
     item.append(form);
     const raw = computed?.reports.original.details.filter((row) => row.clipId === clip.id) ?? [];
@@ -238,17 +334,24 @@ export function setupFileBenchmark() {
     if (!raw.length) return;
     item.append(node("h4", "Provider decisions by target"),
       node("p", "Judge whether the provider’s text contains the target, not whether the child said it. If the model actually missed a word, leave the error in place. Override only if the automatic text scorer misread the provider’s output."));
-    for (const row of raw) {
+    const focusedModel = $("file-review-provider").value;
+    const ordered = focusedModel ? [...raw.filter((r) => r.provider === focusedModel),
+      ...raw.filter((r) => r.provider !== focusedModel)] : raw;
+    for (const row of ordered) {
       const section = node("details");
       section.dataset.provider = row.provider;
-      section.open = openProviders.has(row.provider) || (!sameClip && raw.length === 1);
+      section.open = openProviders.has(row.provider) || row.provider === focusedModel || (!sameClip && raw.length === 1);
       const effective = reviewed.get(row.provider);
       const actual = effective ?? row;
       const result = actual.vector ? actual.vector.join("") : "not scored";
-      section.append(node("summary", row.provider + " · " + result));
+      const annotation = providerReviewFor(review, row.provider, row.transcript);
+      const deletion = annotation?.deletion === true ? " · deletion confirmed" :
+        annotation?.deletion === false ? " · no deletion found" : "";
+      section.append(node("summary", row.provider + " · " + result + deletion));
       if (!row.vector) section.append(node("p", row.error || "No result"));
       else {
         section.append(node("p", "Provider text: " + (row.transcript || "(empty)")),
+          node("p", `Output words: ${fileTranscriptWords(row.transcript).length} · Human words: ${fileTranscriptWords(reference).length}`),
           node("p", "Normalized: " + (row.normalized || "(empty)") +
             (effective ? "" : " · excluded from reviewed statistics")));
         const match = (d) => d.provider === row.provider && d.transcript === row.transcript && d.ignoreOrder === ignoreOrder();
@@ -286,6 +389,7 @@ export function setupFileBenchmark() {
           section.append(button);
         }
       }
+      section.append(providerReviewForm(clip, row, annotation));
       item.append(section);
     }
   }
@@ -321,9 +425,11 @@ export function setupFileBenchmark() {
       clips = cases;
       results = new Map();
       reviews = new Map();
+      drafts.clear();
       progress.reset();
       reviewedClip = undefined;
       $("file-review-filter").value = "all";
+      $("file-review-provider").value = "";
       $("file-clip").replaceChildren();
       $("file-review-status").textContent = "";
       $("file-results").value = "";
@@ -372,6 +478,25 @@ export function setupFileBenchmark() {
     $("file-review-status").textContent = "";
     refreshClipList();
   };
+  $("file-review-provider").onchange = () => {
+    $("file-review-status").textContent = "";
+    refreshReviewQueue();
+  };
+  $("file-export-annotations").onclick = () => {
+    const rows = [["clip_id", "file", "participant", "quality", "included", "provider",
+      "outcome", "human_transcript", "provider_transcript", "human_words", "provider_words",
+      "deletion_review", "note"]];
+    for (const record of queue.annotations) {
+      const { clip, quality, included, provider, outcome, reference, transcript,
+        referenceWords, outputWords, annotation } = record;
+      const decision = annotation.deletion === true ? "confirmed" :
+        annotation.deletion === false ? "not found" : provider ? "not checked" : "";
+      rows.push([clip.id, clip.file, clip.speakerGroup, quality, included, provider, outcome,
+        reference, transcript, referenceWords, outputWords, decision, annotation.note]);
+    }
+    download("rsvp-review-annotations.csv", rows.map((row) => row.map(csvCell).join(",")).join("\r\n"),
+      "text/csv;charset=utf-8");
+  };
   $("file-scope").onchange = drawReport;
   $("file-ignore-order").onchange = () => {
     if (!manifest) return;
@@ -384,6 +509,7 @@ export function setupFileBenchmark() {
     settings: { ignoreOrder: ignoreOrder() },
     results: resultRows(),
     reviews: [...reviews.values()],
+    annotationSummary: queue?.summaries,
     tailDiagnostics: controller ? undefined : tailReports().map(({ details, ...summary }) => summary),
     quality: controller ? undefined : computed.quality,
     reports: controller ? undefined : Object.fromEntries(Object.entries(computed.reports).map(([key, report]) =>
