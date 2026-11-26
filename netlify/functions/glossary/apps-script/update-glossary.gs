@@ -20,7 +20,10 @@ var NETLIFY_FUNCTION_URL = "https://easyeyes.app/.netlify/functions/glossary";
 function onOpen() {
   SpreadsheetApp.getUi()
     .createMenu("EasyEyes")
-    .addItem("Update EasyEyes to use current Glossary", "pushGlossary")
+    .addItem(
+      "Update EasyEyes to use current Glossary",
+      "showGlossaryUpdateDialog",
+    )
     .addItem("Run Glossary audit", "runGlossaryAudit")
     .addItem("View Glossary audit report", "showGlossaryAuditReport")
     .addToUi();
@@ -35,21 +38,75 @@ function notify(message) {
 }
 
 function pushGlossary() {
+  notify(runGlossaryUpdate());
+}
+
+function showGlossaryUpdateDialog() {
+  var html = `<!doctype html>
+    <html lang="en">
+    <head>
+      <meta charset="utf-8">
+      <style>
+        body { margin: 16px; color: #202124; font: 14px/1.5 Arial, sans-serif; }
+        h2 { margin: 0; font-size: 18px; }
+        p { white-space: pre-wrap; overflow-wrap: anywhere; }
+        button { font: inherit; padding: 6px 16px; }
+      </style>
+    </head>
+    <body>
+      <h2 id="heading">Updating Glossary…</h2>
+      <p id="message" role="status">Please wait while the Glossary is updated.</p>
+      <button id="close" hidden onclick="google.script.host.close()">Close</button>
+      <script>
+        const limit = 'Google Sheets limits Apps Script runs to six minutes in most accounts. ';
+        const check = ' Check whether any changes were saved before running the action again.';
+        const deadline = setTimeout(() => {
+          showResult('Update status unknown',
+            limit + 'This action may have reached that limit. No final result has arrived.' + check);
+        }, 6 * 60 * 1000);
+
+        function showResult(heading, message) {
+          clearTimeout(deadline);
+          document.getElementById('heading').textContent = heading;
+          document.getElementById('message').textContent = message;
+          document.getElementById('close').hidden = false;
+        }
+
+        google.script.run
+          .withSuccessHandler(message => showResult('Glossary update result', message))
+          .withFailureHandler(error => {
+            const message = error && error.message;
+            if (/Exceeded maximum execution time/i.test(message || '')) {
+              showResult('Execution time limit reached',
+                limit + 'This action reached the execution time limit.' + check);
+            } else {
+              showResult('Glossary update interrupted', message || 'The update was interrupted.');
+            }
+          })
+          .runGlossaryUpdate();
+      </script>
+    </body>
+    </html>`;
+  SpreadsheetApp.getUi().showModalDialog(
+    HtmlService.createHtmlOutput(html).setWidth(460).setHeight(240),
+    "Update Glossary",
+  );
+}
+
+function runGlossaryUpdate() {
   var secret =
     PropertiesService.getScriptProperties().getProperty("GLOSSARY_SECRET");
   if (!secret) {
-    notify(
+    return (
       "GLOSSARY_SECRET is not set in Script Properties. " +
-        "Add it under File > Project settings > Script properties.",
+      "Add it under File > Project settings > Script properties."
     );
-    return;
   }
 
   var sheet =
     SpreadsheetApp.getActiveSpreadsheet().getSheetByName("InputParameters");
   if (!sheet) {
-    notify('Sheet "InputParameters" not found.');
-    return;
+    return 'Sheet "InputParameters" not found.';
   }
 
   var rows = sheet.getDataRange().getDisplayValues();
@@ -73,14 +130,13 @@ function pushGlossary() {
   console.log("[glossary] response body: " + responseText);
 
   if (code !== 200) {
-    notify("Glossary push failed (" + code + "): " + responseText);
-    return;
+    return "Glossary push failed (" + code + "): " + responseText;
   }
 
   var version = JSON.parse(responseText).version;
   try {
     var audit = requestGlossaryAudit();
-    notify(
+    return (
       "Glossary pushed successfully. Version: " +
         version +
         "\n\n" +
@@ -89,14 +145,14 @@ function pushGlossary() {
           : "Glossary audit requested.") +
         " Run ID: " +
         audit.id +
-        "\nUse View Glossary audit report to review the result.",
+        "\nUse View Glossary audit report to review the result."
     );
   } catch (error) {
-    notify(
+    return (
       "Glossary pushed successfully. Version: " +
         version +
         "\n\nThe audit could not be started: " +
-        error.message,
+        error.message
     );
   }
 }

@@ -65,11 +65,11 @@ function onOpen() {
     .createMenu("EasyEyes")
     .addItem(
       "Retranslate all white cells derived from changed English cells. Then update EasyEyes.",
-      "updatePhrases",
+      "showPhrasesUpdateDialog",
     )
     .addItem(
       "Retranslate the selected white cells. Then update EasyEyes.",
-      "retranslateSelectedCells",
+      "showSelectedPhrasesUpdateDialog",
     )
     .addItem("Check all cells. No update.", "checkPhraseKeys")
     .addItem("Color stale translation text red", "colorStaleTranslationTextRed")
@@ -869,6 +869,21 @@ function buildPhrasesAuditHistoryHtml(windowState) {
   );
 }
 
+function buildDeepLBillingActionHtml_() {
+  return `
+    <div class="billing-guidance">
+      DeepL rejected the API key. An inactive subscription or billing issue
+      is a possible cause. Sign in as <strong>denis.pelli@gmail.com</strong>.
+    </div>
+    <a
+      class="button billing-button"
+      href="https://www.deepl.com/en/your-account/billing"
+      target="_blank"
+      rel="noopener noreferrer"
+    >Check DeepL billing</a>
+  `;
+}
+
 function notify(message, type, options) {
   type = type || "warning";
   options = options || {};
@@ -903,18 +918,7 @@ function notify(message, type, options) {
   var title = isSuccess ? "Success" : isError ? "Fatal error" : "Warning";
   var safeMsg = buildNotificationMessageHtml(message, options.linkUrl);
   var billingAction = options.showDeepLBillingAction
-    ? `
-        <div class="billing-guidance">
-          DeepL rejected the API key. An inactive subscription or billing issue
-          is a possible cause. Sign in as <strong>denis.pelli@gmail.com</strong>.
-        </div>
-        <a
-          class="button billing-button"
-          href="https://www.deepl.com/en/your-account/billing"
-          target="_blank"
-          rel="noopener noreferrer"
-        >Check DeepL billing</a>
-  `
+    ? buildDeepLBillingActionHtml_()
     : "";
 
   var html =
@@ -1414,6 +1418,130 @@ function getSpinnerProgress() {
   return CacheService.getUserCache().get("spinnerProgress") || "";
 }
 
+function showPhrasesUpdateDialog() {
+  showPhrasesUpdateDialog_("update", "Updating phrases…");
+}
+
+function showSelectedPhrasesUpdateDialog() {
+  showPhrasesUpdateDialog_("retranslate", "Retranslating selected cells…");
+}
+
+function showPhrasesUpdateDialog_(action, heading) {
+  var progressId = Utilities.getUuid();
+  var html = `<!doctype html>
+    <html lang="en">
+    <head>
+      <meta charset="utf-8">
+      <style>
+        body { margin: 16px; color: #202124; font: 14px/1.5 Arial, sans-serif; }
+        h2 { margin: 0; font-size: 18px; }
+        p { white-space: pre-wrap; overflow-wrap: anywhere; }
+        button { font: inherit; padding: 6px 16px; }
+        .billing-button { display: inline-block; margin: 8px 0 16px; }
+      </style>
+    </head>
+    <body>
+      <h2 id="heading">${heading}</h2>
+      <p id="message" role="status">Please wait while International Phrases is updated.</p>
+      <div id="progress" role="status"></div>
+      <div id="billing" hidden>${buildDeepLBillingActionHtml_()}</div>
+      <button id="close" hidden onclick="google.script.host.close()">Close</button>
+      <script>
+        const limit = 'Google Sheets limits Apps Script runs to six minutes in most accounts. ';
+        const check = ' Check whether any changes were saved before running the action again.';
+        const progressId = ${JSON.stringify(progressId)};
+        let waiting = true;
+        let progressTimer;
+        const deadline = setTimeout(() => {
+          showResult('Update status unknown',
+            limit + 'This action may have reached that limit. No final result has arrived.' + check);
+        }, 6 * 60 * 1000);
+
+        function showResult(heading, message, showBilling) {
+          waiting = false;
+          clearTimeout(deadline);
+          clearTimeout(progressTimer);
+          document.getElementById('heading').textContent = heading;
+          document.getElementById('message').textContent = message;
+          document.getElementById('progress').textContent = '';
+          document.getElementById('billing').hidden = !showBilling;
+          document.getElementById('close').hidden = false;
+        }
+
+        function scheduleProgress() {
+          if (waiting) progressTimer = setTimeout(pollProgress, 2000);
+        }
+
+        function pollProgress() {
+          google.script.run
+            .withSuccessHandler(text => {
+              if (!waiting) return;
+              document.getElementById('progress').textContent = text;
+              scheduleProgress();
+            })
+            .withFailureHandler(scheduleProgress)
+            .getPhrasesUpdateProgress(progressId);
+        }
+
+        google.script.run
+          .withSuccessHandler(result => {
+            const titles = { success: 'Success', warning: 'Warning', error: 'Fatal error' };
+            showResult(titles[result.type], result.message, result.showDeepLBillingAction);
+          })
+          .withFailureHandler(error => {
+            const message = error && error.message;
+            if (/Exceeded maximum execution time/i.test(message || '')) {
+              showResult('Execution time limit reached',
+                limit + 'This action reached the execution time limit.' + check);
+            } else {
+              showResult('Phrases update interrupted', message || 'The update was interrupted.');
+            }
+          })
+          .runPhrasesUpdate(${JSON.stringify(action)}, progressId);
+        scheduleProgress();
+      </script>
+    </body>
+    </html>`;
+  SpreadsheetApp.getUi().showModalDialog(
+    HtmlService.createHtmlOutput(html).setWidth(460).setHeight(280),
+    "Update International Phrases",
+  );
+}
+
+function phrasesUpdateProgressKey_(progressId) {
+  return "phrasesUpdateProgress:" + progressId;
+}
+
+function getPhrasesUpdateProgress(progressId) {
+  return (
+    CacheService.getUserCache().get(phrasesUpdateProgressKey_(progressId)) || ""
+  );
+}
+
+function runPhrasesUpdate(action, progressId) {
+  var result;
+  var options = {
+    progressKey: phrasesUpdateProgressKey_(progressId),
+    report: function (message, type, notificationOptions) {
+      result = {
+        message: message,
+        type: type || "warning",
+        showDeepLBillingAction: Boolean(
+          notificationOptions && notificationOptions.showDeepLBillingAction,
+        ),
+      };
+    },
+  };
+  if (action === "update") {
+    updatePhrases(options);
+  } else if (action === "retranslate") {
+    retranslateSelectedCells(options);
+  } else {
+    throw new Error("Unknown International Phrases update action.");
+  }
+  return result;
+}
+
 function shouldShowPhrasesSuccess(options) {
   return !(options && options.suppressSuccessNotification);
 }
@@ -1449,10 +1577,12 @@ function fullResyncPhrases() {
 }
 
 function pushPhrases(isFullResync, options) {
+  var report = (options && options.report) || notify;
+  var progressKey = options && options.progressKey;
   var secret =
     PropertiesService.getScriptProperties().getProperty("PHRASES_SECRET");
   if (!secret) {
-    notify(
+    report(
       "PHRASES_SECRET is not set in Script Properties. " +
         "Add it under File > Project settings > Script properties.",
     );
@@ -1462,7 +1592,7 @@ function pushPhrases(isFullResync, options) {
   var sheet =
     SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Translations");
   if (!sheet) {
-    notify('Sheet "Translations" not found.');
+    report('Sheet "Translations" not found.');
     return;
   }
 
@@ -1474,7 +1604,7 @@ function pushPhrases(isFullResync, options) {
   // Pre-flight: refuse to update if any phrase key is duplicated.
   var duplicateKeys = findDuplicateKeys(rows);
   if (duplicateKeys.length > 0) {
-    notify(
+    report(
       "EasyEyes was NOT updated.\n\n" +
         "The International Phrases has duplicate phrase keys. Each key must be " +
         "unique. Please remove or rename the following duplicate key(s) and " +
@@ -1496,7 +1626,7 @@ function pushPhrases(isFullResync, options) {
   console.log("[phrases] Phase 1 response code: " + diffCode);
 
   if (diffCode !== 200) {
-    notify("Phrases diff failed (" + diffCode + "): " + diffText);
+    report("Phrases diff failed (" + diffCode + "): " + diffText);
     return;
   }
 
@@ -1546,7 +1676,7 @@ function pushPhrases(isFullResync, options) {
         },
       );
       if (retryVersionResponse.getResponseCode() !== 200) {
-        notify(
+        report(
           "Non-white update had a version conflict and the version re-fetch failed. Please try again.",
         );
         return;
@@ -1567,7 +1697,7 @@ function pushPhrases(isFullResync, options) {
     }
 
     if (nonWhiteCode !== 200) {
-      notify(
+      report(
         "Non-white values update failed (" +
           nonWhiteCode +
           "): " +
@@ -1580,7 +1710,7 @@ function pushPhrases(isFullResync, options) {
     try {
       nonWhiteResult = parseVerifiedPhrasesResult(nonWhiteText);
     } catch (e) {
-      notify(
+      report(
         "Fatal error: the phrases API did not verify the non-white update.\n\n" +
           e.message,
         "error",
@@ -1596,9 +1726,9 @@ function pushPhrases(isFullResync, options) {
   if (!changedKeys || changedKeys.length === 0) {
     if (shouldShowPhrasesSuccess(options)) {
       if (nonWhiteChanged) {
-        notify("Phrases updated. New version: " + currentVersion, "success");
+        report("Phrases updated. New version: " + currentVersion, "success");
       } else {
-        notify("Phrases are up to date. No changes detected.", "success");
+        report("Phrases are up to date. No changes detected.", "success");
       }
     }
     return;
@@ -1644,11 +1774,11 @@ function pushPhrases(isFullResync, options) {
     });
   }
 
-  showSpinner();
+  if (!progressKey) showSpinner();
   for (var b = startBatch; b < totalBatches; b++) {
     if (totalBatches > 1) {
       CacheService.getUserCache().put(
-        "spinnerProgress",
+        progressKey || "spinnerProgress",
         b * BATCH_SIZE + " of " + allKeys.length + " phrases done",
         60,
       );
@@ -1705,7 +1835,7 @@ function pushPhrases(isFullResync, options) {
         },
       );
       if (retryVersion.getResponseCode() !== 200) {
-        notify(
+        report(
           "Batch " +
             (b + 1) +
             " of " +
@@ -1741,7 +1871,7 @@ function pushPhrases(isFullResync, options) {
         errMsg = translateText;
       }
       var latestVersion = fetchLatestPublishedPhrasesVersion(newVersion);
-      notify(
+      report(
         formatPhrasesBatchFailure({
           batchNumber: b + 1,
           totalBatches: totalBatches,
@@ -1759,7 +1889,7 @@ function pushPhrases(isFullResync, options) {
     if (translateCode !== 200) {
       var translateFailure = classifyPhrasesApiFailure(translateText);
       var latestVersion = fetchLatestPublishedPhrasesVersion(newVersion);
-      notify(
+      report(
         formatPhrasesBatchFailure({
           batchNumber: b + 1,
           totalBatches: totalBatches,
@@ -1779,7 +1909,7 @@ function pushPhrases(isFullResync, options) {
     try {
       translateResult = parseVerifiedPhrasesResult(translateText);
     } catch (e) {
-      notify(
+      report(
         "Fatal error: the phrases API did not verify batch " +
           (b + 1) +
           ".\n\n" +
@@ -1795,7 +1925,7 @@ function pushPhrases(isFullResync, options) {
     try {
       writeAndVerifySheetValues(sheet, writes);
     } catch (e) {
-      notify(
+      report(
         "Fatal error: EasyEyes saved the phrase version, but the spreadsheet write-back could not be verified.\n\n" +
           e.message +
           "\n\nVerified partial writes were left in place. Retry the operation safely.",
@@ -1817,25 +1947,27 @@ function pushPhrases(isFullResync, options) {
   // Warning: keys with no translatable target cells
   var missingKeys = findMissingTranslatableKeys(colorMask, changedKeys);
   if (missingKeys.length > 0) {
-    notify(
+    report(
       "Warning: the following phrase keys have no translatable (white) " +
         "target-language cells and were not translated:\n" +
         missingKeys.join(", "),
     );
   } else if (shouldShowPhrasesSuccess(options)) {
     var label = isFullResync ? "Full Resync" : "update";
-    notify(
+    report(
       "Phrases " + label + " complete. New version: " + newVersion,
       "success",
     );
   }
 }
 
-function retranslateSelectedCells() {
+function retranslateSelectedCells(options) {
+  var report = (options && options.report) || notify;
+  var progressKey = options && options.progressKey;
   var secret =
     PropertiesService.getScriptProperties().getProperty("PHRASES_SECRET");
   if (!secret) {
-    notify(
+    report(
       "PHRASES_SECRET is not set in Script Properties. " +
         "Add it under File > Project settings > Script properties.",
     );
@@ -1845,7 +1977,7 @@ function retranslateSelectedCells() {
   var sheet =
     SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Translations");
   if (!sheet) {
-    notify('Sheet "Translations" not found.');
+    report('Sheet "Translations" not found.');
     return;
   }
 
@@ -1855,7 +1987,7 @@ function retranslateSelectedCells() {
   var activeLanguages = extractActiveLanguages(rows);
 
   if (rows.length < 2) {
-    notify("No data found in the International Phrases.");
+    report("No data found in the International Phrases.");
     return;
   }
 
@@ -1863,7 +1995,7 @@ function retranslateSelectedCells() {
   var keyIdx = header.indexOf("EE_LanguageCode");
   var enIdx = header.indexOf("en");
   if (keyIdx === -1 || enIdx === -1) {
-    notify(
+    report(
       'Required columns "EE_LanguageCode" and "en" not found in header row.',
     );
     return;
@@ -1871,7 +2003,7 @@ function retranslateSelectedCells() {
 
   var rangeList = sheet.getActiveRangeList();
   if (!rangeList) {
-    notify("No cells selected.");
+    report("No cells selected.");
     return;
   }
   var ranges = rangeList.getRanges();
@@ -1926,7 +2058,7 @@ function retranslateSelectedCells() {
       : "";
 
   if (whiteCells.length === 0) {
-    notify(
+    report(
       "No translatable cells found in selection." +
         (nonWhiteWarning ? "\n\n" + nonWhiteWarning : ""),
     );
@@ -1941,7 +2073,7 @@ function retranslateSelectedCells() {
     },
   );
   if (versionResponse.getResponseCode() !== 200) {
-    notify("Failed to fetch current phrase version. Please try again.");
+    report("Failed to fetch current phrase version. Please try again.");
     return;
   }
   var currentVersion = JSON.parse(versionResponse.getContentText()).version;
@@ -1985,11 +2117,11 @@ function retranslateSelectedCells() {
     });
   }
 
-  showSpinner();
+  if (!progressKey) showSpinner();
   for (var b = startBatch; b < totalBatches; b++) {
     if (totalBatches > 1) {
       CacheService.getUserCache().put(
-        "spinnerProgress",
+        progressKey || "spinnerProgress",
         b * BATCH_SIZE + " of " + allKeys.length + " phrases done",
         60,
       );
@@ -2049,7 +2181,7 @@ function retranslateSelectedCells() {
         },
       );
       if (retryVersion.getResponseCode() !== 200) {
-        notify(
+        report(
           "Batch " +
             (b + 1) +
             " of " +
@@ -2082,7 +2214,7 @@ function retranslateSelectedCells() {
     if (responseCode !== 200) {
       var responseFailure = classifyPhrasesApiFailure(responseText);
       var latestVersion = fetchLatestPublishedPhrasesVersion(currentVersion);
-      notify(
+      report(
         formatPhrasesBatchFailure({
           batchNumber: b + 1,
           totalBatches: totalBatches,
@@ -2102,7 +2234,7 @@ function retranslateSelectedCells() {
     try {
       result = parseVerifiedPhrasesResult(responseText);
     } catch (e) {
-      notify(
+      report(
         "Fatal error: the phrases API did not verify batch " +
           (b + 1) +
           ".\n\n" +
@@ -2117,7 +2249,7 @@ function retranslateSelectedCells() {
     try {
       writeAndVerifySheetValues(sheet, writes);
     } catch (e) {
-      notify(
+      report(
         "Fatal error: EasyEyes saved the phrase version, but the spreadsheet write-back could not be verified.\n\n" +
           e.message +
           "\n\nVerified partial writes were left in place. Retry the operation safely.",
@@ -2136,7 +2268,7 @@ function retranslateSelectedCells() {
   }
 
   clearPhrasesCheckpoint();
-  notify(
+  report(
     "Translated " +
       totalCellCount +
       " cell(s). New version: " +
