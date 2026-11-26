@@ -15,12 +15,12 @@ export const createProjectDetailsHandler =
     if (!authorization) return Response.json({}, { status: 401 });
 
     const projectId = new URL(request.url).searchParams.get("projectId");
-    if (!projectId || !/^[a-f0-9]{24}$/i.test(projectId))
+    if (!projectId?.trim() || projectId === "." || projectId === "..")
       return Response.json({}, { status: 400 });
 
     try {
       const response = await fetchProject(
-        `https://api.prolific.com/api/v1/projects/${projectId}/`,
+        `https://api.prolific.com/api/v1/projects/${encodeURIComponent(projectId)}/`,
         { headers: { authorization }, redirect: "error" },
       );
       if (!response.ok) {
