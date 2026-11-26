@@ -17,6 +17,57 @@
 
 var NETLIFY_FUNCTION_URL = "https://easyeyes.app/.netlify/functions/glossary";
 
+var EXECUTION_TIMEOUT_PATTERN = /Exceeded maximum execution time/i;
+
+// Each Sheet has its own bound Apps Script project.
+function executionDeadlineScript_() {
+  return `
+    function executionLimitTitle(confirmed) {
+      return confirmed ? 'Execution time limit reached' : 'Action status unknown';
+    }
+
+    function executionLimitMessage(confirmed) {
+      return 'Google Sheets limits Apps Script runs to six minutes in most accounts. ' +
+        (confirmed ? 'This action reached the execution time limit.' :
+          'This action may have reached that limit. No final result has arrived.') +
+        ' Check whether any changes were saved before running the action again.';
+    }
+
+    function withExecutionDeadline(success, failure, showTimeout) {
+      function onLimit(confirmed) {
+        if (showTimeout) {
+          showTimeout(confirmed);
+          return;
+        }
+        const error = new Error(executionLimitTitle(confirmed) + '. ' + executionLimitMessage(confirmed));
+        error.executionDeadline = true;
+        failure(error);
+      }
+
+      let expired = false;
+      const deadline = setTimeout(() => {
+        expired = true;
+        onLimit(false);
+      }, 6 * 60 * 1000);
+      return google.script.run
+        .withSuccessHandler(result => {
+          clearTimeout(deadline);
+          // Menu dialogs can show late results. Reports can start a new request.
+          if (!expired || showTimeout) success(result);
+        })
+        .withFailureHandler(error => {
+          clearTimeout(deadline);
+          if (expired && !showTimeout) return;
+          if (${EXECUTION_TIMEOUT_PATTERN}.test(error && error.message || '')) {
+            onLimit(true);
+          } else {
+            failure(error);
+          }
+        });
+    }
+  `;
+}
+
 function onOpen() {
   SpreadsheetApp.getUi()
     .createMenu("EasyEyes")
@@ -24,7 +75,7 @@ function onOpen() {
       "Update EasyEyes to use current Glossary",
       "showGlossaryUpdateDialog",
     )
-    .addItem("Run Glossary audit", "runGlossaryAudit")
+    .addItem("Run Glossary audit", "showGlossaryAuditRequestDialog")
     .addItem("View Glossary audit report", "showGlossaryAuditReport")
     .addToUi();
 }
@@ -42,6 +93,24 @@ function pushGlossary() {
 }
 
 function showGlossaryUpdateDialog() {
+  showGlossaryActionDialog_("update", "Update Glossary", "Updating Glossary…");
+}
+
+function showGlossaryAuditRequestDialog() {
+  showGlossaryActionDialog_(
+    "audit",
+    "Run Glossary audit",
+    "Requesting Glossary audit…",
+  );
+}
+
+function runGlossaryMenuAction(action) {
+  if (action === "update") return runGlossaryUpdate(true);
+  if (action === "audit") return requestGlossaryAuditResult_(true);
+  throw new Error("Unknown Glossary menu action.");
+}
+
+function showGlossaryActionDialog_(action, title, heading) {
   var html = `<!doctype html>
     <html lang="en">
     <head>
@@ -54,46 +123,32 @@ function showGlossaryUpdateDialog() {
       </style>
     </head>
     <body>
-      <h2 id="heading">Updating Glossary…</h2>
-      <p id="message" role="status">Please wait while the Glossary is updated.</p>
+      <h2 id="heading">${heading}</h2>
+      <p id="message" role="status">Please wait.</p>
       <button id="close" hidden onclick="google.script.host.close()">Close</button>
       <script>
-        const limit = 'Google Sheets limits Apps Script runs to six minutes in most accounts. ';
-        const check = ' Check whether any changes were saved before running the action again.';
-        const deadline = setTimeout(() => {
-          showResult('Update status unknown',
-            limit + 'This action may have reached that limit. No final result has arrived.' + check);
-        }, 6 * 60 * 1000);
-
+        ${executionDeadlineScript_()}
         function showResult(heading, message) {
-          clearTimeout(deadline);
           document.getElementById('heading').textContent = heading;
           document.getElementById('message').textContent = message;
           document.getElementById('close').hidden = false;
         }
 
-        google.script.run
-          .withSuccessHandler(message => showResult('Glossary update result', message))
-          .withFailureHandler(error => {
-            const message = error && error.message;
-            if (/Exceeded maximum execution time/i.test(message || '')) {
-              showResult('Execution time limit reached',
-                limit + 'This action reached the execution time limit.' + check);
-            } else {
-              showResult('Glossary update interrupted', message || 'The update was interrupted.');
-            }
-          })
-          .runGlossaryUpdate();
+        withExecutionDeadline(
+          message => showResult('Result', message),
+          error => showResult('Action interrupted', error && error.message || 'The action was interrupted.'),
+          confirmed => showResult(executionLimitTitle(confirmed), executionLimitMessage(confirmed)),
+        ).runGlossaryMenuAction(${JSON.stringify(action)});
       </script>
     </body>
     </html>`;
   SpreadsheetApp.getUi().showModalDialog(
     HtmlService.createHtmlOutput(html).setWidth(460).setHeight(240),
-    "Update Glossary",
+    title,
   );
 }
 
-function runGlossaryUpdate() {
+function runGlossaryUpdate(rethrowTimeout) {
   var secret =
     PropertiesService.getScriptProperties().getProperty("GLOSSARY_SECRET");
   if (!secret) {
@@ -148,6 +203,7 @@ function runGlossaryUpdate() {
         "\nUse View Glossary audit report to review the result."
     );
   } catch (error) {
+    if (rethrowTimeout && EXECUTION_TIMEOUT_PATTERN.test(error.message)) throw error;
     return (
       "Glossary pushed successfully. Version: " +
         version +
@@ -223,18 +279,23 @@ function requestGlossaryAudit() {
 }
 
 function runGlossaryAudit() {
+  notify(requestGlossaryAuditResult_());
+}
+
+function requestGlossaryAuditResult_(rethrowTimeout) {
   try {
     var audit = requestGlossaryAudit();
-    notify(
+    return (
       (audit.alreadyRunning
         ? "A glossary audit is already running."
         : "Glossary audit requested.") +
-        " Run ID: " +
-        audit.id +
-        "\nUse View Glossary audit report to review the result.",
+      " Run ID: " +
+      audit.id +
+      "\nUse View Glossary audit report to review the result."
     );
   } catch (error) {
-    notify("The audit could not be started: " + error.message);
+    if (rethrowTimeout && EXECUTION_TIMEOUT_PATTERN.test(error.message)) throw error;
+    return "The audit could not be started: " + error.message;
   }
 }
 
@@ -305,6 +366,7 @@ function buildGlossaryAuditReportHtml() {
   <div id="groups"></div>
 </main>
 <script>
+${executionDeadlineScript_()}
 (function () {
   var select = document.getElementById("run-select");
   var search = document.getElementById("key-search");
@@ -377,20 +439,22 @@ function buildGlossaryAuditReportHtml() {
     var id = select.value;
     if (!id) return;
     findings = null; render(); refresh.disabled = true; setStatus("Loading selected report…");
-    google.script.run.withSuccessHandler(function (result) {
+    withExecutionDeadline(function (result) {
       if (number !== requestNumber) return;
       refresh.disabled = false;
       findings = result.findings; render();
       if (findings) setStatus("Glossary " + findings.version + " · Report generated " + date(result.run.generatedAt));
       else if (result.run.status === "failed") setStatus(result.run.error || "This audit failed.", true);
       else { setStatus("This audit is " + result.run.status + ". The report will appear when it finishes."); timer = setTimeout(loadSelected, 15000); }
-    }).withFailureHandler(function (error) { if (number === requestNumber) fail(error); }).getGlossaryAuditRun(id);
+    }, function (error) { if (number === requestNumber) fail(error); }).getGlossaryAuditRun(id);
   }
   function loadRuns() {
-    clearTimeout(timer); ++requestNumber;
+    clearTimeout(timer);
+    var number = ++requestNumber;
     var selected = select.value;
     refresh.disabled = true;
-    google.script.run.withSuccessHandler(function (result) {
+    withExecutionDeadline(function (result) {
+      if (number !== requestNumber) return;
       select.replaceChildren();
       var runs = result.runs || [];
       runs.forEach(function (run) { var option = document.createElement("option"); option.value = run.id; option.textContent = date(run.requestedAt) + " · " + run.status; select.appendChild(option); });
@@ -398,7 +462,7 @@ function buildGlossaryAuditReportHtml() {
       if (!runs.length) { findings = null; render(); setStatus("No saved audits yet. Use the glossary update menu to publish and request an audit."); return; }
       if (runs.some(function (run) { return run.id === selected; })) select.value = selected;
       loadSelected();
-    }).withFailureHandler(fail).listGlossaryAuditRuns();
+    }, function (error) { if (number === requestNumber) fail(error); }).listGlossaryAuditRuns();
   }
   select.addEventListener("change", loadSelected);
   search.addEventListener("input", render);

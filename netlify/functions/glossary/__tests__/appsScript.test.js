@@ -28,7 +28,7 @@ describe("Glossary Apps Script client", () => {
     onOpen();
     expect(menu.addItem.mock.calls).toEqual([
       ["Update EasyEyes to use current Glossary", "showGlossaryUpdateDialog"],
-      ["Run Glossary audit", "runGlossaryAudit"],
+      ["Run Glossary audit", "showGlossaryAuditRequestDialog"],
       ["View Glossary audit report", "showGlossaryAuditReport"],
     ]);
   });

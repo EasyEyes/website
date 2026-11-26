@@ -60,6 +60,57 @@ function buildNotificationMessageHtml(message, linkUrl) {
   );
 }
 
+var EXECUTION_TIMEOUT_PATTERN = /Exceeded maximum execution time/i;
+
+// Each Sheet has its own bound Apps Script project.
+function executionDeadlineScript_() {
+  return `
+    function executionLimitTitle(confirmed) {
+      return confirmed ? 'Execution time limit reached' : 'Action status unknown';
+    }
+
+    function executionLimitMessage(confirmed) {
+      return 'Google Sheets limits Apps Script runs to six minutes in most accounts. ' +
+        (confirmed ? 'This action reached the execution time limit.' :
+          'This action may have reached that limit. No final result has arrived.') +
+        ' Check whether any changes were saved before running the action again.';
+    }
+
+    function withExecutionDeadline(success, failure, showTimeout) {
+      function onLimit(confirmed) {
+        if (showTimeout) {
+          showTimeout(confirmed);
+          return;
+        }
+        const error = new Error(executionLimitTitle(confirmed) + '. ' + executionLimitMessage(confirmed));
+        error.executionDeadline = true;
+        failure(error);
+      }
+
+      let expired = false;
+      const deadline = setTimeout(() => {
+        expired = true;
+        onLimit(false);
+      }, 6 * 60 * 1000);
+      return google.script.run
+        .withSuccessHandler(result => {
+          clearTimeout(deadline);
+          // Menu dialogs can show late results. Reports can start a new request.
+          if (!expired || showTimeout) success(result);
+        })
+        .withFailureHandler(error => {
+          clearTimeout(deadline);
+          if (expired && !showTimeout) return;
+          if (${EXECUTION_TIMEOUT_PATTERN}.test(error && error.message || '')) {
+            onLimit(true);
+          } else {
+            failure(error);
+          }
+        });
+    }
+  `;
+}
+
 function onOpen() {
   SpreadsheetApp.getUi()
     .createMenu("EasyEyes")
@@ -71,15 +122,15 @@ function onOpen() {
       "Retranslate the selected white cells. Then update EasyEyes.",
       "showSelectedPhrasesUpdateDialog",
     )
-    .addItem("Check all cells. No update.", "checkPhraseKeys")
-    .addItem("Color stale translation text red", "colorStaleTranslationTextRed")
-    .addItem("Tabulate needed translations", "tabulateNeededTranslations")
-    .addItem("Read new translations", "readNewTranslations")
+    .addItem("Check all cells. No update.", "showPhrasesCheckDialog")
+    .addItem("Color stale translation text red", "showPhrasesFreshnessDialog")
+    .addItem("Tabulate needed translations", "showPhrasesTabulationDialog")
+    .addItem("Read new translations", "showPhrasesImportDialog")
     .addItem(
       "Compare latest EasyEyes copy with this spreadsheet",
-      "compareLatestEasyEyesCopy",
+      "showPhrasesComparisonDialog",
     )
-    .addItem("Run International Phrases audit", "requestPhrasesAudit")
+    .addItem("Run International Phrases audit", "showPhrasesAuditRequestDialog")
     .addItem(
       "View International Phrases audit history",
       "showPhrasesAuditHistory",
@@ -87,7 +138,8 @@ function onOpen() {
     .addToUi();
 }
 
-function requestPhrasesAudit() {
+function requestPhrasesAudit(report) {
+  report = report || notify;
   try {
     var secret =
       PropertiesService.getScriptProperties().getProperty("PHRASES_SECRET");
@@ -101,7 +153,7 @@ function requestPhrasesAudit() {
     if (response.getResponseCode() === 409) {
       var active = JSON.parse(response.getContentText());
       if (active.code === "audit_in_progress" && active.id) {
-        notify(
+        report(
           "A previous International Phrases audit is still running. " +
             "Please wait for it to finish before requesting another audit. " +
             "Run ID: " +
@@ -120,15 +172,15 @@ function requestPhrasesAudit() {
     if (!result.id || result.status !== "queued") {
       throw new Error("The audit service returned an invalid response.");
     }
-    notify(
+    report(
       "International Phrases audit requested. Run ID: " + result.id,
       "success",
     );
   } catch (error) {
-    notify(
-      "Could not request the International Phrases audit.\n\n" +
-        (error && error.message ? error.message : String(error)),
-      "error",
+    reportPhrasesActionError_(
+      report,
+      error,
+      "Could not request the International Phrases audit.\n\n",
     );
   }
 }
@@ -312,6 +364,7 @@ function addPhraseAuditWindowControls(html, state, allowExport) {
     </div>
   `;
   var script = `
+    ${executionDeadlineScript_()}
     var phraseAuditWindowState = ${savedState};
     (function () {
       var toggle = document.getElementById("audit-window-toggle");
@@ -326,18 +379,18 @@ function addPhraseAuditWindowControls(html, state, allowExport) {
         toggle.textContent = state.collapsed ? "Minimizing…" : "Re-expanding…";
         content.inert = true;
         document.getElementById("audit-window-error").textContent = "";
-        google.script.run
-          .withSuccessHandler(function () {
+        withExecutionDeadline(
+          function () {
             // The host replaces the old dialog. Do not close the replacement.
-          })
-          .withFailureHandler(function (error) {
+          },
+          function (error) {
             toggle.disabled = false;
             toggle.textContent = phraseAuditWindowState.collapsed ? "Re-expand" : "Minimize";
             content.inert = false;
             document.getElementById("audit-window-error").textContent =
               "Could not reopen the report: " + (error.message || error);
-          })
-          .reopenPhraseAuditWindow(state);
+          },
+        ).reopenPhraseAuditWindow(state);
       };
     })();
   `;
@@ -601,15 +654,15 @@ function buildPhrasesAuditHistoryHtml(windowState) {
                 event.preventDefault();
                 event.stopPropagation();
                 setStatus("Selecting " + entry.key + " in the Sheet…", false);
-                google.script.run
-                  .withSuccessHandler(function() {
+                withExecutionDeadline(
+                  function() {
                     setStatus("Selected " + entry.key + " in the Sheet.", false);
                     google.script.host.editor.focus();
-                  })
-                  .withFailureHandler(function(error) {
+                  },
+                  function(error) {
                     setStatus(error.message || String(error), true);
-                  })
-                  .focusPhraseInSheet(entry.key);
+                  },
+                ).focusPhraseInSheet(entry.key);
               });
               title.appendChild(sheetLink);
             } else {
@@ -727,16 +780,16 @@ function buildPhrasesAuditHistoryHtml(windowState) {
             updateExportButton();
             document.getElementById("content").className = "hidden";
             setStatus("Loading selected audit report…", false);
-            google.script.run
-              .withSuccessHandler(function (result) {
+            withExecutionDeadline(
+              function (result) {
                 if (requestNumber !== activeRunRequest) return;
                 showLoadedReport(result);
-              })
-              .withFailureHandler(function (error) {
+              },
+              function (error) {
                 if (requestNumber !== activeRunRequest) return;
                 setStatus("Could not load this report: " + (error.message || error), true);
-              })
-              .getPhrasesAuditRun(runId);
+              },
+            ).getPhrasesAuditRun(runId);
           }
 
           keySearch.addEventListener("input", renderReport);
@@ -773,8 +826,8 @@ function buildPhrasesAuditHistoryHtml(windowState) {
             loadingAuditPage = true;
             document.getElementById("load-older-audits").disabled = true;
             document.getElementById("audit-page-status").textContent = "Loading older audits…";
-            google.script.run
-              .withSuccessHandler(function (result) {
+            withExecutionDeadline(
+              function (result) {
                 if (closed) return;
                 var selection = runSelect.value;
                 appendRuns(result.runs || []);
@@ -782,14 +835,14 @@ function buildPhrasesAuditHistoryHtml(windowState) {
                 updatePaging(result);
                 loadingAuditPage = false;
                 document.getElementById("audit-page-status").textContent = nextAuditCursor ? "" : "All audit runs loaded.";
-              })
-              .withFailureHandler(function (error) {
+              },
+              function (error) {
                 if (closed) return;
                 loadingAuditPage = false;
                 document.getElementById("load-older-audits").disabled = false;
                 document.getElementById("audit-page-status").textContent = "Could not load older audits: " + (error.message || error);
-              })
-              .listPhrasesAuditRuns(nextAuditCursor);
+              },
+            ).listPhrasesAuditRuns(nextAuditCursor);
           });
 
           function schedulePoll() {
@@ -804,8 +857,8 @@ function buildPhrasesAuditHistoryHtml(windowState) {
               if (closed) return;
               var run = pending.shift();
               if (!run) { schedulePoll(); return; }
-              google.script.run
-                .withSuccessHandler(function (result) {
+              withExecutionDeadline(
+                function (result) {
                   if (closed) return;
                   pollFailures = 0;
                   var previousStatus = run.status;
@@ -815,13 +868,14 @@ function buildPhrasesAuditHistoryHtml(windowState) {
                     loadRun(run.id);
                   }
                   next();
-                })
-                .withFailureHandler(function () {
+                },
+                function (error) {
                   if (closed) return;
+                  if (error && error.executionDeadline) setStatus(error.message, true);
                   pollFailures++;
                   schedulePoll();
-                })
-                .getPhrasesAuditStatus(run.id);
+                },
+              ).getPhrasesAuditStatus(run.id);
             }
             next();
           }
@@ -843,23 +897,26 @@ function buildPhrasesAuditHistoryHtml(windowState) {
               loadRun(runSelect.value);
             }
             schedulePoll();
-          } else google.script.run
-            .withSuccessHandler(function (result) {
-              var runs = result.runs || [];
-              if (closed) return;
-              updatePaging(result);
-              if (!runs.length) { setStatus("No audit runs have been saved yet.", false); return; }
-              appendRuns(runs.filter(isActive).concat(runs.filter(function (run) { return !isActive(run); })));
-              var latestCompleted = runs.find(function (run) { return run.status === "completed"; });
-              runSelect.value = (latestCompleted || auditRuns[0]).id;
-              runSelect.disabled = false;
-              loadRun(runSelect.value);
-              schedulePoll();
-            })
-            .withFailureHandler(function (error) {
-              setStatus("Could not load audit runs: " + (error.message || error), true);
-            })
-            .listPhrasesAuditRuns();
+          } else {
+            withExecutionDeadline(
+              function (result) {
+                var runs = result.runs || [];
+                if (closed) return;
+                updatePaging(result);
+                if (!runs.length) { setStatus("No audit runs have been saved yet.", false); return; }
+                appendRuns(runs.filter(isActive).concat(runs.filter(function (run) { return !isActive(run); })));
+                var latestCompleted = runs.find(function (run) { return run.status === "completed"; });
+                runSelect.value = (latestCompleted || auditRuns[0]).id;
+                runSelect.disabled = false;
+                loadRun(runSelect.value);
+                schedulePoll();
+              },
+              function (error) {
+                if (closed) return;
+                setStatus("Could not load audit runs: " + (error.message || error), true);
+              },
+            ).listPhrasesAuditRuns();
+          }
         </script>
       </body>
     </html>
@@ -1069,18 +1126,19 @@ function fetchPhraseAuditJson(url, description) {
   return JSON.parse(response.getContentText());
 }
 
-function compareLatestEasyEyesCopy() {
+function compareLatestEasyEyesCopy(report) {
+  report = report || notify;
   try {
     var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
     var sheet = spreadsheet.getSheetByName("Translations");
     if (!sheet) {
-      notify('Sheet "Translations" not found.');
+      report('Sheet "Translations" not found.');
       return;
     }
 
     var rows = sheet.getDataRange().getDisplayValues();
     if (rows.length < 2 || rows[0].indexOf("EE_LanguageCode") === -1) {
-      notify('No phrase data or required column "EE_LanguageCode" was found.');
+      report('No phrase data or required column "EE_LanguageCode" was found.');
       return;
     }
 
@@ -1117,11 +1175,12 @@ function compareLatestEasyEyesCopy() {
       HtmlService.createHtmlOutput(html).setWidth(1000).setHeight(700),
       "International Phrases audit",
     );
+    return true;
   } catch (error) {
-    notify(
-      "Could not compare International Phrases with Firebase.\n\n" +
-        (error && error.message ? error.message : String(error)),
-      "error",
+    reportPhrasesActionError_(
+      report,
+      error,
+      "Could not compare International Phrases with Firebase.\n\n",
     );
   }
 }
@@ -1419,15 +1478,82 @@ function getSpinnerProgress() {
 }
 
 function showPhrasesUpdateDialog() {
-  showPhrasesUpdateDialog_("update", "Updating phrases…");
+  showPhrasesActionDialog_(
+    "update",
+    "Update International Phrases",
+    "Updating phrases…",
+  );
 }
 
 function showSelectedPhrasesUpdateDialog() {
-  showPhrasesUpdateDialog_("retranslate", "Retranslating selected cells…");
+  showPhrasesActionDialog_(
+    "retranslate",
+    "Update International Phrases",
+    "Retranslating selected cells…",
+  );
 }
 
-function showPhrasesUpdateDialog_(action, heading) {
-  var progressId = Utilities.getUuid();
+function showPhrasesCheckDialog() {
+  showPhrasesActionDialog_(
+    "check",
+    "Check all cells",
+    "Checking phrase cells…",
+  );
+}
+
+function showPhrasesFreshnessDialog() {
+  showPhrasesActionDialog_(
+    "freshness",
+    "Color stale translation text red",
+    "Checking translation freshness…",
+  );
+}
+
+function showPhrasesTabulationDialog() {
+  showPhrasesActionDialog_(
+    "tabulate",
+    "Tabulate needed translations",
+    "Creating translation request…",
+  );
+}
+
+function showPhrasesImportDialog() {
+  showPhrasesActionDialog_(
+    "import",
+    "Read new translations",
+    "Importing translations…",
+  );
+}
+
+function showPhrasesComparisonDialog() {
+  showPhrasesActionDialog_(
+    "compare",
+    "Compare latest EasyEyes copy",
+    "Comparing phrases…",
+  );
+}
+
+function showPhrasesAuditRequestDialog() {
+  showPhrasesActionDialog_(
+    "audit",
+    "Run International Phrases audit",
+    "Requesting International Phrases audit…",
+  );
+}
+
+function showPhrasesActionDialog_(action, title, heading) {
+  var progressId =
+    action === "update" || action === "retranslate" ? Utilities.getUuid() : "";
+  var importForm = action === "import"
+    ? `
+    <form id="import-form">
+      <label for="import-url">Paste the returned Google Sheets URL.</label>
+      <input id="import-url" type="url" required>
+      <button type="submit">Import</button>
+      <button type="button" onclick="google.script.host.close()">Cancel</button>
+    </form>
+  `
+    : "";
   var html = `<!doctype html>
     <html lang="en">
     <head>
@@ -1436,40 +1562,41 @@ function showPhrasesUpdateDialog_(action, heading) {
         body { margin: 16px; color: #202124; font: 14px/1.5 Arial, sans-serif; }
         h2 { margin: 0; font-size: 18px; }
         p { white-space: pre-wrap; overflow-wrap: anywhere; }
-        button { font: inherit; padding: 6px 16px; }
+        button, input { font: inherit; padding: 6px 16px; }
+        input { display: block; width: 100%; box-sizing: border-box; margin: 8px 0 12px; }
         .billing-button { display: inline-block; margin: 8px 0 16px; }
       </style>
     </head>
     <body>
-      <h2 id="heading">${heading}</h2>
-      <p id="message" role="status">Please wait while International Phrases is updated.</p>
+      <h2 id="heading" ${importForm ? "hidden" : ""}>${heading}</h2>
+      <p id="message" role="status">${importForm ? "" : "Please wait."}</p>
+      ${importForm}
       <div id="progress" role="status"></div>
       <div id="billing" hidden>${buildDeepLBillingActionHtml_()}</div>
       <button id="close" hidden onclick="google.script.host.close()">Close</button>
       <script>
-        const limit = 'Google Sheets limits Apps Script runs to six minutes in most accounts. ';
-        const check = ' Check whether any changes were saved before running the action again.';
+        ${executionDeadlineScript_()}
         const progressId = ${JSON.stringify(progressId)};
-        let waiting = true;
+        const form = document.getElementById('import-form');
+        let started = false;
+        let waiting = false;
         let progressTimer;
-        const deadline = setTimeout(() => {
-          showResult('Update status unknown',
-            limit + 'This action may have reached that limit. No final result has arrived.' + check);
-        }, 6 * 60 * 1000);
 
-        function showResult(heading, message, showBilling) {
+        function showResult(heading, message, showBilling, messageHtml) {
           waiting = false;
-          clearTimeout(deadline);
           clearTimeout(progressTimer);
           document.getElementById('heading').textContent = heading;
-          document.getElementById('message').textContent = message;
+          const output = document.getElementById('message');
+          output.textContent = message;
+          // The server escapes the text and allows only Google Sheets links.
+          if (messageHtml) output.innerHTML = messageHtml;
           document.getElementById('progress').textContent = '';
           document.getElementById('billing').hidden = !showBilling;
           document.getElementById('close').hidden = false;
         }
 
         function scheduleProgress() {
-          if (waiting) progressTimer = setTimeout(pollProgress, 2000);
+          if (waiting && progressId) progressTimer = setTimeout(pollProgress, 2000);
         }
 
         function pollProgress() {
@@ -1483,29 +1610,42 @@ function showPhrasesUpdateDialog_(action, heading) {
             .getPhrasesUpdateProgress(progressId);
         }
 
-        google.script.run
-          .withSuccessHandler(result => {
-            const titles = { success: 'Success', warning: 'Warning', error: 'Fatal error' };
-            showResult(titles[result.type], result.message, result.showDeepLBillingAction);
-          })
-          .withFailureHandler(error => {
-            const message = error && error.message;
-            if (/Exceeded maximum execution time/i.test(message || '')) {
-              showResult('Execution time limit reached',
-                limit + 'This action reached the execution time limit.' + check);
-            } else {
-              showResult('Phrases update interrupted', message || 'The update was interrupted.');
-            }
-          })
-          .runPhrasesUpdate(${JSON.stringify(action)}, progressId);
-        scheduleProgress();
+        function startAction(url) {
+          if (started) return;
+          started = waiting = true;
+          if (form) {
+            form.hidden = true;
+            document.getElementById('heading').hidden = false;
+            document.getElementById('message').textContent = 'Please wait.';
+          }
+          withExecutionDeadline(
+            result => {
+              // Sheets replaces this window when the comparison report opens.
+              if (result.reportOpened) {
+                showResult('Result', 'Comparison report opened.');
+                return;
+              }
+              const titles = { success: 'Success', warning: 'Warning', error: 'Fatal error' };
+              showResult(titles[result.type], result.message, result.showDeepLBillingAction, result.messageHtml);
+            },
+            error => showResult('Action interrupted', error && error.message || 'The action was interrupted.'),
+            confirmed => showResult(executionLimitTitle(confirmed), executionLimitMessage(confirmed)),
+          ).runPhrasesMenuAction(${JSON.stringify(action)}, progressId, url);
+          scheduleProgress();
+        }
+
+        if (form) form.addEventListener('submit', event => {
+          event.preventDefault();
+          startAction(document.getElementById('import-url').value.trim());
+        });
+        else startAction(null);
       </script>
     </body>
     </html>`;
-  SpreadsheetApp.getUi().showModalDialog(
-    HtmlService.createHtmlOutput(html).setWidth(460).setHeight(280),
-    "Update International Phrases",
-  );
+  var ui = SpreadsheetApp.getUi();
+  var output = HtmlService.createHtmlOutput(html).setWidth(460).setHeight(280);
+  if (action === "compare") ui.showModelessDialog(output, title);
+  else ui.showModalDialog(output, title);
 }
 
 function phrasesUpdateProgressKey_(progressId) {
@@ -1518,26 +1658,55 @@ function getPhrasesUpdateProgress(progressId) {
   );
 }
 
-function runPhrasesUpdate(action, progressId) {
+function reportPhrasesActionError_(report, error, prefix) {
+  var message = error && error.message ? error.message : String(error);
+  if (report !== notify && EXECUTION_TIMEOUT_PATTERN.test(message)) throw error;
+  report((prefix || "") + message, "error");
+}
+
+function runPhrasesMenuAction(action, progressId, url) {
   var result;
-  var options = {
-    progressKey: phrasesUpdateProgressKey_(progressId),
-    report: function (message, type, notificationOptions) {
-      result = {
-        message: message,
-        type: type || "warning",
-        showDeepLBillingAction: Boolean(
-          notificationOptions && notificationOptions.showDeepLBillingAction,
-        ),
-      };
-    },
-  };
-  if (action === "update") {
-    updatePhrases(options);
-  } else if (action === "retranslate") {
-    retranslateSelectedCells(options);
-  } else {
-    throw new Error("Unknown International Phrases update action.");
+  function report(message, type, options) {
+    options = options || {};
+    result = {
+      message: message,
+      type: type || "warning",
+      showDeepLBillingAction: Boolean(options.showDeepLBillingAction),
+      messageHtml: options.linkUrl
+        ? buildNotificationMessageHtml(message, options.linkUrl)
+        : "",
+    };
+  }
+
+  var options = { report: report };
+  if (progressId) options.progressKey = phrasesUpdateProgressKey_(progressId);
+  switch (action) {
+    case "update":
+      updatePhrases(options);
+      break;
+    case "retranslate":
+      retranslateSelectedCells(options);
+      break;
+    case "check":
+      checkPhraseKeys(report);
+      break;
+    case "freshness":
+      colorStaleTranslationTextRed(null, report);
+      break;
+    case "tabulate":
+      tabulateNeededTranslations(report);
+      break;
+    case "import":
+      readTranslationsFromUrl_(url, report);
+      break;
+    case "compare":
+      if (compareLatestEasyEyesCopy(report)) return { reportOpened: true };
+      break;
+    case "audit":
+      requestPhrasesAudit(report);
+      break;
+    default:
+      throw new Error("Unknown International Phrases menu action.");
   }
   return result;
 }
@@ -2587,11 +2756,12 @@ function classifyPhrasesApiFailure(responseText) {
   };
 }
 
-function checkPhraseKeys() {
+function checkPhraseKeys(report) {
+  report = report || notify;
   var sheet =
     SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Translations");
   if (!sheet) {
-    notify('Sheet "Translations" not found.');
+    report('Sheet "Translations" not found.');
     return;
   }
 
@@ -2599,12 +2769,12 @@ function checkPhraseKeys() {
   var rows = dataRange.getDisplayValues();
   var backgrounds = dataRange.getBackgrounds();
   if (rows.length < 2) {
-    notify("No data found in the International Phrases.");
+    report("No data found in the International Phrases.");
     return;
   }
 
   if (rows[0].indexOf("EE_LanguageCode") === -1) {
-    notify('Required column "EE_LanguageCode" not found in header row.');
+    report('Required column "EE_LanguageCode" not found in header row.');
     return;
   }
 
@@ -2627,14 +2797,14 @@ function checkPhraseKeys() {
   });
 
   if (sections.length === 0) {
-    notify(
+    report(
       "No potential problems found in the International Phrases.",
       "success",
     );
     return;
   }
 
-  notify(
+  report(
     "Found potential problems in the International Phrases:\n\n" +
       sections.join("\n\n"),
   );
@@ -3053,7 +3223,8 @@ function fetchFreshness(rows, secret) {
   return results;
 }
 
-function colorStaleTranslationTextRed(successMessage) {
+function colorStaleTranslationTextRed(successMessage, report) {
+  report = report || notify;
   try {
     var secret =
       PropertiesService.getScriptProperties().getProperty("PHRASES_SECRET");
@@ -3064,19 +3235,21 @@ function colorStaleTranslationTextRed(successMessage) {
     if (!sheet) throw new Error('Sheet "Translations" not found.');
     var range = sheet.getDataRange();
     var rows = range.getDisplayValues();
-    showSpinner("Checking translation freshness…", "Checking freshness …");
+    if (report === notify) {
+      showSpinner("Checking translation freshness…", "Checking freshness …");
+    }
     var colors = planFreshnessFontColors(
       rows,
       range.getFontColors(),
       fetchFreshness(rows, secret),
     );
     range.setFontColors(colors);
-    notify(
+    report(
       successMessage || "Translation freshness colors updated.",
       "success",
     );
   } catch (e) {
-    notify(e.message, "error");
+    reportPhrasesActionError_(report, e);
   }
 }
 
@@ -3198,7 +3371,8 @@ function applyCompactTranslationPlan(sheet, plan) {
   });
 }
 
-function tabulateNeededTranslations() {
+function tabulateNeededTranslations(report) {
+  report = report || notify;
   try {
     var secret =
       PropertiesService.getScriptProperties().getProperty("PHRASES_SECRET");
@@ -3207,10 +3381,12 @@ function tabulateNeededTranslations() {
     var source = SpreadsheetApp.getActiveSpreadsheet();
     var sourceSheet = source.getSheetByName("Translations");
     if (!sourceSheet) throw new Error('Sheet "Translations" not found.');
-    showSpinner(
-      "Creating translation request…",
-      "Creating translation request …",
-    );
+    if (report === notify) {
+      showSpinner(
+        "Creating translation request…",
+        "Creating translation request …",
+      );
+    }
     var sourceRange = sourceSheet.getDataRange();
     var rows = sourceRange.getDisplayValues();
     var backgrounds = sourceRange.getBackgrounds();
@@ -3237,11 +3413,11 @@ function tabulateNeededTranslations() {
       throw new Error('Copied spreadsheet has no "Translations" sheet.');
     applyCompactTranslationPlan(copySheet, plan);
     var copyUrl = copy.getUrl();
-    notify("Translation request created: " + copyUrl, "success", {
+    report("Translation request created: " + copyUrl, "success", {
       linkUrl: copyUrl,
     });
   } catch (e) {
-    notify(e.message, "error");
+    reportPhrasesActionError_(report, e);
   }
 }
 
@@ -3370,7 +3546,15 @@ function readNewTranslations() {
       ui.ButtonSet.OK_CANCEL,
     );
     if (prompt.getSelectedButton() !== ui.Button.OK) return;
-    var returned = SpreadsheetApp.openByUrl(prompt.getResponseText().trim());
+    readTranslationsFromUrl_(prompt.getResponseText(), notify);
+  } catch (e) {
+    notify("Translation import failed: " + e.message, "error");
+  }
+}
+
+function readTranslationsFromUrl_(url, report) {
+  try {
+    var returned = SpreadsheetApp.openByUrl(url.trim());
     var compactSheet = returned.getSheetByName("Translations");
     if (!compactSheet)
       throw new Error('Returned spreadsheet has no "Translations" sheet.');
@@ -3386,7 +3570,7 @@ function readNewTranslations() {
       currentRange.getDisplayValues(),
     );
     if (validation.conflicts.length) {
-      notify(
+      report(
         "English sources differ. No translations were imported.\n\n" +
           formatEnglishConflicts(validation.conflicts),
         "error",
@@ -3394,16 +3578,17 @@ function readNewTranslations() {
       return;
     }
     if (!validation.incoming.length) {
-      notify("No non-white translations were found in the returned sheet.");
+      report("No non-white translations were found in the returned sheet.");
       return;
     }
     importValidatedTranslations(
       returned.getId(),
       destinationSheet,
       validation.incoming,
+      report,
     );
   } catch (e) {
-    notify("Translation import failed: " + e.message, "error");
+    reportPhrasesActionError_(report, e, "Translation import failed: ");
   }
 }
 
@@ -3433,7 +3618,8 @@ function buildTranslationImportPayload(
   };
 }
 
-function importValidatedTranslations(spreadsheetId, sheet, incoming) {
+function importValidatedTranslations(spreadsheetId, sheet, incoming, report) {
+  report = report || notify;
   var secret =
     PropertiesService.getScriptProperties().getProperty("PHRASES_SECRET");
   if (!secret)
@@ -3545,7 +3731,7 @@ function importValidatedTranslations(spreadsheetId, sheet, incoming) {
     });
   }
   clearImportCheckpoint();
-  notify(
+  report(
     "Imported " +
       incoming.length +
       " translation cell(s). New version: " +
