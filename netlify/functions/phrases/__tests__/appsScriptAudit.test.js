@@ -136,8 +136,8 @@ describe("International Phrases Firebase audit", () => {
         createDocumentFragment: createElement,
       };
       const timers = [];
-      const setTimeout = jest.fn((callback) => {
-        timers.push(callback);
+      const setTimeout = jest.fn((callback, delay) => {
+        if (delay !== 360000) timers.push(callback);
         return timers.length;
       });
       const clearTimeout = jest.fn();
@@ -271,11 +271,11 @@ describe("International Phrases Firebase audit", () => {
     expect(createMenu).toHaveBeenCalledWith("EasyEyes");
     expect(menu.addItem).toHaveBeenCalledWith(
       "Compare latest EasyEyes copy with this spreadsheet",
-      "compareLatestEasyEyesCopy",
+      "showPhrasesComparisonDialog",
     );
     expect(menu.addItem).toHaveBeenCalledWith(
       "Run International Phrases audit",
-      "requestPhrasesAudit",
+      "showPhrasesAuditRequestDialog",
     );
     expect(menu.addItem).toHaveBeenCalledWith(
       "View International Phrases audit history",

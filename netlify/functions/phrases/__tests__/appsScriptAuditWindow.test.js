@@ -3,7 +3,7 @@ const path = require("path");
 const vm = require("vm");
 const { JSDOM } = require("jsdom");
 
-function harness(kind) {
+function harness(kind, { deferInitialList = false } = {}) {
   let current;
   let failReopen = false;
   let status = "running";
@@ -12,6 +12,7 @@ function harness(kind) {
   const selections = [];
   const focus = jest.fn();
   let deferReports = false;
+  let initialListFailure;
   const context = vm.createContext({ console });
   vm.runInContext(
     fs.readFileSync(
@@ -28,14 +29,18 @@ function harness(kind) {
   });
   function mount(html) {
     const timers = [];
+    const deadlines = new Map();
+    let nextTimer = 0;
     const dom = new JSDOM(html, {
       runScripts: "dangerously",
       beforeParse(window) {
-        window.setTimeout = (f) => {
-          timers.push(f);
-          return timers.length;
+        window.setTimeout = (f, delay) => {
+          const id = ++nextTimer;
+          if (delay === 360000) deadlines.set(id, f);
+          else timers.push(f);
+          return id;
         };
-        window.clearTimeout = () => {};
+        window.clearTimeout = (id) => deadlines.delete(id);
         const runner = {
           withSuccessHandler(f) {
             this.success = f;
@@ -46,6 +51,10 @@ function harness(kind) {
             return this;
           },
           listPhrasesAuditRuns() {
+            if (deferInitialList) {
+              initialListFailure = this.failure;
+              return;
+            }
             this.success({
               runs: [
                 { id: "active", status },
@@ -97,7 +106,7 @@ function harness(kind) {
         };
       },
     });
-    current = { dom, timers, document: dom.window.document };
+    current = { dom, timers, deadlines, document: dom.window.document };
   }
   context.HtmlService = {
     createHtmlOutput(html) {
@@ -148,6 +157,9 @@ function harness(kind) {
     reportReads,
     selections,
     focus,
+    failInitialList(error) {
+      initialListFailure(error);
+    },
     deferReports(value) {
       deferReports = value;
     },
@@ -162,6 +174,26 @@ function harness(kind) {
     },
   };
 }
+
+test.each([true, false])(
+  "audit history explains the execution limit for a slow list request (confirmed=%s)",
+  (confirmed) => {
+    const h = harness("history", { deferInitialList: true });
+    try {
+      if (confirmed)
+        h.failInitialList(new Error("Exceeded maximum execution time"));
+      else [...h.current.deadlines.values()][0]();
+      expect(h.current.document.getElementById("status").textContent).toContain(
+        confirmed ? "Execution time limit reached" : "Action status unknown",
+      );
+      expect(h.current.document.getElementById("status").textContent).toContain(
+        "Google Sheets limits Apps Script runs",
+      );
+    } finally {
+      h.current.dom.window.close();
+    }
+  },
+);
 
 test.each(["completed", "failed"])(
   "recreates history, preserves selection/search, and observes %s while minimized",
