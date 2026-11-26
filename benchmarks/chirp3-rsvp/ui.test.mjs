@@ -436,6 +436,34 @@ try {
     const pair = tailData.results.filter(({ clipId }) => clipId === clip.id);
     assert.equal(pair[0].evidence.originalPcmSha256, pair[1].evidence.originalPcmSha256);
   }
+  const reviewClips = ["third", "formatted", "first", "incomplete"].map((id) => ({
+    id, file: id + ".wav", reference: "boat lake tree", targets: ["boat", "lake", "tree"],
+  }));
+  const variants = ["Chirp 3 · with keyterms", "Chirp 3 SHORT · with keyterms",
+    "ElevenLabs Scribe v2 Realtime · with keyterms"];
+  const reviewResults = reviewClips.flatMap(({ id }) => variants.map((provider, index) => ({
+    clipId: id, provider, ...(id === "incomplete" && index === 1 ? { error: "transcriberFailure" } : {
+      transcript: id === "third" && index === 1 ? "boat boat lake tree" :
+        id === "first" && index === 2 ? "lake boat tree" : "Boat, lake TREE.",
+    }),
+  })));
+  const requestsBeforeReview = ticketRequests;
+  await page.locator("#file-manifest").setInputFiles(jsonFile("review-manifest.json", { version: 1, clips: reviewClips }));
+  await page.getByText(/^4 clips/).waitFor();
+  await page.locator("#file-review-filter").selectOption("transcript-disagreement");
+  const disagreementCount = page.locator("#file-transcript-disagreement-count");
+  assert.match(await disagreementCount.innerText(), /Load results from both Chirp and ElevenLabs/);
+  await page.locator("#file-results").setInputFiles(jsonFile("review-results.json", { version: 1, results: reviewResults }));
+  await page.getByText(/2 of 3 compared clips/).waitFor();
+  assert.match(await disagreementCount.innerText(), /1 skipped/);
+  assert.deepEqual(await page.locator("#file-clip option").evaluateAll((options) =>
+    options.map((option) => option.value)), ["third", "first"]);
+  assert.equal(await page.locator("#file-clip").inputValue(), "third");
+  await page.locator("#file-next").click();
+  assert.equal(await page.locator("#file-clip").inputValue(), "first");
+  await page.locator("#file-review-filter").selectOption("all");
+  assert.equal(await disagreementCount.isVisible(), false);
+  assert.equal(ticketRequests, requestsBeforeReview);
   assert.deepEqual(errors, []);
   console.log(
     "Preview UI passed: live comparison and complete same-audio RSVP dataset replay.",

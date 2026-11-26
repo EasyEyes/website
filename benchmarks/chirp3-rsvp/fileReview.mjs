@@ -1,3 +1,5 @@
+import { isTailLabel } from "./fileDiagnostics.mjs";
+
 export const qualityLabels = {
   unreviewed: "Not reviewed",
   clear: "Clear / intelligible",
@@ -5,6 +7,26 @@ export const qualityLabels = {
   unclear: "Unintelligible / cannot judge",
   invalid: "Wrong task or invalid recording",
 };
+
+const transcriptWords = (text) => (text.normalize("NFC").toLowerCase()
+  .replace(/\u2019/g, "'").match(/[\p{L}\p{M}\p{N}]+(?:'[\p{L}\p{M}\p{N}]+)*/gu) ?? []).join(" ");
+
+export function transcriptDisagreements(clips, results) {
+  const providers = [...results].filter(([label]) =>
+    !isTailLabel(label) && /^(?:Chirp 3|ElevenLabs)\b/.test(label));
+  const ready = providers.some(([label]) => label.startsWith("Chirp 3")) &&
+    providers.some(([label]) => label.startsWith("ElevenLabs"));
+  const ids = new Set();
+  let compared = 0;
+  if (ready) for (const clip of clips) {
+    const texts = providers.map(([, entries]) => entries.get(clip.id)?.transcript);
+    if (texts.some((text) => typeof text !== "string")) continue;
+    compared++;
+    const reference = transcriptWords(clip.reference);
+    if (texts.some((text) => transcriptWords(text) !== reference)) ids.add(clip.id);
+  }
+  return { ready, compared, ids };
+}
 
 export const manifestKey = (clips) => JSON.stringify(clips.map((c) =>
   [c.id, c.file, c.reference, c.targets ?? null, c.speakerGroup ?? null])

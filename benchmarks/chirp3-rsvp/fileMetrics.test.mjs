@@ -1,7 +1,29 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readManifest, readResults, compareVectors, summarizeFiles, summarizeKeytermPairs, summarizeProviderAgreement, summarizeReviews, summarizeSpeakers } from "./fileMetrics.mjs";
-import { manifestKey, readReviews } from "./fileReview.mjs";
+import { manifestKey, readReviews, transcriptDisagreements } from "./fileReview.mjs";
+
+test("transcript review compares all loaded Chirp and ElevenLabs settings in manifest order", () => {
+  const clips = ["repeat", "format", "order", "failed", "empty", "missing"].map((id) =>
+    ({ id, reference: "boat lake" }));
+  const rows = (values) => new Map(clips.flatMap(({ id }, index) =>
+    values[index] === undefined ? [] : [[id, typeof values[index] === "string"
+      ? { transcript: values[index] } : { error: "unavailable" }]]));
+  const standard = rows(clips.map(() => "Boat, lake!"));
+  const short = rows(["boat boat lake", "BOAT LAKE", "lake boat", false, "", undefined]);
+  const eleven = rows(clips.map(() => "boat  lake"));
+  const results = new Map([
+    ["Chirp 3 SHORT", short], ["Chirp 3", standard], ["ElevenLabs Scribe v2", eleven],
+    ["Chirp 3 · tail 800 ms", rows(clips.map(() => "other"))],
+    ["Deepgram Nova-3", rows(clips.map(() => "other"))],
+  ]);
+  const result = transcriptDisagreements(clips, results);
+  assert.deepEqual({ ...result, ids: [...result.ids] },
+    { ready: true, compared: 4, ids: ["repeat", "order", "empty"] });
+  results.delete("ElevenLabs Scribe v2");
+  assert.deepEqual(transcriptDisagreements(clips, results),
+    { ready: false, compared: 0, ids: new Set() });
+});
 
 test("distinguishes missed correct targets from false credit", () => {
   assert.deepEqual(compareVectors([1, 1, 0], [1, 0, 1]),

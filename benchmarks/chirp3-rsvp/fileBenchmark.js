@@ -1,7 +1,7 @@
 import { readManifest, readResults, summarizeReviews, summarizeKeytermPairs } from "./fileMetrics.mjs";
 import { replayClip, replayProviders, replayLabel } from "./fileReplay.js";
 import { fileKeyterms, fileRsvpScorer, makeRsvpCases } from "./fileRsvpScore.js";
-import { manifestKey, qualityLabels, readReviews } from "./fileReview.mjs";
+import { manifestKey, qualityLabels, readReviews, transcriptDisagreements } from "./fileReview.mjs";
 import { csvMetricRows, node, renderFileReport, table } from "./fileReport.js";
 import { createFileProgress } from "./fileProgress.js";
 import { byteAgreement, isTailLabel, summarizeTailPairs, tailLabel, tailVariants } from "./fileDiagnostics.mjs";
@@ -139,16 +139,26 @@ export function setupFileBenchmark() {
     const picker = $("file-clip");
     const previous = picker.value;
     const filter = $("file-review-filter").value;
+    const disagreement = filter === "transcript-disagreement" ? transcriptDisagreements(clips, results) : null;
+    const count = $("file-transcript-disagreement-count");
+    count.hidden = !disagreement;
+    count.textContent = disagreement ? disagreement.ready
+      ? `${disagreement.ids.size} of ${disagreement.compared} compared clips have transcript differences. ` +
+        `${clips.length - disagreement.compared} skipped for missing or failed results. ` +
+        "Compares the original human transcript with all loaded Chirp and ElevenLabs settings; case and punctuation do not count."
+      : "Load results from both Chirp and ElevenLabs to compare transcripts."
+      : "";
     const errors = filter === "error" ? new Set(computed.reports.adjudicated.details
       .filter((row) => row.differences && !row.differences.exact).map((row) => row.clipId)) : null;
     const visible = clips.filter((clip) => {
+      if (disagreement) return disagreement.ids.has(clip.id);
       const quality = reviews.get(clip.id)?.quality ?? "unreviewed";
       if (filter === "diff") return quality === "unreviewed" &&
         (clip.referenceStatus === "needsReview" || clip.expected.includes(0));
       if (filter === "flagged") return ["difficult", "unclear", "invalid"].includes(quality);
       return !errors || errors.has(clip.id);
     });
-    if (keepCurrent && previous && !visible.some((clip) => clip.id === previous)) {
+    if (!disagreement && keepCurrent && previous && !visible.some((clip) => clip.id === previous)) {
       const clip = clips.find((clip) => clip.id === previous);
       if (clip) visible.unshift(clip);
     }

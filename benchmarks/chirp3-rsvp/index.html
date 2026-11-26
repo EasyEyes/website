@@ -121,6 +121,7 @@
             <label>Show clips
               <select id="file-review-filter">
                 <option value="all">All clips</option>
+                <option value="transcript-disagreement">Transcript disagreements only</option>
                 <option value="diff">Unreviewed reference / target differences</option>
                 <option value="error">Provider disagrees with the reference</option>
                 <option value="flagged">Difficult, unclear or invalid audio</option>
@@ -132,6 +133,7 @@
               <button id="file-next" type="button">Next</button>
             </div>
           </div>
+          <p id="file-transcript-disagreement-count" class="hint" role="status" hidden></p>
           <audio id="file-player" controls preload="none" hidden></audio>
           <p id="file-player-status" class="hint"></p>
           <p id="file-review-status" role="status"></p>
