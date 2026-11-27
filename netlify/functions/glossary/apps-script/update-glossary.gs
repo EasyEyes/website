@@ -19,7 +19,13 @@ var NETLIFY_FUNCTION_URL = "https://easyeyes.app/.netlify/functions/glossary";
 
 var EXECUTION_TIMEOUT_PATTERN = /Exceeded maximum execution time/i;
 
-function executionTimeoutScript_() {
+var GLOSSARY_MENU_LABELS = {
+  update: "Update EasyEyes to use current Glossary",
+  audit: "Run Glossary audit",
+  report: "View Glossary audit report",
+};
+
+function executionTimeoutScript_(action) {
   return `
     function withExecutionTimeoutHandler(success, failure, showTimeout) {
       return google.script.run
@@ -36,12 +42,15 @@ function executionTimeoutScript_() {
     function openGlossaryTimeoutDialog(onFailure) {
       google.script.run
         .withFailureHandler(onFailure)
-        .showGlossaryTimeoutDialog();
+        .showGlossaryTimeoutDialog(${JSON.stringify(action)});
     }
   `;
 }
 
-function showGlossaryTimeoutDialog() {
+function showGlossaryTimeoutDialog(action) {
+  var actionName = Object.hasOwn(GLOSSARY_MENU_LABELS, action)
+    ? `The “${GLOSSARY_MENU_LABELS[action]}” action`
+    : "This action";
   var html = `<!doctype html>
     <html lang="en">
     <head>
@@ -53,14 +62,16 @@ function showGlossaryTimeoutDialog() {
     </head>
     <body>
       <p>Google Sheets limits Apps Script runs to six minutes in most accounts.
-        This action reached the execution time limit.</p>
+        ${actionName} reached the execution time limit.
+        Partial changes might have been saved before time ran out.
+        Try running the action again.</p>
       <button type="button" onclick="google.script.host.close()">Close</button>
     </body>
     </html>`;
   // The Sheets host opens the replacement. The old iframe must stay alive
   // long enough to send the request.
   SpreadsheetApp.getUi().showModalDialog(
-    HtmlService.createHtmlOutput(html).setWidth(460).setHeight(180),
+    HtmlService.createHtmlOutput(html).setWidth(460).setHeight(220),
     "Execution time limit reached",
   );
 }
@@ -69,11 +80,11 @@ function onOpen() {
   SpreadsheetApp.getUi()
     .createMenu("EasyEyes")
     .addItem(
-      "Update EasyEyes to use current Glossary",
+      GLOSSARY_MENU_LABELS.update,
       "showGlossaryUpdateDialog",
     )
-    .addItem("Run Glossary audit", "showGlossaryAuditRequestDialog")
-    .addItem("View Glossary audit report", "showGlossaryAuditReport")
+    .addItem(GLOSSARY_MENU_LABELS.audit, "showGlossaryAuditRequestDialog")
+    .addItem(GLOSSARY_MENU_LABELS.report, "showGlossaryAuditReport")
     .addToUi();
 }
 
@@ -124,7 +135,7 @@ function showGlossaryActionDialog_(action, title, heading) {
       <p id="message" role="status">Please wait.</p>
       <button id="close" hidden onclick="google.script.host.close()">Close</button>
       <script>
-        ${executionTimeoutScript_()}
+        ${executionTimeoutScript_(action)}
         function showResult(heading, message) {
           document.getElementById('heading').textContent = heading;
           document.getElementById('message').textContent = message;
@@ -365,7 +376,7 @@ function buildGlossaryAuditReportHtml() {
   <div id="groups"></div>
 </main>
 <script>
-${executionTimeoutScript_()}
+${executionTimeoutScript_("report")}
 (function () {
   var select = document.getElementById("run-select");
   var search = document.getElementById("key-search");

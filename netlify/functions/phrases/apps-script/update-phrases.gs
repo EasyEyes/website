@@ -62,7 +62,19 @@ function buildNotificationMessageHtml(message, linkUrl) {
 
 var EXECUTION_TIMEOUT_PATTERN = /Exceeded maximum execution time/i;
 
-function executionTimeoutScript_(modeless) {
+var PHRASES_MENU_LABELS = {
+  update: "Retranslate all white cells derived from changed English cells. Then update EasyEyes.",
+  retranslate: "Retranslate the selected white cells. Then update EasyEyes.",
+  check: "Check all cells. No update.",
+  freshness: "Color stale translation text red",
+  tabulate: "Tabulate needed translations",
+  import: "Read new translations",
+  compare: "Compare latest EasyEyes copy with this spreadsheet",
+  audit: "Run International Phrases audit",
+  history: "View International Phrases audit history",
+};
+
+function executionTimeoutScript_(modeless, action) {
   return `
     let openingTimeoutDialog = false;
 
@@ -82,13 +94,16 @@ function executionTimeoutScript_(modeless) {
               openingTimeoutDialog = false;
               failure(openError);
             })
-            .showPhrasesTimeoutDialog(${Boolean(modeless)});
+            .showPhrasesTimeoutDialog(${Boolean(modeless)}, ${JSON.stringify(action)});
         });
     }
   `;
 }
 
-function showPhrasesTimeoutDialog(modeless) {
+function showPhrasesTimeoutDialog(modeless, action) {
+  var actionName = Object.hasOwn(PHRASES_MENU_LABELS, action)
+    ? `The “${PHRASES_MENU_LABELS[action]}” action`
+    : "This action";
   var html = `<!doctype html>
     <html lang="en">
     <head>
@@ -100,12 +115,14 @@ function showPhrasesTimeoutDialog(modeless) {
     </head>
     <body>
       <p>Google Sheets limits Apps Script runs to six minutes in most accounts.
-        This action reached the execution time limit.</p>
+        ${actionName} reached the execution time limit.
+        Partial changes might have been saved before time ran out.
+        Try running the action again.</p>
       <button type="button" onclick="google.script.host.close()">Close</button>
     </body>
     </html>`;
   var ui = SpreadsheetApp.getUi();
-  var output = HtmlService.createHtmlOutput(html).setWidth(460).setHeight(180);
+  var output = HtmlService.createHtmlOutput(html).setWidth(460).setHeight(220);
   var title = "Execution time limit reached";
   if (modeless) ui.showModelessDialog(output, title);
   else ui.showModalDialog(output, title);
@@ -115,24 +132,24 @@ function onOpen() {
   SpreadsheetApp.getUi()
     .createMenu("EasyEyes")
     .addItem(
-      "Retranslate all white cells derived from changed English cells. Then update EasyEyes.",
+      PHRASES_MENU_LABELS.update,
       "showPhrasesUpdateDialog",
     )
     .addItem(
-      "Retranslate the selected white cells. Then update EasyEyes.",
+      PHRASES_MENU_LABELS.retranslate,
       "showSelectedPhrasesUpdateDialog",
     )
-    .addItem("Check all cells. No update.", "showPhrasesCheckDialog")
-    .addItem("Color stale translation text red", "showPhrasesFreshnessDialog")
-    .addItem("Tabulate needed translations", "showPhrasesTabulationDialog")
-    .addItem("Read new translations", "showPhrasesImportDialog")
+    .addItem(PHRASES_MENU_LABELS.check, "showPhrasesCheckDialog")
+    .addItem(PHRASES_MENU_LABELS.freshness, "showPhrasesFreshnessDialog")
+    .addItem(PHRASES_MENU_LABELS.tabulate, "showPhrasesTabulationDialog")
+    .addItem(PHRASES_MENU_LABELS.import, "showPhrasesImportDialog")
     .addItem(
-      "Compare latest EasyEyes copy with this spreadsheet",
+      PHRASES_MENU_LABELS.compare,
       "showPhrasesComparisonDialog",
     )
-    .addItem("Run International Phrases audit", "showPhrasesAuditRequestDialog")
+    .addItem(PHRASES_MENU_LABELS.audit, "showPhrasesAuditRequestDialog")
     .addItem(
-      "View International Phrases audit history",
+      PHRASES_MENU_LABELS.history,
       "showPhrasesAuditHistory",
     )
     .addToUi();
@@ -331,7 +348,8 @@ function reopenPhraseAuditWindow(state) {
   );
 }
 
-function addPhraseAuditWindowControls(html, state, allowExport) {
+function addPhraseAuditWindowControls(html, state, action) {
+  var allowExport = action === "history";
   var savedState = JSON.stringify(state || {}).replace(
     /[<>&\u2028\u2029]/g,
     function (character) {
@@ -364,7 +382,7 @@ function addPhraseAuditWindowControls(html, state, allowExport) {
     </div>
   `;
   var script = `
-    ${executionTimeoutScript_(true)}
+    ${executionTimeoutScript_(true, action)}
     var phraseAuditWindowState = ${savedState};
     (function () {
       var toggle = document.getElementById("audit-window-toggle");
@@ -925,7 +943,7 @@ function buildPhrasesAuditHistoryHtml(windowState) {
     </html>
   `,
     windowState,
-    true,
+    "history",
   );
 }
 
@@ -1406,6 +1424,7 @@ function buildPhraseAuditHtml(audit, windowState) {
       </body>
     </html>`,
     windowState,
+    "compare",
   );
 }
 
@@ -1578,7 +1597,7 @@ function showPhrasesActionDialog_(action, title, heading) {
       <div id="billing" hidden>${buildDeepLBillingActionHtml_()}</div>
       <button id="close" hidden onclick="google.script.host.close()">Close</button>
       <script>
-        ${executionTimeoutScript_(action === "compare")}
+        ${executionTimeoutScript_(action === "compare", action)}
         const progressId = ${JSON.stringify(progressId)};
         const form = document.getElementById('import-form');
         let started = false;
