@@ -1,78 +1,127 @@
+/* Diff/Join. The page is one column: title, what the tool does, then the
+   steps in the order you take them: select files, Diff or Join, and the
+   name of the file that is made. Colors, sizes and spacing come from the
+   shared tokens at the top of ../uni.css. */
+
+:root {
+  /* One width for the description and the tool, so they share a right edge. */
+  --tool-width: 42rem;
+  /* The space between two steps, and between the parts inside a step. */
+  --step-gap: var(--space-3);
+  --part-gap: var(--space-1);
+}
+
+/* The footer rests at the bottom of the window when the page is short. */
+body {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
 #root {
+  flex: 1 0 auto;
   margin: 0 auto;
-  padding-bottom: 5px;
   width: 90%;
+  max-width: var(--page-width);
   position: relative;
 }
 
+footer {
+  width: 100%;
+}
+
+/* Title and description */
+
 #header-title {
+  padding: var(--space-5) 0 0;
+}
+
+#header-title h1 {
+  margin: 0 0 var(--space-2);
+  color: var(--ink);
+}
+
+#root > .description {
+  max-width: var(--tool-width);
+  margin: 0 0 var(--space-4);
+  font-size: 1.15rem;
+  line-height: 1.55;
+}
+
+/* The working area: select files, then Diff or Join. */
+
+.tool {
   display: flex;
-  justify-content: center;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--step-gap);
+  max-width: var(--tool-width);
+}
+
+/* Parts that are empty until there is something to say take no room. */
+.selected-files:empty,
+.file-error:empty,
+.filename-warning:empty {
+  display: none;
+}
+
+/* "Select files" is a button. It opens the file chooser when clicked. */
+.dropzone {
+  display: inline-flex;
   align-items: center;
-  h1 {
-    color: #333;
-    margin-bottom: 20px;
-  }
+  padding: var(--button-padding);
+  border: 1px solid var(--green);
+  border-radius: var(--button-radius);
+  background-color: var(--green);
+  background-image: var(--button-shine);
+  box-shadow: var(--button-depth);
+  /* The padding is in em, so the size is set here, as on a real button. */
+  font-size: var(--button-font-size);
+  cursor: pointer;
+  transition:
+    background-color 140ms ease,
+    border-color 140ms ease,
+    transform 140ms ease;
 }
 
-.description {
-  font-size: 1.5rem;
-  color: #666;
-  margin: 0 0 10px 0;
+.dropzone:hover {
+  background-color: var(--green-deep);
+  border-color: var(--green-deep);
 }
 
-.file-error {
-  color: red;
-  margin-bottom: 10px;
-  font-size: 1rem;
+.dropzone:active {
+  box-shadow: var(--button-depth-pressed);
+  transform: translateY(1px);
 }
 
-.output-filename {
-  margin-bottom: 10px;
+.dropzone .dropzone-sub-text {
+  margin: 0;
+  color: #fff;
+  font-size: var(--button-font-size);
+  font-weight: var(--button-font-weight);
+  line-height: 1;
 }
 
-.filename-warning {
-  color: red;
-}
+/* The selected files. Each name sits on the color that marks its lines in
+   the output file, so the list doubles as the legend. */
 
-.dropzone-sub-text {
-  font-size: 1.2rem;
-  color: #666;
-}
-
-.merge-btn-disabled {
-  background: #999;
-  color: white;
-  padding: 1rem;
-  border: none;
-  border-radius: 0.5rem;
-  cursor: not-allowed !important;
-  font-size: 1rem;
-  font-weight: 400;
-  text-align: center;
-  line-height: 100%;
-  outline: none !important;
-  border: none !important;
-}
-
-.merge-btn-enabled {
-  background: #019267;
-  color: white;
-  padding: 1rem;
-  border: none;
-  border-radius: 0.5rem;
-  font-size: 1.2rem;
-  font-weight: 500;
-  text-align: center;
-  line-height: 100%;
+.selected-files {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--part-gap);
+  /* A gray panel as wide as the tool, so it does not change width as files
+     are added and removed. */
+  align-self: stretch;
+  padding: var(--space-2);
+  border-radius: var(--radius-lg);
+  background: var(--paper-2);
 }
 
 .selected-file {
   display: flex;
   align-items: center;
-  margin-bottom: 5px;
-  padding: 5px;
-  border-radius: 4px;
+  max-width: 100%;
 }
 
 .selected-file span {
@@ -80,56 +129,157 @@
   align-items: center;
 }
 
+/* The name. Its color and a 5px padding are set on the element by main.js;
+   the padding here replaces that one. */
 .selected-file span:first-child {
-  padding: 5px;
+  padding: 0.35rem 0.65rem !important;
   border-radius: 4px;
+  font-size: 1rem;
+  line-height: 1.35;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+/* The remove button. */
+.selected-file span:last-child {
+  padding: 0.35rem 0.5rem !important;
 }
 
 .selected-file i {
-  font-size: 1.2rem;
+  font-size: 1.1rem;
+  color: var(--ink-3);
   cursor: pointer;
+  transition: color 120ms ease;
 }
 
-#output-filename-input {
-  display: none;
-  min-width: 350px;
+.selected-file span:last-child:hover i {
+  color: var(--ink);
 }
 
-.dropzone {
-  position: relative;
-  border-radius: 0.5rem !important;
-  outline-offset: -2px;
-  text-align: center;
+.file-error,
+.filename-warning {
+  color: #b42318;
+  font-size: var(--text-sm);
+  line-height: 1.5;
+}
+
+/* Diff and Join */
+
+.merge-actions {
   display: flex;
-  flex-direction: column;
+  flex-wrap: wrap;
+  gap: var(--part-gap);
+}
+
+.merge-btn-disabled,
+.merge-btn-enabled {
+  display: inline-flex;
   align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  background: #019267;
+  gap: 0.5rem;
+  padding: var(--button-padding);
+  border-radius: var(--button-radius);
+  font-size: var(--button-font-size);
+  font-weight: var(--button-font-weight);
+  line-height: 1;
+  text-align: center;
   transition:
-    color 0.1s ease-in-out,
-    outline 0.1s ease-in-out;
-  width: 250px;
-  padding: 0.7rem;
-  margin-bottom: 10px;
+    background-color 140ms ease,
+    border-color 140ms ease,
+    transform 140ms ease;
+}
 
-  .dropzone-sub-text {
-    font-size: 1.2rem;
-    font-weight: 500;
-    color: white;
-  }
+.merge-btn-disabled {
+  border: 1px solid var(--rule) !important;
+  background: var(--paper-2);
+  color: var(--ink-3);
+  cursor: not-allowed !important;
+}
 
-  p {
-    line-height: 150%;
-    margin-bottom: 0;
-  }
+.merge-btn-enabled {
+  border: 1px solid var(--green);
+  background-color: var(--green);
+  background-image: var(--button-shine);
+  box-shadow: var(--button-depth);
+  color: #fff;
+}
+
+.merge-btn-enabled:hover {
+  background-color: var(--green-deep);
+  border-color: var(--green-deep);
+}
+
+.merge-btn-enabled:active {
+  box-shadow: var(--button-depth-pressed);
+  transform: translateY(1px);
+}
+
+/* The name of the output file, and the mark that says it was made. */
+
+.output-filename-container {
+  width: 100%;
+}
+
+/* The field's name. main.js shows the field and turns Diff and Join green
+   at the same moment, when there are two files, so the name follows the
+   buttons. */
+.output-filename-label {
+  display: none;
+  margin: 0 0 0.4rem;
+  font-size: var(--text-sm);
+  font-weight: 500;
+  line-height: 1.4;
+  color: var(--ink-2);
+}
+
+.tool:has(.merge-btn-enabled) .output-filename-label {
+  display: block;
 }
 
 .merge-file-status {
   display: flex;
   align-items: center;
+  gap: var(--part-gap);
 }
 
-#merge-status {
-  margin-left: 10px;
+/* main.js sets this field's width to the width of its text, measured in the
+   page's own font, plus 20px. So the field keeps the page's font and size,
+   and its side padding and borders add up to 20px (9 + 9 + 1 + 1). On a
+   narrow screen it leaves room beside it for the mark. */
+#output-filename-input {
+  --beside: calc(100% - 1.5rem - var(--part-gap));
+  display: none;
+  min-width: min(350px, var(--beside));
+  max-width: var(--beside);
+  padding: 0.75rem 9px;
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius);
+  background: var(--paper);
+  font: inherit;
+  line-height: 1.35;
+  color: var(--ink);
+  transition:
+    border-color 120ms ease,
+    box-shadow 120ms ease;
+}
+
+#output-filename-input:focus {
+  border-color: var(--green);
+  box-shadow: 0 0 0 3px var(--green-tint);
+  outline: none;
+}
+
+.filename-warning {
+  margin: var(--part-gap) 0 0;
+}
+
+/* Phones: less room above the title. */
+@media (max-width: 600px) {
+  #header-title {
+    padding-top: var(--space-4);
+  }
+
+  #root > .description {
+    margin-bottom: var(--space-3);
+    font-size: 1.0625rem;
+  }
 }

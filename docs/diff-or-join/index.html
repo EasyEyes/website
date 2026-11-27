@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" class="redesign">
   <head>
     <meta charset="UTF-8" />
     <meta http-equiv="X-UA-Compatible" content="IE=edge" />
@@ -209,6 +209,11 @@
 
     <link rel="stylesheet" href="../uni.css" />
     <link rel="stylesheet" href="main.css" />
+    <!-- IBM Plex Mono is the font of the small labels (--mono in uni.css). -->
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&display=swap"
+    />
     <style>
       table {
         border-collapse: collapse;
@@ -396,36 +401,59 @@
         to create one XLSX file in the Downloads folder. Identical lines are
         merged and differing lines are highlighted with color indicating origin.
       </div>
-      <div tabindex="0" class="dropzone" id="dropzone">
-        <input
-          multiple
-          type="file"
-          id="file-input"
-          tabindex="-1"
-          style="display: none"
-        />
-        <p class="dropzone-sub-text">Select files</p>
-      </div>
-
-      <div id="selected-files" class="selected-files"></div>
-
-      <div id="file-error" class="file-error"></div>
-      <button id="diff-btn" class="merge-btn-disabled">Diff ⇩</button>
-      <button id="join-btn" class="merge-btn-disabled">Join ⇩</button>
-
-      <div style="margin-bottom: 10px"></div>
-      <div class="output-filename-container">
-        <div class="merge-file-status">
+      <!-- The working area. The ids are what main.js looks for. -->
+      <div class="tool">
+        <div tabindex="0" class="dropzone" id="dropzone">
           <input
-            type="text"
-            id="output-filename-input"
-            placeholder="Output filename"
+            multiple
+            type="file"
+            id="file-input"
+            tabindex="-1"
+            style="display: none"
           />
-          <div id="merge-status"></div>
+          <p class="dropzone-sub-text">Select files</p>
         </div>
-        <p id="filename-warning" class="filename-warning"></p>
+
+        <div id="selected-files" class="selected-files"></div>
+
+        <div id="file-error" class="file-error"></div>
+
+        <div class="merge-actions">
+          <button id="diff-btn" class="merge-btn-disabled">
+            <i class="bi bi-download" aria-hidden="true"></i>Diff
+          </button>
+          <button id="join-btn" class="merge-btn-disabled">
+            <i class="bi bi-download" aria-hidden="true"></i>Join
+          </button>
+        </div>
+
+        <div class="output-filename-container">
+          <!-- Shown with the field, once there are two files (main.css). -->
+          <label class="output-filename-label" for="output-filename-input"
+            >Output filename</label
+          >
+          <div class="merge-file-status">
+            <input
+              type="text"
+              id="output-filename-input"
+              placeholder="Output filename"
+            />
+            <div id="merge-status"></div>
+          </div>
+          <p id="filename-warning" class="filename-warning"></p>
+        </div>
       </div>
     </div>
+
+    <footer>
+      <p>
+        Copyright © 2020 -
+        <script>
+          document.write(new Date().getFullYear());
+        </script>
+        New York University<br />Created by Denis Pelli and the EasyEyes team
+      </p>
+    </footer>
 
     <script type="text/javascript" src="xlsx.bundle.js"></script>
     <script src="main.js"></script>
