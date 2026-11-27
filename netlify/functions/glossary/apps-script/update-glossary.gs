@@ -19,33 +19,51 @@ var NETLIFY_FUNCTION_URL = "https://easyeyes.app/.netlify/functions/glossary";
 
 var EXECUTION_TIMEOUT_PATTERN = /Exceeded maximum execution time/i;
 
-// Each Sheet has its own bound Apps Script project.
 function executionTimeoutScript_() {
   return `
-    const executionLimitTitle = 'Execution time limit reached';
-    const executionLimitMessage =
-      'Google Sheets limits Apps Script runs to six minutes in most accounts. ' +
-      'This action reached the execution time limit. ' +
-      'Check whether any changes were saved before running the action again.';
-
     function withExecutionTimeoutHandler(success, failure, showTimeout) {
       return google.script.run
         .withSuccessHandler(success)
         .withFailureHandler(error => {
-          if (!${EXECUTION_TIMEOUT_PATTERN}.test(error && error.message || '')) {
-            failure(error);
-            return;
-          }
-          if (showTimeout) {
+          if (${EXECUTION_TIMEOUT_PATTERN}.test(error && error.message || '') && showTimeout) {
             showTimeout();
             return;
           }
-          const timeoutError = new Error(executionLimitTitle + '. ' + executionLimitMessage);
-          timeoutError.executionTimeout = true;
-          failure(timeoutError);
+          failure(error);
         });
     }
+
+    function openGlossaryTimeoutDialog(onFailure) {
+      google.script.run
+        .withFailureHandler(onFailure)
+        .showGlossaryTimeoutDialog();
+    }
   `;
+}
+
+function showGlossaryTimeoutDialog() {
+  var html = `<!doctype html>
+    <html lang="en">
+    <head>
+      <meta charset="utf-8">
+      <style>
+        body { margin: 16px; color: #202124; font: 14px/1.5 Arial, sans-serif; }
+        button { font: inherit; padding: 6px 16px; }
+      </style>
+    </head>
+    <body>
+      <p>Google Sheets limits Apps Script runs to six minutes in most accounts.
+        This action reached the execution time limit. Check whether any changes
+        were saved before running the action again.</p>
+      <button type="button" onclick="google.script.host.close()">Close</button>
+    </body>
+    </html>`;
+  // The Sheets host opens the replacement. The old iframe must stay alive
+  // long enough to send the request.
+  SpreadsheetApp.getUi().showModalDialog(
+    HtmlService.createHtmlOutput(html).setWidth(460).setHeight(180),
+    "Execution time limit reached",
+  );
 }
 
 function onOpen() {
@@ -117,7 +135,9 @@ function showGlossaryActionDialog_(action, title, heading) {
         withExecutionTimeoutHandler(
           message => showResult('Result', message),
           error => showResult('Action interrupted', error && error.message || 'The action was interrupted.'),
-          () => showResult(executionLimitTitle, executionLimitMessage),
+          () => openGlossaryTimeoutDialog(error => {
+            showResult('Could not open the timeout dialog', error.message || String(error));
+          }),
         ).runGlossaryMenuAction(${JSON.stringify(action)});
       </script>
     </body>
@@ -426,7 +446,13 @@ ${executionTimeoutScript_()}
       if (findings) setStatus("Glossary " + findings.version + " · Report generated " + date(result.run.generatedAt));
       else if (result.run.status === "failed") setStatus(result.run.error || "This audit failed.", true);
       else { setStatus("This audit is " + result.run.status + ". The report will appear when it finishes."); timer = setTimeout(loadSelected, 15000); }
-    }, function (error) { if (number === requestNumber) fail(error); }).getGlossaryAuditRun(id);
+    }, function (error) {
+      if (number === requestNumber) fail(error);
+    }, function () {
+      if (number === requestNumber) openGlossaryTimeoutDialog(function (error) {
+        if (number === requestNumber) fail(error);
+      });
+    }).getGlossaryAuditRun(id);
   }
   function loadRuns() {
     clearTimeout(timer);
@@ -442,7 +468,13 @@ ${executionTimeoutScript_()}
       if (!runs.length) { findings = null; render(); setStatus("No saved audits yet. Use the glossary update menu to publish and request an audit."); return; }
       if (runs.some(function (run) { return run.id === selected; })) select.value = selected;
       loadSelected();
-    }, function (error) { if (number === requestNumber) fail(error); }).listGlossaryAuditRuns();
+    }, function (error) {
+      if (number === requestNumber) fail(error);
+    }, function () {
+      if (number === requestNumber) openGlossaryTimeoutDialog(function (error) {
+        if (number === requestNumber) fail(error);
+      });
+    }).listGlossaryAuditRuns();
   }
   select.addEventListener("change", loadSelected);
   search.addEventListener("input", render);

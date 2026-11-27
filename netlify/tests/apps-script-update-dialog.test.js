@@ -92,6 +92,10 @@ function openUpdateDialog(name, menuIndex = 0) {
                 failure: this.failure,
               });
             },
+            showGlossaryTimeoutDialog() {
+              server.showGlossaryTimeoutDialog();
+              calls.push({ name: "timeout", html });
+            },
             listGlossaryAuditRuns() {
               calls.push({
                 success: this.success,
@@ -153,12 +157,21 @@ for (const [script, menuIndex, action, result] of [
     const dialog = openUpdateDialog(script, menuIndex);
     assert.equal(dialog.name, action);
     dialog.failure({ message: "Error: Exceeded maximum execution time" });
-    assert.match(dialog.elements.message.textContent, /Google Sheets.*limits/i);
-    assert.match(
-      dialog.elements.message.textContent,
-      /action reached the execution time limit/i,
-    );
-    assert.equal(dialog.elements.close.hidden, false);
+    if (script === "glossary") {
+      assert.equal(dialog.calls[1].name, "timeout");
+      assert.match(dialog.calls[1].html, /Google Sheets.*limits/i);
+      assert.equal(dialog.elements.message.textContent, "");
+    } else {
+      assert.match(
+        dialog.elements.message.textContent,
+        /Google Sheets.*limits/i,
+      );
+      assert.match(
+        dialog.elements.message.textContent,
+        /action reached the execution time limit/i,
+      );
+      assert.equal(dialog.elements.close.hidden, false);
+    }
     assert.ok(
       ![...dialog.timers.values()].some(({ delay }) => delay === 360000),
     );
@@ -203,14 +216,9 @@ test("reading translations starts one request after URL submission", () => {
 test("the Glossary audit viewer explains a timeout while loading saved reports", () => {
   const dialog = openUpdateDialog("glossary", 2);
   dialog.failure({ message: "Exceeded maximum execution time" });
-  assert.match(
-    dialog.elements.status.textContent,
-    /Execution time limit reached/,
-  );
-  assert.match(
-    dialog.elements.status.textContent,
-    /Google Sheets limits Apps Script runs/,
-  );
+  assert.equal(dialog.calls[1].name, "timeout");
+  assert.match(dialog.calls[1].html, /Google Sheets.*limits/i);
+  assert.equal(dialog.elements.status.textContent, "");
 });
 
 test("a late progress response cannot overwrite a Phrases timeout", () => {
