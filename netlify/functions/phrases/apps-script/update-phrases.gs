@@ -62,77 +62,94 @@ function buildNotificationMessageHtml(message, linkUrl) {
 
 var EXECUTION_TIMEOUT_PATTERN = /Exceeded maximum execution time/i;
 
-// Each Sheet has its own bound Apps Script project.
-function executionDeadlineScript_() {
+var PHRASES_MENU_LABELS = {
+  update: "Retranslate all white cells derived from changed English cells. Then update EasyEyes.",
+  retranslate: "Retranslate the selected white cells. Then update EasyEyes.",
+  check: "Check all cells. No update.",
+  freshness: "Color stale translation text red",
+  tabulate: "Tabulate needed translations",
+  import: "Read new translations",
+  compare: "Compare latest EasyEyes copy with this spreadsheet",
+  audit: "Run International Phrases audit",
+  history: "View International Phrases audit history",
+};
+
+function executionTimeoutScript_(modeless, action) {
   return `
-    function executionLimitTitle(confirmed) {
-      return confirmed ? 'Execution time limit reached' : 'Action status unknown';
-    }
+    let openingTimeoutDialog = false;
 
-    function executionLimitMessage(confirmed) {
-      return 'Google Sheets limits Apps Script runs to six minutes in most accounts. ' +
-        (confirmed ? 'This action reached the execution time limit.' :
-          'This action may have reached that limit. No final result has arrived.') +
-        ' Check whether any changes were saved before running the action again.';
-    }
-
-    function withExecutionDeadline(success, failure, showTimeout) {
-      function onLimit(confirmed) {
-        if (showTimeout) {
-          showTimeout(confirmed);
-          return;
-        }
-        const error = new Error(executionLimitTitle(confirmed) + '. ' + executionLimitMessage(confirmed));
-        error.executionDeadline = true;
-        failure(error);
-      }
-
-      let expired = false;
-      const deadline = setTimeout(() => {
-        expired = true;
-        onLimit(false);
-      }, 6 * 60 * 1000);
+    function withExecutionTimeoutHandler(success, failure, beforeTimeout) {
       return google.script.run
-        .withSuccessHandler(result => {
-          clearTimeout(deadline);
-          // Menu dialogs can show late results. Reports can start a new request.
-          if (!expired || showTimeout) success(result);
-        })
+        .withSuccessHandler(success)
         .withFailureHandler(error => {
-          clearTimeout(deadline);
-          if (expired && !showTimeout) return;
-          if (${EXECUTION_TIMEOUT_PATTERN}.test(error && error.message || '')) {
-            onLimit(true);
-          } else {
+          if (!${EXECUTION_TIMEOUT_PATTERN}.test(error && error.message || '')) {
             failure(error);
+            return;
           }
+          if (openingTimeoutDialog || (beforeTimeout && !beforeTimeout())) return;
+          openingTimeoutDialog = true;
+          // Keep the old iframe alive until Sheets opens its replacement.
+          google.script.run
+            .withFailureHandler(openError => {
+              openingTimeoutDialog = false;
+              failure(openError);
+            })
+            .showPhrasesTimeoutDialog(${Boolean(modeless)}, ${JSON.stringify(action)});
         });
     }
   `;
+}
+
+function showPhrasesTimeoutDialog(modeless, action) {
+  var actionName = Object.hasOwn(PHRASES_MENU_LABELS, action)
+    ? `The “${PHRASES_MENU_LABELS[action]}” action`
+    : "This action";
+  var html = `<!doctype html>
+    <html lang="en">
+    <head>
+      <meta charset="utf-8">
+      <style>
+        body { margin: 16px; color: #202124; font: 14px/1.5 Arial, sans-serif; }
+        button { font: inherit; padding: 6px 16px; }
+      </style>
+    </head>
+    <body>
+      <p>Google Sheets limits Apps Script runs to six minutes in most accounts.
+        ${actionName} reached the execution time limit.
+        Partial changes might have been saved before time ran out.
+        Try running the action again.</p>
+      <button type="button" onclick="google.script.host.close()">Close</button>
+    </body>
+    </html>`;
+  var ui = SpreadsheetApp.getUi();
+  var output = HtmlService.createHtmlOutput(html).setWidth(460).setHeight(220);
+  var title = "Execution time limit reached";
+  if (modeless) ui.showModelessDialog(output, title);
+  else ui.showModalDialog(output, title);
 }
 
 function onOpen() {
   SpreadsheetApp.getUi()
     .createMenu("EasyEyes")
     .addItem(
-      "Retranslate all white cells derived from changed English cells. Then update EasyEyes.",
+      PHRASES_MENU_LABELS.update,
       "showPhrasesUpdateDialog",
     )
     .addItem(
-      "Retranslate the selected white cells. Then update EasyEyes.",
+      PHRASES_MENU_LABELS.retranslate,
       "showSelectedPhrasesUpdateDialog",
     )
-    .addItem("Check all cells. No update.", "showPhrasesCheckDialog")
-    .addItem("Color stale translation text red", "showPhrasesFreshnessDialog")
-    .addItem("Tabulate needed translations", "showPhrasesTabulationDialog")
-    .addItem("Read new translations", "showPhrasesImportDialog")
+    .addItem(PHRASES_MENU_LABELS.check, "showPhrasesCheckDialog")
+    .addItem(PHRASES_MENU_LABELS.freshness, "showPhrasesFreshnessDialog")
+    .addItem(PHRASES_MENU_LABELS.tabulate, "showPhrasesTabulationDialog")
+    .addItem(PHRASES_MENU_LABELS.import, "showPhrasesImportDialog")
     .addItem(
-      "Compare latest EasyEyes copy with this spreadsheet",
+      PHRASES_MENU_LABELS.compare,
       "showPhrasesComparisonDialog",
     )
-    .addItem("Run International Phrases audit", "showPhrasesAuditRequestDialog")
+    .addItem(PHRASES_MENU_LABELS.audit, "showPhrasesAuditRequestDialog")
     .addItem(
-      "View International Phrases audit history",
+      PHRASES_MENU_LABELS.history,
       "showPhrasesAuditHistory",
     )
     .addToUi();
@@ -331,7 +348,8 @@ function reopenPhraseAuditWindow(state) {
   );
 }
 
-function addPhraseAuditWindowControls(html, state, allowExport) {
+function addPhraseAuditWindowControls(html, state, action) {
+  var allowExport = action === "history";
   var savedState = JSON.stringify(state || {}).replace(
     /[<>&\u2028\u2029]/g,
     function (character) {
@@ -364,7 +382,7 @@ function addPhraseAuditWindowControls(html, state, allowExport) {
     </div>
   `;
   var script = `
-    ${executionDeadlineScript_()}
+    ${executionTimeoutScript_(true, action)}
     var phraseAuditWindowState = ${savedState};
     (function () {
       var toggle = document.getElementById("audit-window-toggle");
@@ -379,7 +397,7 @@ function addPhraseAuditWindowControls(html, state, allowExport) {
         toggle.textContent = state.collapsed ? "Minimizing…" : "Re-expanding…";
         content.inert = true;
         document.getElementById("audit-window-error").textContent = "";
-        withExecutionDeadline(
+        withExecutionTimeoutHandler(
           function () {
             // The host replaces the old dialog. Do not close the replacement.
           },
@@ -654,7 +672,7 @@ function buildPhrasesAuditHistoryHtml(windowState) {
                 event.preventDefault();
                 event.stopPropagation();
                 setStatus("Selecting " + entry.key + " in the Sheet…", false);
-                withExecutionDeadline(
+                withExecutionTimeoutHandler(
                   function() {
                     setStatus("Selected " + entry.key + " in the Sheet.", false);
                     google.script.host.editor.focus();
@@ -780,7 +798,7 @@ function buildPhrasesAuditHistoryHtml(windowState) {
             updateExportButton();
             document.getElementById("content").className = "hidden";
             setStatus("Loading selected audit report…", false);
-            withExecutionDeadline(
+            withExecutionTimeoutHandler(
               function (result) {
                 if (requestNumber !== activeRunRequest) return;
                 showLoadedReport(result);
@@ -789,6 +807,7 @@ function buildPhrasesAuditHistoryHtml(windowState) {
                 if (requestNumber !== activeRunRequest) return;
                 setStatus("Could not load this report: " + (error.message || error), true);
               },
+              () => requestNumber === activeRunRequest,
             ).getPhrasesAuditRun(runId);
           }
 
@@ -826,7 +845,7 @@ function buildPhrasesAuditHistoryHtml(windowState) {
             loadingAuditPage = true;
             document.getElementById("load-older-audits").disabled = true;
             document.getElementById("audit-page-status").textContent = "Loading older audits…";
-            withExecutionDeadline(
+            withExecutionTimeoutHandler(
               function (result) {
                 if (closed) return;
                 var selection = runSelect.value;
@@ -842,6 +861,7 @@ function buildPhrasesAuditHistoryHtml(windowState) {
                 document.getElementById("load-older-audits").disabled = false;
                 document.getElementById("audit-page-status").textContent = "Could not load older audits: " + (error.message || error);
               },
+              () => !closed,
             ).listPhrasesAuditRuns(nextAuditCursor);
           });
 
@@ -857,7 +877,7 @@ function buildPhrasesAuditHistoryHtml(windowState) {
               if (closed) return;
               var run = pending.shift();
               if (!run) { schedulePoll(); return; }
-              withExecutionDeadline(
+              withExecutionTimeoutHandler(
                 function (result) {
                   if (closed) return;
                   pollFailures = 0;
@@ -871,10 +891,10 @@ function buildPhrasesAuditHistoryHtml(windowState) {
                 },
                 function (error) {
                   if (closed) return;
-                  if (error && error.executionDeadline) setStatus(error.message, true);
                   pollFailures++;
                   schedulePoll();
                 },
+                () => !closed,
               ).getPhrasesAuditStatus(run.id);
             }
             next();
@@ -898,7 +918,7 @@ function buildPhrasesAuditHistoryHtml(windowState) {
             }
             schedulePoll();
           } else {
-            withExecutionDeadline(
+            withExecutionTimeoutHandler(
               function (result) {
                 var runs = result.runs || [];
                 if (closed) return;
@@ -915,6 +935,7 @@ function buildPhrasesAuditHistoryHtml(windowState) {
                 if (closed) return;
                 setStatus("Could not load audit runs: " + (error.message || error), true);
               },
+              () => !closed,
             ).listPhrasesAuditRuns();
           }
         </script>
@@ -922,7 +943,7 @@ function buildPhrasesAuditHistoryHtml(windowState) {
     </html>
   `,
     windowState,
-    true,
+    "history",
   );
 }
 
@@ -1403,6 +1424,7 @@ function buildPhraseAuditHtml(audit, windowState) {
       </body>
     </html>`,
     windowState,
+    "compare",
   );
 }
 
@@ -1575,7 +1597,7 @@ function showPhrasesActionDialog_(action, title, heading) {
       <div id="billing" hidden>${buildDeepLBillingActionHtml_()}</div>
       <button id="close" hidden onclick="google.script.host.close()">Close</button>
       <script>
-        ${executionDeadlineScript_()}
+        ${executionTimeoutScript_(action === "compare", action)}
         const progressId = ${JSON.stringify(progressId)};
         const form = document.getElementById('import-form');
         let started = false;
@@ -1618,7 +1640,7 @@ function showPhrasesActionDialog_(action, title, heading) {
             document.getElementById('heading').hidden = false;
             document.getElementById('message').textContent = 'Please wait.';
           }
-          withExecutionDeadline(
+          withExecutionTimeoutHandler(
             result => {
               // Sheets replaces this window when the comparison report opens.
               if (result.reportOpened) {
@@ -1629,7 +1651,11 @@ function showPhrasesActionDialog_(action, title, heading) {
               showResult(titles[result.type], result.message, result.showDeepLBillingAction, result.messageHtml);
             },
             error => showResult('Action interrupted', error && error.message || 'The action was interrupted.'),
-            confirmed => showResult(executionLimitTitle(confirmed), executionLimitMessage(confirmed)),
+            () => {
+              waiting = false;
+              clearTimeout(progressTimer);
+              return true;
+            },
           ).runPhrasesMenuAction(${JSON.stringify(action)}, progressId, url);
           scheduleProgress();
         }

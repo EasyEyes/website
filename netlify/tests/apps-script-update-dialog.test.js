@@ -92,6 +92,14 @@ function openUpdateDialog(name, menuIndex = 0) {
                 failure: this.failure,
               });
             },
+            showGlossaryTimeoutDialog() {
+              server.showGlossaryTimeoutDialog();
+              calls.push({ name: "timeout", html });
+            },
+            showPhrasesTimeoutDialog(modeless) {
+              server.showPhrasesTimeoutDialog(modeless);
+              calls.push({ name: "timeout", html, modeless });
+            },
             listGlossaryAuditRuns() {
               calls.push({
                 success: this.success,
@@ -153,29 +161,22 @@ for (const [script, menuIndex, action, result] of [
     const dialog = openUpdateDialog(script, menuIndex);
     assert.equal(dialog.name, action);
     dialog.failure({ message: "Error: Exceeded maximum execution time" });
-    assert.match(dialog.elements.message.textContent, /Google Sheets.*limits/i);
-    assert.match(
-      dialog.elements.message.textContent,
-      /action reached the execution time limit/i,
-    );
-    assert.equal(dialog.elements.close.hidden, false);
+    assert.equal(dialog.calls[1].name, "timeout");
+    if (script === "phrases") {
+      assert.equal(dialog.calls[1].modeless, action === "compare");
+    }
+    assert.match(dialog.calls[1].html, /Google Sheets.*limits/i);
+    assert.equal(dialog.elements.message.textContent, "");
     assert.ok(
       ![...dialog.timers.values()].some(({ delay }) => delay === 360000),
     );
   });
 
-  test(`${script} ${action} can still report a result after the dialog stops waiting`, () => {
+  test(`${script} ${action} waits for the result without a browser deadline`, () => {
     const dialog = openUpdateDialog(script, menuIndex);
-    const deadline = [...dialog.timers.values()].find(
-      ({ delay }) => delay === 360000,
+    assert.ok(
+      ![...dialog.timers.values()].some(({ delay }) => delay === 360000),
     );
-    assert.ok(deadline);
-    deadline.callback();
-    assert.match(
-      dialog.elements.message.textContent,
-      /may have reached that limit/i,
-    );
-    assert.equal(dialog.elements.heading.textContent, "Action status unknown");
     dialog.success(result);
     assert.equal(dialog.elements.message.textContent, result.message || result);
   });
@@ -188,7 +189,7 @@ for (const [script, menuIndex, action, result] of [
   });
 }
 
-test("reading translations starts one timed request after URL submission", () => {
+test("reading translations starts one request after URL submission", () => {
   const dialog = openUpdateDialog("phrases", 5);
   assert.equal(dialog.calls.length, 0);
   assert.equal(dialog.timers.size, 0);
@@ -199,25 +200,18 @@ test("reading translations starts one timed request after URL submission", () =>
   assert.equal(dialog.calls.length, 1);
   assert.equal(dialog.calls[0].name, "import");
   assert.equal(dialog.calls[0].url, url);
-  assert.ok([...dialog.timers.values()].some(({ delay }) => delay === 360000));
+  assert.ok(![...dialog.timers.values()].some(({ delay }) => delay === 360000));
   dialog.calls[0].failure({ message: "Exceeded maximum execution time" });
-  assert.match(
-    dialog.elements.message.textContent,
-    /action reached the execution time limit/i,
-  );
+  assert.equal(dialog.calls[1].name, "timeout");
+  assert.match(dialog.calls[1].html, /Google Sheets.*limits/i);
 });
 
 test("the Glossary audit viewer explains a timeout while loading saved reports", () => {
   const dialog = openUpdateDialog("glossary", 2);
   dialog.failure({ message: "Exceeded maximum execution time" });
-  assert.match(
-    dialog.elements.status.textContent,
-    /Execution time limit reached/,
-  );
-  assert.match(
-    dialog.elements.status.textContent,
-    /Google Sheets limits Apps Script runs/,
-  );
+  assert.equal(dialog.calls[1].name, "timeout");
+  assert.match(dialog.calls[1].html, /Google Sheets.*limits/i);
+  assert.equal(dialog.elements.status.textContent, "");
 });
 
 test("a late progress response cannot overwrite a Phrases timeout", () => {
