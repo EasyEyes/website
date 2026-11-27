@@ -29,18 +29,14 @@ function harness(kind, { deferInitialList = false } = {}) {
   });
   function mount(html) {
     const timers = [];
-    const deadlines = new Map();
-    let nextTimer = 0;
     const dom = new JSDOM(html, {
       runScripts: "dangerously",
       beforeParse(window) {
-        window.setTimeout = (f, delay) => {
-          const id = ++nextTimer;
-          if (delay === 360000) deadlines.set(id, f);
-          else timers.push(f);
-          return id;
+        window.setTimeout = (f) => {
+          timers.push(f);
+          return timers.length;
         };
-        window.clearTimeout = (id) => deadlines.delete(id);
+        window.clearTimeout = () => {};
         const runner = {
           withSuccessHandler(f) {
             this.success = f;
@@ -106,7 +102,7 @@ function harness(kind, { deferInitialList = false } = {}) {
         };
       },
     });
-    current = { dom, timers, deadlines, document: dom.window.document };
+    current = { dom, timers, document: dom.window.document };
   }
   context.HtmlService = {
     createHtmlOutput(html) {
@@ -175,25 +171,21 @@ function harness(kind, { deferInitialList = false } = {}) {
   };
 }
 
-test.each([true, false])(
-  "audit history explains the execution limit for a slow list request (confirmed=%s)",
-  (confirmed) => {
-    const h = harness("history", { deferInitialList: true });
-    try {
-      if (confirmed)
-        h.failInitialList(new Error("Exceeded maximum execution time"));
-      else [...h.current.deadlines.values()][0]();
-      expect(h.current.document.getElementById("status").textContent).toContain(
-        confirmed ? "Execution time limit reached" : "Action status unknown",
-      );
-      expect(h.current.document.getElementById("status").textContent).toContain(
-        "Google Sheets limits Apps Script runs",
-      );
-    } finally {
-      h.current.dom.window.close();
-    }
-  },
-);
+test("audit history explains a reported timeout without a browser deadline", () => {
+  const h = harness("history", { deferInitialList: true });
+  try {
+    expect(h.current.timers).toHaveLength(0);
+    h.failInitialList(new Error("Exceeded maximum execution time"));
+    expect(h.current.document.getElementById("status").textContent).toContain(
+      "Execution time limit reached",
+    );
+    expect(h.current.document.getElementById("status").textContent).toContain(
+      "Google Sheets limits Apps Script runs",
+    );
+  } finally {
+    h.current.dom.window.close();
+  }
+});
 
 test.each(["completed", "failed"])(
   "recreates history, preserves selection/search, and observes %s while minimized",

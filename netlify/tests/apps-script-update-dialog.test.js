@@ -164,18 +164,11 @@ for (const [script, menuIndex, action, result] of [
     );
   });
 
-  test(`${script} ${action} can still report a result after the dialog stops waiting`, () => {
+  test(`${script} ${action} waits for the result without a browser deadline`, () => {
     const dialog = openUpdateDialog(script, menuIndex);
-    const deadline = [...dialog.timers.values()].find(
-      ({ delay }) => delay === 360000,
+    assert.ok(
+      ![...dialog.timers.values()].some(({ delay }) => delay === 360000),
     );
-    assert.ok(deadline);
-    deadline.callback();
-    assert.match(
-      dialog.elements.message.textContent,
-      /may have reached that limit/i,
-    );
-    assert.equal(dialog.elements.heading.textContent, "Action status unknown");
     dialog.success(result);
     assert.equal(dialog.elements.message.textContent, result.message || result);
   });
@@ -188,7 +181,7 @@ for (const [script, menuIndex, action, result] of [
   });
 }
 
-test("reading translations starts one timed request after URL submission", () => {
+test("reading translations starts one request after URL submission", () => {
   const dialog = openUpdateDialog("phrases", 5);
   assert.equal(dialog.calls.length, 0);
   assert.equal(dialog.timers.size, 0);
@@ -199,7 +192,7 @@ test("reading translations starts one timed request after URL submission", () =>
   assert.equal(dialog.calls.length, 1);
   assert.equal(dialog.calls[0].name, "import");
   assert.equal(dialog.calls[0].url, url);
-  assert.ok([...dialog.timers.values()].some(({ delay }) => delay === 360000));
+  assert.ok(![...dialog.timers.values()].some(({ delay }) => delay === 360000));
   dialog.calls[0].failure({ message: "Exceeded maximum execution time" });
   assert.match(
     dialog.elements.message.textContent,

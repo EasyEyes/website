@@ -20,49 +20,29 @@ var NETLIFY_FUNCTION_URL = "https://easyeyes.app/.netlify/functions/glossary";
 var EXECUTION_TIMEOUT_PATTERN = /Exceeded maximum execution time/i;
 
 // Each Sheet has its own bound Apps Script project.
-function executionDeadlineScript_() {
+function executionTimeoutScript_() {
   return `
-    function executionLimitTitle(confirmed) {
-      return confirmed ? 'Execution time limit reached' : 'Action status unknown';
-    }
+    const executionLimitTitle = 'Execution time limit reached';
+    const executionLimitMessage =
+      'Google Sheets limits Apps Script runs to six minutes in most accounts. ' +
+      'This action reached the execution time limit. ' +
+      'Check whether any changes were saved before running the action again.';
 
-    function executionLimitMessage(confirmed) {
-      return 'Google Sheets limits Apps Script runs to six minutes in most accounts. ' +
-        (confirmed ? 'This action reached the execution time limit.' :
-          'This action may have reached that limit. No final result has arrived.') +
-        ' Check whether any changes were saved before running the action again.';
-    }
-
-    function withExecutionDeadline(success, failure, showTimeout) {
-      function onLimit(confirmed) {
-        if (showTimeout) {
-          showTimeout(confirmed);
-          return;
-        }
-        const error = new Error(executionLimitTitle(confirmed) + '. ' + executionLimitMessage(confirmed));
-        error.executionDeadline = true;
-        failure(error);
-      }
-
-      let expired = false;
-      const deadline = setTimeout(() => {
-        expired = true;
-        onLimit(false);
-      }, 6 * 60 * 1000);
+    function withExecutionTimeoutHandler(success, failure, showTimeout) {
       return google.script.run
-        .withSuccessHandler(result => {
-          clearTimeout(deadline);
-          // Menu dialogs can show late results. Reports can start a new request.
-          if (!expired || showTimeout) success(result);
-        })
+        .withSuccessHandler(success)
         .withFailureHandler(error => {
-          clearTimeout(deadline);
-          if (expired && !showTimeout) return;
-          if (${EXECUTION_TIMEOUT_PATTERN}.test(error && error.message || '')) {
-            onLimit(true);
-          } else {
+          if (!${EXECUTION_TIMEOUT_PATTERN}.test(error && error.message || '')) {
             failure(error);
+            return;
           }
+          if (showTimeout) {
+            showTimeout();
+            return;
+          }
+          const timeoutError = new Error(executionLimitTitle + '. ' + executionLimitMessage);
+          timeoutError.executionTimeout = true;
+          failure(timeoutError);
         });
     }
   `;
@@ -127,17 +107,17 @@ function showGlossaryActionDialog_(action, title, heading) {
       <p id="message" role="status">Please wait.</p>
       <button id="close" hidden onclick="google.script.host.close()">Close</button>
       <script>
-        ${executionDeadlineScript_()}
+        ${executionTimeoutScript_()}
         function showResult(heading, message) {
           document.getElementById('heading').textContent = heading;
           document.getElementById('message').textContent = message;
           document.getElementById('close').hidden = false;
         }
 
-        withExecutionDeadline(
+        withExecutionTimeoutHandler(
           message => showResult('Result', message),
           error => showResult('Action interrupted', error && error.message || 'The action was interrupted.'),
-          confirmed => showResult(executionLimitTitle(confirmed), executionLimitMessage(confirmed)),
+          () => showResult(executionLimitTitle, executionLimitMessage),
         ).runGlossaryMenuAction(${JSON.stringify(action)});
       </script>
     </body>
@@ -366,7 +346,7 @@ function buildGlossaryAuditReportHtml() {
   <div id="groups"></div>
 </main>
 <script>
-${executionDeadlineScript_()}
+${executionTimeoutScript_()}
 (function () {
   var select = document.getElementById("run-select");
   var search = document.getElementById("key-search");
@@ -439,7 +419,7 @@ ${executionDeadlineScript_()}
     var id = select.value;
     if (!id) return;
     findings = null; render(); refresh.disabled = true; setStatus("Loading selected report…");
-    withExecutionDeadline(function (result) {
+    withExecutionTimeoutHandler(function (result) {
       if (number !== requestNumber) return;
       refresh.disabled = false;
       findings = result.findings; render();
@@ -453,7 +433,7 @@ ${executionDeadlineScript_()}
     var number = ++requestNumber;
     var selected = select.value;
     refresh.disabled = true;
-    withExecutionDeadline(function (result) {
+    withExecutionTimeoutHandler(function (result) {
       if (number !== requestNumber) return;
       select.replaceChildren();
       var runs = result.runs || [];

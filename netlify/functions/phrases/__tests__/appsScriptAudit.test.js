@@ -136,8 +136,8 @@ describe("International Phrases Firebase audit", () => {
         createDocumentFragment: createElement,
       };
       const timers = [];
-      const setTimeout = jest.fn((callback, delay) => {
-        if (delay !== 360000) timers.push(callback);
+      const setTimeout = jest.fn((callback) => {
+        timers.push(callback);
         return timers.length;
       });
       const clearTimeout = jest.fn();
