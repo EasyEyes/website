@@ -63,6 +63,33 @@ export function compareVectors(expected, actual) {
   return { falsePos, falseNeg, exact: !falsePos.length && !falseNeg.length };
 }
 
+export function referenceCorrectionImpact(original, adjudicated, reviews) {
+  const beforeByProvider = new Map(), summary = new Map();
+  for (const row of original.details) {
+    if (reviews.get(row.clipId)?.reference === undefined || !row.automaticVector) continue;
+    if (!beforeByProvider.has(row.provider)) beforeByProvider.set(row.provider, new Map());
+    beforeByProvider.get(row.provider).set(row.clipId, row.expected);
+  }
+  for (const row of adjudicated.details) {
+    const before = beforeByProvider.get(row.provider)?.get(row.clipId);
+    if (!before || !row.automaticVector) continue;
+    if (!summary.has(row.provider)) summary.set(row.provider, {
+      provider: row.provider, clips: 0, bits: 0, before: 0, after: 0, resolved: 0, introduced: 0,
+    });
+    const entry = summary.get(row.provider);
+    entry.clips++;
+    entry.bits += row.automaticVector.length;
+    for (const [i, bit] of row.automaticVector.entries()) {
+      const oldError = bit !== before[i], newError = bit !== row.expected[i];
+      entry.before += Number(oldError);
+      entry.after += Number(newError);
+      entry.resolved += Number(oldError && !newError);
+      entry.introduced += Number(!oldError && newError);
+    }
+  }
+  return [...summary.values()];
+}
+
 const blankScore = () => ({
   positives: 0, negatives: 0, falsePos: 0, falseNeg: 0, exact: 0,
   truePos: 0, trueNeg: 0, lastErrors: 0, explicitClips: 0, referenceClips: 0,

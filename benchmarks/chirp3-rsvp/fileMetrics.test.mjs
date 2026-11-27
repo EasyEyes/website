@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readManifest, readResults, compareVectors, summarizeFiles, summarizeKeytermPairs, summarizeProviderAgreement, summarizeReviews, summarizeSpeakers } from "./fileMetrics.mjs";
+import { readManifest, readResults, compareVectors, referenceCorrectionImpact, summarizeFiles, summarizeKeytermPairs, summarizeProviderAgreement, summarizeReviews, summarizeSpeakers } from "./fileMetrics.mjs";
 import { buildReviewQueue, manifestKey, readReviews } from "./fileReview.mjs";
 
 test("review filters include every imported model except diagnostic tails", () => {
@@ -78,6 +78,20 @@ test("distinguishes missed correct targets from false credit", () => {
   assert.deepEqual(compareVectors([1, 1, 0], [1, 0, 1]),
     { falsePos: [2], falseNeg: [1], exact: false });
   assert.throws(() => compareVectors([1, 1], [1]));
+});
+
+test("isolates corrected human reference impact from model overrides and audio exclusions", () => {
+  const original = { details: [
+    { clipId: "a", provider: "Model", expected: [1, 0, 1], automaticVector: [0, 0, 0] },
+    { clipId: "excluded", provider: "Model", expected: [1], automaticVector: [0] },
+  ] };
+  const adjudicated = { details: [
+    { clipId: "a", provider: "Model", expected: [0, 1, 1], automaticVector: [0, 0, 0], vector: [0, 1, 1] },
+  ] };
+  const reviews = new Map([["a", { reference: "new transcript" }], ["excluded", { reference: "", quality: "unclear" }]]);
+  assert.deepEqual(referenceCorrectionImpact(original, adjudicated, reviews), [
+    { provider: "Model", clips: 1, bits: 3, before: 2, after: 2, resolved: 1, introduced: 1 },
+  ]);
 });
 
 test("agreement excludes whole trials on any disagreement, not on provider failure alone", () => {

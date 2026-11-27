@@ -22,6 +22,7 @@ export const reviewFilters = {
   confirmed: "Human-confirmed word deletion",
   flagged: "Difficult, unclear or invalid audio",
   diff: "Reference or target needs review",
+  "reference-corrected": "Corrected human transcript",
   failed: "Missing or failed STT result",
   notes: "Saved notes",
 };
@@ -70,14 +71,17 @@ export function buildReviewQueue(clips, results, details, reviews, selected, tok
       if (annotation?.note) summary.noted++;
       if (annotation) annotations.push({
         clip, quality, reference, provider, transcript, annotation, reviewed,
+        referenceCorrected: review?.reference !== undefined,
         referenceWords: words.length, outputWords: actual?.length ?? null,
         outcome: returned ? "returned" : "failed", included: !excluded,
       });
       return { provider, returned, shorter, differs: returned && normalized !== text, normalized,
         diff: scored.get(provider)?.get(clip.id), annotation };
     });
-    if (review?.note || reviewed) annotations.push({ clip, quality, reference,
-      annotation: { note: review?.note }, reviewed, referenceWords: words.length, included: !excluded });
+    if (review?.note || reviewed || review?.reference !== undefined) annotations.push({
+      clip, quality, reference, annotation: { note: review?.note }, reviewed, referenceWords: words.length,
+      referenceCorrected: review?.reference !== undefined, included: !excluded,
+    });
     if (reviewStatus !== "all" && reviewed !== (reviewStatus === "reviewed")) continue;
     const active = selected ? rows.filter(({ provider }) => provider === selected) : rows;
     const comparable = !excluded && active.length > 0 && active.every(({ returned }) => returned);
@@ -101,6 +105,7 @@ export function buildReviewQueue(clips, results, details, reviews, selected, tok
       confirmed: !excluded && active.some(({ annotation }) => annotation?.deletion === true),
       flagged: ["difficult", "unclear", "invalid"].includes(quality),
       diff: quality === "unreviewed" && (clip.referenceStatus === "needsReview" || clip.expected.includes(0)),
+      "reference-corrected": review?.reference !== undefined,
       failed: active.some(({ returned }) => !returned),
       notes: active.some(({ annotation }) => annotation?.note) || (!selected && review?.note),
     };
