@@ -62,16 +62,11 @@ function buildNotificationMessageHtml(message, linkUrl) {
 
 var EXECUTION_TIMEOUT_PATTERN = /Exceeded maximum execution time/i;
 
-// Each Sheet has its own bound Apps Script project.
-function executionTimeoutScript_() {
+function executionTimeoutScript_(modeless) {
   return `
-    const executionLimitTitle = 'Execution time limit reached';
-    const executionLimitMessage =
-      'Google Sheets limits Apps Script runs to six minutes in most accounts. ' +
-      'This action reached the execution time limit. ' +
-      'Check whether any changes were saved before running the action again.';
+    let openingTimeoutDialog = false;
 
-    function withExecutionTimeoutHandler(success, failure, showTimeout) {
+    function withExecutionTimeoutHandler(success, failure, beforeTimeout) {
       return google.script.run
         .withSuccessHandler(success)
         .withFailureHandler(error => {
@@ -79,16 +74,42 @@ function executionTimeoutScript_() {
             failure(error);
             return;
           }
-          if (showTimeout) {
-            showTimeout();
-            return;
-          }
-          const timeoutError = new Error(executionLimitTitle + '. ' + executionLimitMessage);
-          timeoutError.executionTimeout = true;
-          failure(timeoutError);
+          if (openingTimeoutDialog || (beforeTimeout && !beforeTimeout())) return;
+          openingTimeoutDialog = true;
+          // Keep the old iframe alive until Sheets opens its replacement.
+          google.script.run
+            .withFailureHandler(openError => {
+              openingTimeoutDialog = false;
+              failure(openError);
+            })
+            .showPhrasesTimeoutDialog(${Boolean(modeless)});
         });
     }
   `;
+}
+
+function showPhrasesTimeoutDialog(modeless) {
+  var html = `<!doctype html>
+    <html lang="en">
+    <head>
+      <meta charset="utf-8">
+      <style>
+        body { margin: 16px; color: #202124; font: 14px/1.5 Arial, sans-serif; }
+        button { font: inherit; padding: 6px 16px; }
+      </style>
+    </head>
+    <body>
+      <p>Google Sheets limits Apps Script runs to six minutes in most accounts.
+        This action reached the execution time limit. Check whether any changes
+        were saved before running the action again.</p>
+      <button type="button" onclick="google.script.host.close()">Close</button>
+    </body>
+    </html>`;
+  var ui = SpreadsheetApp.getUi();
+  var output = HtmlService.createHtmlOutput(html).setWidth(460).setHeight(180);
+  var title = "Execution time limit reached";
+  if (modeless) ui.showModelessDialog(output, title);
+  else ui.showModalDialog(output, title);
 }
 
 function onOpen() {
@@ -344,7 +365,7 @@ function addPhraseAuditWindowControls(html, state, allowExport) {
     </div>
   `;
   var script = `
-    ${executionTimeoutScript_()}
+    ${executionTimeoutScript_(true)}
     var phraseAuditWindowState = ${savedState};
     (function () {
       var toggle = document.getElementById("audit-window-toggle");
@@ -769,6 +790,7 @@ function buildPhrasesAuditHistoryHtml(windowState) {
                 if (requestNumber !== activeRunRequest) return;
                 setStatus("Could not load this report: " + (error.message || error), true);
               },
+              () => requestNumber === activeRunRequest,
             ).getPhrasesAuditRun(runId);
           }
 
@@ -822,6 +844,7 @@ function buildPhrasesAuditHistoryHtml(windowState) {
                 document.getElementById("load-older-audits").disabled = false;
                 document.getElementById("audit-page-status").textContent = "Could not load older audits: " + (error.message || error);
               },
+              () => !closed,
             ).listPhrasesAuditRuns(nextAuditCursor);
           });
 
@@ -851,10 +874,10 @@ function buildPhrasesAuditHistoryHtml(windowState) {
                 },
                 function (error) {
                   if (closed) return;
-                  if (error && error.executionTimeout) setStatus(error.message, true);
                   pollFailures++;
                   schedulePoll();
                 },
+                () => !closed,
               ).getPhrasesAuditStatus(run.id);
             }
             next();
@@ -895,6 +918,7 @@ function buildPhrasesAuditHistoryHtml(windowState) {
                 if (closed) return;
                 setStatus("Could not load audit runs: " + (error.message || error), true);
               },
+              () => !closed,
             ).listPhrasesAuditRuns();
           }
         </script>
@@ -1555,7 +1579,7 @@ function showPhrasesActionDialog_(action, title, heading) {
       <div id="billing" hidden>${buildDeepLBillingActionHtml_()}</div>
       <button id="close" hidden onclick="google.script.host.close()">Close</button>
       <script>
-        ${executionTimeoutScript_()}
+        ${executionTimeoutScript_(action === "compare")}
         const progressId = ${JSON.stringify(progressId)};
         const form = document.getElementById('import-form');
         let started = false;
@@ -1609,7 +1633,11 @@ function showPhrasesActionDialog_(action, title, heading) {
               showResult(titles[result.type], result.message, result.showDeepLBillingAction, result.messageHtml);
             },
             error => showResult('Action interrupted', error && error.message || 'The action was interrupted.'),
-            () => showResult(executionLimitTitle, executionLimitMessage),
+            () => {
+              waiting = false;
+              clearTimeout(progressTimer);
+              return true;
+            },
           ).runPhrasesMenuAction(${JSON.stringify(action)}, progressId, url);
           scheduleProgress();
         }

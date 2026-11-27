@@ -46,6 +46,9 @@ function harness(kind, { deferInitialList = false } = {}) {
             this.failure = f;
             return this;
           },
+          showPhrasesTimeoutDialog(modeless) {
+            context.showPhrasesTimeoutDialog(modeless);
+          },
           listPhrasesAuditRuns() {
             if (deferInitialList) {
               initialListFailure = this.failure;
@@ -176,11 +179,12 @@ test("audit history explains a reported timeout without a browser deadline", () 
   try {
     expect(h.current.timers).toHaveLength(0);
     h.failInitialList(new Error("Exceeded maximum execution time"));
-    expect(h.current.document.getElementById("status").textContent).toContain(
-      "Execution time limit reached",
-    );
-    expect(h.current.document.getElementById("status").textContent).toContain(
+    expect(h.opened).toEqual([{ width: 460, height: 180 }]);
+    expect(h.current.document.body.textContent).toContain(
       "Google Sheets limits Apps Script runs",
+    );
+    expect(h.current.document.querySelector("button").textContent).toBe(
+      "Close",
     );
   } finally {
     h.current.dom.window.close();
