@@ -139,6 +139,10 @@ filter its transcript differences, short outputs, missed targets, false
 credit, or errors no other imported model made. Each filter displays the
 number of matching clips. The short-output filter counts words against
 the current human reference; it does not prove a word was dropped.
+After saving individual decisions, use **Mark clip reviewed** to remove the
+clip from every pending filter. Switch **Clip review status** to **Reviewed
+only** to find completed clips and reopen them if needed. Completion does not
+affect the scored reports or review coverage by model.
 
 Export JSON to retain transcripts, the original and reviewed decisions and
 the saved reviews. Import the JSON with the same manifest to resume. Clip and

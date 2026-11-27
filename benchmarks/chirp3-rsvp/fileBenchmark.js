@@ -26,6 +26,7 @@ const csvCell = (value) => {
   const safe = typeof value === "string" && /^\s*[=+\-@]|^[\t\r\n]/.test(text) ? "'" + text : text;
   return '"' + safe.replaceAll('"', '""') + '"';
 };
+const providerDraftKey = (clip, row) => JSON.stringify([clip.id, row.provider, row.transcript]);
 
 async function readJson(file, maxMB) {
   if (!file || file.size > maxMB * 1024 * 1024)
@@ -160,7 +161,7 @@ export function setupFileBenchmark() {
     model.value = normal.includes(selected) ? selected : "";
     model.disabled = !normal.length;
     queue = buildReviewQueue(clips, results, computed.reports.adjudicated.details,
-      reviews, model.value, fileTranscriptWords);
+      reviews, model.value, fileTranscriptWords, $("file-review-mode").value);
     const coverage = $("file-review-coverage");
     coverage.replaceChildren(
       node("p", "Word shortfall sums only positive gaps from the current human reference. Human confirmation is separate. Unclear and invalid audio are excluded except from note counts."),
@@ -189,7 +190,8 @@ export function setupFileBenchmark() {
     selector.value = selector.querySelector(`option[value="${filter}"]`)?.disabled ? "all" : filter;
     const visible = queue.lists.get(selector.value);
     picker.replaceChildren(...visible.map((clip) => {
-      const tag = [clip.file, clip.speakerGroup, clip.referenceStatus === "needsReview" ? "check reference" : null].filter(Boolean);
+      const tag = [clip.file, clip.speakerGroup, reviews.get(clip.id)?.reviewed ? "Reviewed" : null,
+        clip.referenceStatus === "needsReview" ? "check reference" : null].filter(Boolean);
       const option = node("option", tag.join(" · "));
       option.value = clip.id;
       return option;
@@ -204,7 +206,7 @@ export function setupFileBenchmark() {
     const updated = { clipId: clip.id, ...review };
     const old = reviews.get(clip.id);
     if (updated.quality === "unreviewed" && updated.reference === undefined &&
-        !updated.predictions.length && !updated.note && !updated.providerReviews?.length)
+        !updated.predictions.length && !updated.note && !updated.providerReviews?.length && !updated.reviewed)
       reviews.delete(clip.id);
     else reviews.set(clip.id, updated);
     if ((old?.quality ?? "unreviewed") !== updated.quality || old?.reference !== updated.reference ||
@@ -219,7 +221,7 @@ export function setupFileBenchmark() {
   function providerReviewForm(clip, row, annotation) {
     const form = node("form");
     form.className = "file-review-form file-provider-review";
-    const draftKey = JSON.stringify([clip.id, row.provider, row.transcript]);
+    const draftKey = providerDraftKey(clip, row);
     const initial = drafts.get(draftKey) ?? annotation;
     const note = noteField("Model note (optional)", initial?.note);
     const checked = node("input"), deleted = node("input");
@@ -282,11 +284,29 @@ export function setupFileBenchmark() {
       : filter === "exclusive" ? " · All other loaded models must have a correct score"
       : filter === "short" || filter === "pending-short" ? " · Compared with the current human transcript" : "";
     $("file-review-count").textContent = `${picker.length} of ${clips.length} clips` +
-      (clip ? ` · Clip ${picker.selectedIndex + 1} of ${picker.length}` : "") + note;
+      (clip ? ` · Clip ${picker.selectedIndex + 1} of ${picker.length}` : "") + note +
+      ` · ${queue.reviewedClips} reviewed overall`;
+    $("file-review-completion").hidden = !clip;
     if (!clip) return item.append(node("p", "No clips match this filter."));
     const review = reviews.get(clip.id) ?? { quality: "unreviewed", predictions: [] };
     const reference = review.reference ?? clip.reference;
     const clipDraft = drafts.get(clip.id);
+    const raw = computed?.reports.original.details.filter((row) => row.clipId === clip.id) ?? [];
+    const badge = $("file-clip-review-badge");
+    const toggle = $("file-review-toggle");
+    badge.textContent = review.reviewed ? "Reviewed" : "Pending";
+    badge.dataset.reviewed = String(!!review.reviewed);
+    toggle.textContent = review.reviewed ? "Reopen review" : "Mark clip reviewed";
+    toggle.onclick = () => {
+      const current = reviews.get(clip.id) ?? review;
+      if (!current.reviewed && (drafts.has(clip.id) || raw.some((row) => drafts.has(providerDraftKey(clip, row))) ||
+          [...item.querySelectorAll("select[data-saved-value]")].some((field) => field.value !== field.dataset.savedValue))) {
+        $("file-review-status").textContent = "Save this clip’s audio/reference, model notes, or target decisions before marking it reviewed.";
+        return;
+      }
+      saveReview(clip, { ...current, reviewed: current.reviewed ? undefined : true },
+        current.reviewed ? `${clip.file} reopened in the pending lists.` : `${clip.file} reviewed and removed from all pending lists.`);
+    };
     const expected = review.reference === undefined ? clip.expected : score()(clip.targets, reference).vector;
     item.append(
       node("p", [clip.speakerGroup ?? "Participant not supplied", clip.session, clip.list && "Task " + clip.list].filter(Boolean).join(" · ")),
@@ -329,7 +349,6 @@ export function setupFileBenchmark() {
         reference: changed ? text : undefined, note: clipNote.input.value.trim() || undefined }, "Audio / reference review saved.");
     };
     item.append(form);
-    const raw = computed?.reports.original.details.filter((row) => row.clipId === clip.id) ?? [];
     const reviewed = new Map(computed?.reports.adjudicated.details.filter((row) => row.clipId === clip.id).map((row) => [row.provider, row]));
     if (!raw.length) return;
     item.append(node("h4", "Provider decisions by target"),
@@ -368,6 +387,7 @@ export function setupFileBenchmark() {
               control.append(option);
             }
             control.value = String(stored?.bits[i] ?? "");
+            control.dataset.savedValue = control.value;
             controls.push(control);
             const bit = actual.vector[i];
             return [target, expected[i], row.vector[i], bit,
@@ -430,6 +450,7 @@ export function setupFileBenchmark() {
       reviewedClip = undefined;
       $("file-review-filter").value = "all";
       $("file-review-provider").value = "";
+      $("file-review-mode").value = "pending";
       $("file-clip").replaceChildren();
       $("file-review-status").textContent = "";
       $("file-results").value = "";
@@ -482,17 +503,22 @@ export function setupFileBenchmark() {
     $("file-review-status").textContent = "";
     refreshReviewQueue();
   };
+  $("file-review-mode").onchange = () => {
+    $("file-review-status").textContent = "";
+    refreshReviewQueue();
+  };
   $("file-export-annotations").onclick = () => {
     const rows = [["clip_id", "file", "participant", "quality", "included", "provider",
       "outcome", "human_transcript", "provider_transcript", "human_words", "provider_words",
-      "deletion_review", "note"]];
+      "deletion_review", "note", "clip_review_status"]];
     for (const record of queue.annotations) {
       const { clip, quality, included, provider, outcome, reference, transcript,
-        referenceWords, outputWords, annotation } = record;
+        referenceWords, outputWords, annotation, reviewed } = record;
       const decision = annotation.deletion === true ? "confirmed" :
         annotation.deletion === false ? "not found" : provider ? "not checked" : "";
       rows.push([clip.id, clip.file, clip.speakerGroup, quality, included, provider, outcome,
-        reference, transcript, referenceWords, outputWords, decision, annotation.note]);
+        reference, transcript, referenceWords, outputWords, decision, annotation.note,
+        reviewed ? "reviewed" : "pending"]);
     }
     download("rsvp-review-annotations.csv", rows.map((row) => row.map(csvCell).join(",")).join("\r\n"),
       "text/csv;charset=utf-8");

@@ -42,11 +42,23 @@ test("review filters include every imported model except diagnostic tails", () =
   assert.deepEqual(get(focus, "false-credit"), ["missing"]);
   assert.equal(focus.annotations[0].annotation.note, "lake");
   assert.equal(focus.summaries.find((s) => s.provider === "Gemini Live").wordGap, 2);
+  reviews.get("format").reviewed = true;
+  const pending = buildReviewQueue(clips, results, details, reviews, "Gemini Live", tokenizer);
+  assert.equal(pending.reviewedClips, 1);
+  for (const filter of pending.lists.keys())
+    assert.ok(!get(pending, filter).includes("format"), filter);
+  assert.deepEqual(pending.summaries, focus.summaries);
+  const archive = buildReviewQueue(clips, results, details, reviews, "Gemini Live", tokenizer, "reviewed");
+  assert.deepEqual(get(archive, "confirmed"), ["format"]);
+  assert.deepEqual(get(archive, "exclusive"), ["format"]);
+  assert.equal(archive.annotations[0].reviewed, true);
+  const both = buildReviewQueue(clips, results, details, reviews, "Gemini Live", tokenizer, "all");
+  assert.deepEqual(get(both, "missed"), get(focus, "missed"));
 });
 
 test("annotations round-trip without altering the original score and are tied to the current result", () => {
   const clip = { id: "one", file: "one.wav", reference: "a b", targets: ["a", "b"], expected: [1, 1] };
-  const row = { clipId: "one", quality: "clear", predictions: [], note: "clip context",
+  const row = { clipId: "one", quality: "clear", predictions: [], note: "clip context", reviewed: true,
     providerReviews: [{ provider: "Gemini", transcript: "a", deletion: false, note: "checked" }] };
   const data = JSON.parse(JSON.stringify({ manifestKey: manifestKey([clip]), reviews: [row] }));
   const reviews = readReviews(data, [clip]);
@@ -58,6 +70,8 @@ test("annotations round-trip without altering the original score and are tied to
   assert.equal(queue.annotations[0].annotation.note, "clip context");
   data.reviews[0].providerReviews[0].transcript = null;
   assert.throws(() => readReviews(data, [clip]), /provider annotation/);
+  data.reviews[0].reviewed = "true";
+  assert.throws(() => readReviews(data, [clip]), /clip review/);
 });
 
 test("distinguishes missed correct targets from false credit", () => {

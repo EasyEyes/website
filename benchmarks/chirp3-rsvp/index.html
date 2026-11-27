@@ -116,13 +116,20 @@
         <section id="file-tail-summary" class="file-chart-panel" hidden></section>
         <details id="file-review" hidden>
           <summary>Listen to and review individual clips</summary>
-          <p>Listen locally, verify the human transcript, and review each model. A shorter transcript is a clue, not proof of deletion. Export results JSON to keep your review decisions.</p>
+          <p>Listen locally, verify the human transcript, and review each model. Mark the clip reviewed when you are finished to remove it from all pending lists. Export results JSON to keep your progress.</p>
           <div class="file-review-controls">
             <label>Model or run setting
               <select id="file-review-provider"><option value="">All models</option></select>
             </label>
             <label>Show clips
               <select id="file-review-filter"><option value="all">All clips</option></select>
+            </label>
+            <label>Clip review status
+              <select id="file-review-mode">
+                <option value="pending">Pending only</option>
+                <option value="reviewed">Reviewed only</option>
+                <option value="all">Pending and reviewed</option>
+              </select>
             </label>
             <label>Clip<select id="file-clip"></select></label>
             <div class="actions">
@@ -138,6 +145,10 @@
           <button id="file-export-annotations" type="button" disabled>Export review notes and deletion checks CSV</button>
           <audio id="file-player" controls preload="none" hidden></audio>
           <p id="file-player-status" class="hint"></p>
+          <div id="file-review-completion" class="actions" hidden>
+            <span id="file-clip-review-badge" class="file-clip-review-badge"></span>
+            <button id="file-review-toggle" type="button">Mark clip reviewed</button>
+          </div>
           <p id="file-review-status" role="status"></p>
           <div id="file-item-results"></div>
         </details>

@@ -176,6 +176,15 @@ select:focus-visible {
 }
 #file-review summary, .file-chart-panel summary { cursor: pointer; font-weight: 750; margin-block: .5rem; }
 #file-player { width: min(100%, 34rem); margin-block: .5rem; }
+.file-clip-review-badge {
+  align-self: center;
+  padding: .25rem .55rem;
+  border-radius: .3rem;
+  background: #edf2f6;
+  color: #304a5c;
+  font-weight: 700;
+}
+.file-clip-review-badge[data-reviewed="true"] { background: #e2f3e8; color: #205432; }
 .file-review-form { display: grid; gap: .75rem; margin-block: .8rem; }
 .file-review-form select { width: fit-content; }
 .file-review-form button { justify-self: start; }

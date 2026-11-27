@@ -29,7 +29,7 @@ export const reviewFilters = {
 export const providerReviewFor = (review, provider, transcript) =>
   review?.providerReviews?.find((entry) => entry.provider === provider && entry.transcript === transcript);
 
-export function buildReviewQueue(clips, results, details, reviews, selected, tokenize) {
+export function buildReviewQueue(clips, results, details, reviews, selected, tokenize, reviewStatus = "pending") {
   const providerRows = [...results].filter(([label]) => !isTailLabel(label));
   const summaries = providerRows.map(([provider]) => ({
     provider, returned: 0, shorter: 0, referenceWords: 0, wordGap: 0, checked: 0, confirmed: 0, noted: 0,
@@ -42,9 +42,11 @@ export function buildReviewQueue(clips, results, details, reviews, selected, tok
     }
   const lists = new Map(Object.keys(reviewFilters).map((filter) => [filter, []]));
   const annotations = [];
-  let compared = 0;
+  let compared = 0, reviewedClips = 0;
   for (const clip of clips) {
     const review = reviews.get(clip.id);
+    const reviewed = review?.reviewed === true;
+    if (reviewed) reviewedClips++;
     const reference = review?.reference ?? clip.reference;
     const words = tokenize(reference), text = words.join(" ");
     const quality = review?.quality ?? "unreviewed";
@@ -67,15 +69,16 @@ export function buildReviewQueue(clips, results, details, reviews, selected, tok
       }
       if (annotation?.note) summary.noted++;
       if (annotation) annotations.push({
-        clip, quality, reference, provider, transcript, annotation,
+        clip, quality, reference, provider, transcript, annotation, reviewed,
         referenceWords: words.length, outputWords: actual?.length ?? null,
         outcome: returned ? "returned" : "failed", included: !excluded,
       });
       return { provider, returned, shorter, differs: returned && normalized !== text, normalized,
         diff: scored.get(provider)?.get(clip.id), annotation };
     });
-    if (review?.note) annotations.push({ clip, quality, reference, annotation: { note: review.note },
-      referenceWords: words.length, included: !excluded });
+    if (review?.note || reviewed) annotations.push({ clip, quality, reference,
+      annotation: { note: review?.note }, reviewed, referenceWords: words.length, included: !excluded });
+    if (reviewStatus !== "all" && reviewed !== (reviewStatus === "reviewed")) continue;
     const active = selected ? rows.filter(({ provider }) => provider === selected) : rows;
     const comparable = !excluded && active.length > 0 && active.every(({ returned }) => returned);
     const modelsComparable = !excluded && rows.length > 1 && rows.every(({ returned }) => returned);
@@ -104,7 +107,7 @@ export function buildReviewQueue(clips, results, details, reviews, selected, tok
     for (const [filter, match] of Object.entries(matches))
       if (match) lists.get(filter).push(clip);
   }
-  return { lists, summaries, annotations, compared, providers: providerRows.map(([label]) => label) };
+  return { lists, summaries, annotations, compared, reviewedClips, providers: providerRows.map(([label]) => label) };
 }
 
 export const manifestKey = (clips) => JSON.stringify(clips.map((c) =>
@@ -122,6 +125,7 @@ export function readReviews(data, clips) {
     if (!clip || result.has(row.clipId) || !Object.hasOwn(qualityLabels, row.quality) ||
         (row.reference !== undefined && (!clip.targets || typeof row.reference !== "string" || row.reference.length > 1500)) ||
         !Array.isArray(row.predictions) || row.predictions.length > 32 ||
+        (row.reviewed !== undefined && typeof row.reviewed !== "boolean") ||
         (row.note !== undefined && !validNote(row.note)) ||
         (row.providerReviews !== undefined &&
           (!Array.isArray(row.providerReviews) || row.providerReviews.length > 100)))
