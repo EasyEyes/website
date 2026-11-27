@@ -53,8 +53,7 @@ function showGlossaryTimeoutDialog() {
     </head>
     <body>
       <p>Google Sheets limits Apps Script runs to six minutes in most accounts.
-        This action reached the execution time limit. Check whether any changes
-        were saved before running the action again.</p>
+        This action reached the execution time limit.</p>
       <button type="button" onclick="google.script.host.close()">Close</button>
     </body>
     </html>`;
