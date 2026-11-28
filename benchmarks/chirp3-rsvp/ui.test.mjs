@@ -324,6 +324,13 @@ try {
   assert.match(summary, /Chirp 3[^\n]+2\/2[^\n]+2\/5 \(40\.0%\)/);
   assert.match(summary, /ElevenLabs[^\n]+2\/2[^\n]+3\/5 \(60\.0%\)[^\n]+1\/1 \(100\.0%\)/);
   assert.match(await page.locator("#file-overlap-result").innerText(), /Invalidated by disagreement: 2\/2 \(100\.00%\)/);
+  assert.match(await page.locator("#file-overlap-result").innerText(), /Trials lost under full agreement: 2\/2 \(100\.00%\)/);
+  const trailingS = page.getByRole("checkbox", { name: "Exclude trailing-s disagreements (pet / pets)" });
+  await trailingS.check();
+  assert.equal(await page.getByRole("columnheader", { name: "S-only targets excluded" }).count(), 1);
+  assert.match(await page.locator("#file-summary").innerText(), /Provider agreement below is strict/);
+  await trailingS.uncheck();
+  assert.equal(await page.getByRole("columnheader", { name: "S-only targets excluded" }).count(), 0);
   await page.getByText("Listen to and review individual clips").click();
   await page.locator("#file-clip").selectOption("audio-02");
   assert.match(await page.locator("#file-item-results").innerText(), /Expected: 110/);

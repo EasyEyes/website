@@ -149,16 +149,17 @@ function agreementReport(report, choices, onChange) {
     for (const item of first.options) item.disabled = item.value === second.value;
     for (const item of second.options) item.disabled = item.value === first.value;
     onChange([first.value, second.value]);
-    const { eligible, paired, rejected, rejectedTargets, first: a, second: b, accepted } =
+    const { eligible, paired, rejected, rejectedTargets, acceptedTrials, unavailableTrials, lostTrials,
+      first: a, second: b, accepted } =
       summarizeProviderAgreement(report.clips, report.details, first.value, second.value);
-    const row = (name, n, s) => [name, n, percentage(errors(s), size(s)),
+    const row = (name, n, s, lost = "—") => [name, n, lost, percentage(errors(s), size(s)),
       percentage(s.falseNeg, s.positives), percentage(s.falsePos, s.negatives)];
     output.replaceChildren(
-      node("p", `Successful for both: ${paired}/${eligible} clips. Failed or missing for either: ${eligible - paired} (not counted as disagreement).`),
-      node("p", `Accepted: ${percentage(paired - rejected, paired)} · Invalidated by disagreement: ${percentage(rejected, paired)} · Excluded targets: ${rejectedTargets}.`),
-      table(["Policy", "Scored clips", "Target error rate", "Missed target (1 → 0)", "False credit (0 → 1)"], [
+      node("p", `Successful for both: ${paired}/${eligible} trials. Failed or missing for either: ${percentage(unavailableTrials, eligible)}.`),
+      node("p", `Invalidated by disagreement: ${percentage(rejected, paired)} of trials with two results (${rejectedTargets} targets). Trials lost under full agreement: ${percentage(lostTrials, eligible)} of all eligible trials, including failed or missing results.`),
+      table(["Policy", "Scored trials", "Trials lost / eligible", "Target error rate", "Missed target (1 → 0)", "False credit (0 → 1)"], [
         row(first.value + " alone", paired, a), row(second.value + " alone", paired, b),
-        row("Only accept full agreement", paired - rejected, accepted),
+        row("Only accept full agreement", acceptedTrials, accepted, percentage(lostTrials, eligible)),
       ]),
       node("p", `Change after filtering (overall / missed / false credit): vs. first ${delta(a, accepted)}; vs. second ${delta(b, accepted)}.`),
       node("p", "A lower error rate applies only to the retained clips. This filter does not correct mistakes, and both providers can agree on the wrong bit."),
@@ -170,31 +171,37 @@ function agreementReport(report, choices, onChange) {
   return section;
 }
 
-export function renderFileReport(container, computed, scope, preferredProvider, onProvider, overlap, onOverlap) {
+export function renderFileReport(container, computed, scope, preferredProvider, onProvider, overlap, onOverlap, filteredReports) {
   container.replaceChildren();
   if (!computed) return;
   const { reports, quality } = computed;
   const all = reports.original.clips.length;
-  const report = reports[scope];
+  const shownReports = filteredReports ?? reports;
+  const report = shownReports[scope];
   const { summary, keytermPairs } = report;
   const qualityRows = Object.entries(qualityLabels).map(([key, label]) => [label, fraction(quality[key], all)]);
   container.append(
     node("h3", "Review coverage"),
     table(["Audio review status", "Clips"], [...qualityRows, ["Reference text corrected (overlaps the statuses above)", fraction(quality.corrected, all)]]),
-    node("p", "Original uses the supplied reference. After review applies saved decisions and excludes clips that cannot be judged or belong to another task. The third view also excludes difficult audio; it still includes unreviewed clips."),
+    node("p", "After review excludes unintelligible audio and invalid recordings. The third view also excludes audio marked Difficult but intelligible. Both include clips whose audio quality was not rated."),
   );
   if (!summary.length) return;
   container.append(
     node("h3", "Target-level comparison · " + scopes[scope]),
     node("p", "Each target counts once. Target error rate = all incorrect decisions ÷ scored targets. Missed target = expected 1, got 0, out of expected 1s. False credit = expected 0, got 1, out of expected 0s. A dash means no eligible targets. Provider failures and missing results are not scored."),
     node("h4", "Common successful clips"),
-    node("p", "The same clips are used for every provider and keyterms setting in this table."),
-    table(["Provider", "Returned / eligible", "Failed / missing", "Common clips", ...metricLabels],
-      summary.map((s) => [s.provider, s.returned + "/" + s.clips, s.failed + "/" + s.missing, s.paired, ...metrics(s)])),
-    agreementReport(report, overlap, onOverlap),
+    node("p", filteredReports
+      ? "All models use the same clips. Only matching trailing-s discrepancies (for example, pet vs. pets) are excluded from both errors and scored targets, separately for each model. Other target errors in the same clip still count."
+      : "The same clips are used for every provider and keyterms setting in this table."),
+    table(["Provider", "Returned / eligible", "Failed / missing", "Common clips",
+      ...(filteredReports ? ["S-only targets excluded"] : []), ...metricLabels],
+      summary.map((s) => [s.provider, s.returned + "/" + s.clips, s.failed + "/" + s.missing, s.paired,
+        ...(filteredReports ? [s.excludedTrailingS] : []), ...metrics(s)])),
+    ...(filteredReports ? [node("p", "Provider agreement below is strict and uses the unfiltered target decisions. It does not use the human transcript to waive disagreements.")] : []),
+    agreementReport(reports[scope], overlap, onOverlap),
     node("h4", "Effect of review · each provider’s available clips"),
     table(["View", "Provider", "Scored / eligible clips", ...metricLabels],
-      Object.entries(reports).flatMap(([key, r]) => r.summary.map((s) =>
+      Object.entries(shownReports).flatMap(([key, r]) => r.summary.map((s) =>
         [scopes[key], s.provider, s.returned + "/" + s.clips, ...metrics(s.allReturned)]))),
   );
   if (keytermPairs.length) {
@@ -226,15 +233,17 @@ export function renderFileReport(container, computed, scope, preferredProvider, 
   container.append(label, panel);
 }
 
-export function csvMetricRows(computed) {
+export function csvMetricRows(computed, filteredReports) {
   const header = ["scope", "subset", "provider", "participant", "eligible_clips", "returned_clips", "failed_clips", "missing_clips",
     "scored_targets", "expected_ones", "expected_zeros", "true_positive", "true_negative", "false_negative", "false_positive",
-    "error_pct", "agreement_pct", "false_negative_pct", "false_positive_pct"];
+    "error_pct", "agreement_pct", "false_negative_pct", "false_positive_pct",
+    "trailing_s_filter", "excluded_trailing_s_targets"];
   const row = (scope, subset, s, score) => [scope, subset, s.provider, s.speaker, s.clips, s.returned, s.failed, s.missing,
     size(score), score.positives, score.negatives, score.truePos, score.trueNeg, score.falseNeg, score.falsePos,
     pct(errors(score), size(score)), pct(score.truePos + score.trueNeg, size(score)),
-    pct(score.falseNeg, score.positives), pct(score.falsePos, score.negatives)];
-  return [header, ...Object.entries(computed.reports).flatMap(([key, r]) => [
+    pct(score.falseNeg, score.positives), pct(score.falsePos, score.negatives),
+    Boolean(filteredReports), subset === "available" ? (s.excludedTrailingSAvailable ?? 0) : (s.excludedTrailingS ?? 0)];
+  return [header, ...Object.entries(filteredReports ?? computed.reports).flatMap(([key, r]) => [
     ...r.summary.flatMap((s) => [
       row(key, "available", s, s.allReturned),
       row(key, "common", { ...s, returned: s.paired, failed: null, missing: null }, s),

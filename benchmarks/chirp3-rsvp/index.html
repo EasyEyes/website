@@ -109,8 +109,12 @@
           <select id="file-scope">
             <option value="original">Original · no review decisions</option>
             <option value="adjudicated" selected>After review</option>
-            <option value="unflagged">After review · difficult audio excluded</option>
+            <option value="unflagged">After review · difficult but intelligible audio also excluded</option>
           </select>
+        </label>
+        <label id="file-s-only-label" class="check" hidden>
+          <input type="checkbox" id="file-s-only">
+          Exclude trailing-s disagreements (pet / pets)
         </label>
         <div id="file-summary"></div>
         <section id="file-tail-summary" class="file-chart-panel" hidden></section>

@@ -97,13 +97,68 @@ const blankScore = () => ({
 
 function countVector(totals, clip, actual, diff) {
   totals[clip.targetSource === "explicit" ? "explicitClips" : "referenceClips"]++;
-  for (const bit of clip.expected) totals[bit ? "positives" : "negatives"]++;
+  const ignored = actual.ignoredTargets;
+  let positives = 0, negatives = 0;
+  for (const [i, bit] of clip.expected.entries()) {
+    if (ignored?.includes(i)) continue;
+    if (bit) positives++;
+    else negatives++;
+  }
+  totals.positives += positives;
+  totals.negatives += negatives;
   totals.falsePos += diff.falsePos.length;
   totals.falseNeg += diff.falseNeg.length;
-  totals.truePos += clip.expected.filter((bit) => bit === 1).length - diff.falseNeg.length;
-  totals.trueNeg += clip.expected.filter((bit) => bit === 0).length - diff.falsePos.length;
-  totals.exact += Number(diff.exact);
-  totals.lastErrors += Number(clip.expected.at(-1) !== actual.vector.at(-1));
+  totals.truePos += positives - diff.falseNeg.length;
+  totals.trueNeg += negatives - diff.falsePos.length;
+  totals.exact += Number(diff.exact && positives + negatives > 0);
+  if (!ignored?.includes(clip.expected.length - 1))
+    totals.lastErrors += Number(clip.expected.at(-1) !== actual.vector.at(-1));
+}
+
+function maskTargets(row, ignoredTargets) {
+  if (!ignoredTargets.length) return row;
+  const falseNeg = row.differences.falseNeg.filter((i) => !ignoredTargets.includes(i));
+  const falsePos = row.differences.falsePos.filter((i) => !ignoredTargets.includes(i));
+  return { ...row, ignoredTargets, differences: { falseNeg, falsePos, exact: !falseNeg.length && !falsePos.length } };
+}
+
+// Mask only mismatching explicit target bits with an unambiguous trailing-s
+// swap in the transcripts. Neither transcripts nor scoring decisions change.
+export function excludeTrailingSDisagreements(report, tokenize) {
+  const summary = report.summary.map((s) => ({
+    ...s, ...blankScore(), allReturned: blankScore(), excludedTrailingS: 0, excludedTrailingSAvailable: 0,
+  }));
+  const totalsByProvider = new Map(summary.map((s) => [s.provider, s]));
+  const clips = new Map(report.clips.map((clip) => [clip.id, clip]));
+  const details = report.details.map((row) => {
+    if (!row.differences) return row;
+    const totals = totalsByProvider.get(row.provider);
+    const clip = clips.get(row.clipId);
+    const nonmatching = [...row.differences.falseNeg, ...row.differences.falsePos];
+    let filtered = row;
+    if (row.targetSource === "explicit" && nonmatching.length) {
+      const human = new Set(tokenize(row.reference));
+      const model = new Set(tokenize(row.transcript));
+      const ignoredTargets = nonmatching.filter((i) => {
+        if (row.vector[i] !== row.automaticVector[i]) return false;
+        const [word] = tokenize(row.targets[i]);
+        if (!/^[a-z]+$/.test(word ?? "")) return false;
+        const [present, absent] = row.expected[i] ? [human, model] : [model, human];
+        if (!present.has(word) || absent.has(word)) return false;
+        const alternates = [word + "s", ...(word.endsWith("s") && word.length > 1 ? [word.slice(0, -1)] : [])];
+        return alternates.some((alternate) => absent.has(alternate) && !present.has(alternate));
+      });
+      if (ignoredTargets.length) {
+        filtered = maskTargets(row, ignoredTargets);
+        totals.excludedTrailingSAvailable += ignoredTargets.length;
+        if (row.included) totals.excludedTrailingS += ignoredTargets.length;
+      }
+    }
+    countVector(totals.allReturned, clip, filtered, filtered.differences);
+    if (row.included) countVector(totals, clip, filtered, filtered.differences);
+    return filtered;
+  });
+  return { ...report, summary, details };
 }
 
 export function summarizeFiles(clips, providers, score, amend = (_clip, _result, actual) => actual) {
@@ -145,7 +200,7 @@ export function summarizeFiles(clips, providers, score, amend = (_clip, _result,
 export const scopes = {
   original: "Original",
   adjudicated: "After review",
-  unflagged: "After review · difficult audio excluded",
+  unflagged: "After review · difficult but intelligible audio also excluded",
 };
 
 export function summarizeReviews(clips, providers, score, reviews, ignoreOrder) {
@@ -194,11 +249,12 @@ export function summarizeSpeakers(clips, details, providers) {
   const rows = [];
   for (const [speaker, group] of groups) {
     for (const provider of providers) {
-      const out = { speaker, provider, clips: group.length, returned: 0, failed: 0, missing: 0, ...blankScore() };
+      const out = { speaker, provider, clips: group.length, returned: 0, failed: 0, missing: 0, excludedTrailingS: 0, ...blankScore() };
       for (const clip of group) {
         const row = byKey.get(JSON.stringify([provider, clip.id]));
         if (row?.differences) {
           out.returned++;
+          out.excludedTrailingS += row.ignoredTargets?.length ?? 0;
           countVector(out, clip, row, row.differences);
         } else if (row?.error) out.failed++;
         else out.missing++;
@@ -221,9 +277,15 @@ export function summarizeKeytermPairs(clips, details, variants) {
     const without = blankScore(), withTerms = blankScore();
     let paired = 0;
     for (const clip of clips) {
-      const a = scores.get(off).get(clip.id);
-      const b = scores.get(on).get(clip.id);
+      let a = scores.get(off).get(clip.id);
+      let b = scores.get(on).get(clip.id);
       if (!a || !b) continue;
+      if (a.ignoredTargets || b.ignoredTargets) {
+        // Use the same targets on both sides of an off/on comparison.
+        const ignored = [...new Set([...(a.ignoredTargets ?? []), ...(b.ignoredTargets ?? [])])];
+        a = maskTargets(a, ignored);
+        b = maskTargets(b, ignored);
+      }
       paired++;
       countVector(without, clip, a, a.differences);
       countVector(withTerms, clip, b, b.differences);
@@ -241,7 +303,8 @@ export function summarizeProviderAgreement(clips, details, first, second) {
     if (row.provider === second) b.set(row.clipId, row);
   }
   const result = {
-    eligible: clips.length, paired: 0, rejected: 0, rejectedTargets: 0,
+    eligible: clips.length, paired: 0, rejected: 0, rejectedTargets: 0, acceptedTrials: 0,
+    unavailableTrials: clips.length, lostTrials: clips.length,
     first: blankScore(), second: blankScore(), accepted: blankScore(),
   };
   if (first === second) return result;
@@ -255,8 +318,11 @@ export function summarizeProviderAgreement(clips, details, first, second) {
       result.rejected++;
       result.rejectedTargets += clip.expected.length;
     } else {
+      result.acceptedTrials++;
       countVector(result.accepted, clip, x, x.differences);
     }
   }
+  result.unavailableTrials = result.eligible - result.paired;
+  result.lostTrials = result.eligible - result.acceptedTrials;
   return result;
 }

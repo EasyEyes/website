@@ -152,6 +152,13 @@ score overrides. Export the review annotations CSV for those checks and notes,
 or the metrics CSV for target counts and percentages across views and
 participants. Neither export includes audio.
 
+**Exclude trailing-s disagreements** is an optional sensitivity check on the
+target metrics and metrics CSV. It removes the affected target decisions
+from the error counts and denominators, model by model, without changing
+the transcripts, saved reviews, or other target decisions in a clip.
+Provider agreement stays strict: **Trials lost / eligible** reports both
+disagreement and unavailable results on the selected report's eligible trials.
+
 To prepare candidates from ACAD without any external requests:
 
 ```text

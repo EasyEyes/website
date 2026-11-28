@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readManifest, readResults, compareVectors, referenceCorrectionImpact, summarizeFiles, summarizeKeytermPairs, summarizeProviderAgreement, summarizeReviews, summarizeSpeakers } from "./fileMetrics.mjs";
+import { readManifest, readResults, compareVectors, excludeTrailingSDisagreements, referenceCorrectionImpact, summarizeFiles, summarizeKeytermPairs, summarizeProviderAgreement, summarizeReviews, summarizeSpeakers } from "./fileMetrics.mjs";
 import { buildReviewQueue, manifestKey, readReviews } from "./fileReview.mjs";
 
 test("review filters include every imported model except diagnostic tails", () => {
@@ -80,6 +80,44 @@ test("distinguishes missed correct targets from false credit", () => {
   assert.throws(() => compareVectors([1, 1], [1]));
 });
 
+test("the trailing-s report masks only unambiguous automatic target disagreements in both directions", () => {
+  const tokenize = (text) => text.toLowerCase().match(/[a-z]+/g) ?? [];
+  const score = (targets, text) => ({ vector: targets.map((t) => Number(tokenize(text).includes(t))) });
+  const fixtures = [
+    ["mixed", ["pet", "coat"], "pet coat", "pets goat"],
+    ["credit", ["pet"], "pets", "Pet."],
+    ["plural-target", ["pets"], "pets", "pet"],
+    ["both-forms", ["pet"], "pet, pets", "pets"],
+    ["not-only-s", ["baby"], "baby", "babies"],
+    ["reference-only", ["pet"], "pet", "pets"],
+    ["manual", ["pet"], "pets", "pets"],
+  ];
+  const clips = fixtures.map(([id, targets, reference]) => ({
+    id, targets, reference, expected: score(targets, reference).vector,
+    targetSource: id === "reference-only" ? "reference" : "explicit",
+  }));
+  const by = (entries) => new Map(entries.map(([id, text]) => [id, { transcript: text }]));
+  const providers = new Map([
+    ["A", by(fixtures.map(([id, , , transcript]) => [id, transcript]))],
+    ["B", by(fixtures.map(([id, , reference]) => [id, reference]))],
+  ]);
+  const strict = { clips, ...summarizeFiles(clips, providers, score, (clip, _row, actual) =>
+    clip.id === "manual" && _row === providers.get("A").get(clip.id) ? { ...actual, vector: [1] } : actual) };
+  const filtered = excludeTrailingSDisagreements(strict, tokenize);
+  const [a, b] = filtered.summary;
+  assert.deepEqual([a.excludedTrailingS, a.positives, a.negatives, a.falseNeg, a.falsePos], [3, 4, 1, 4, 1]);
+  assert.deepEqual([b.excludedTrailingS, b.truePos, b.trueNeg], [0, 6, 2]);
+  const mixed = filtered.details.find((r) => r.clipId === "mixed" && r.provider === "A");
+  assert.deepEqual(mixed.ignoredTargets, [0]);
+  assert.deepEqual(mixed.differences.falseNeg, [1]);
+  assert.deepEqual(mixed.vector, [0, 0]);
+  assert.equal(strict.summary[0].falseNeg, 6);
+  assert.equal(strict.summary[0].falsePos, 2);
+  const [keyterms] = summarizeKeytermPairs(clips, filtered.details, [{ provider: "A/B", off: "A", on: "B" }]);
+  assert.deepEqual([keyterms.without.positives, keyterms.withTerms.positives, keyterms.without.negatives, keyterms.withTerms.negatives],
+    [4, 4, 1, 1]);
+});
+
 test("isolates corrected human reference impact from model overrides and audio exclusions", () => {
   const original = { details: [
     { clipId: "a", provider: "Model", expected: [1, 0, 1], automaticVector: [0, 0, 0] },
@@ -107,6 +145,7 @@ test("agreement excludes whole trials on any disagreement, not on provider failu
     { clipId: d.id, provider: "C", vector: null, error: "transcriberFailure" }];
   const result = summarizeProviderAgreement(clips, details, "A", "B");
   assert.deepEqual([result.eligible, result.paired, result.rejected, result.rejectedTargets], [3, 2, 1, 3]);
+  assert.deepEqual([result.acceptedTrials, result.unavailableTrials, result.lostTrials], [1, 1, 2]);
   assert.deepEqual([result.first.falseNeg, result.second.falseNeg], [1, 2]);
   assert.deepEqual([result.accepted.positives, result.accepted.negatives,
     result.accepted.falseNeg, result.accepted.falsePos], [2, 1, 1, 1]);

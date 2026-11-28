@@ -1,4 +1,4 @@
-import { readManifest, readResults, referenceCorrectionImpact, summarizeReviews, summarizeKeytermPairs } from "./fileMetrics.mjs";
+import { excludeTrailingSDisagreements, readManifest, readResults, referenceCorrectionImpact, summarizeReviews, summarizeKeytermPairs } from "./fileMetrics.mjs";
 import { replayClip, replayProviders, replayLabel } from "./fileReplay.js";
 import { fileKeyterms, fileRsvpScorer, fileTranscriptWords, makeRsvpCases } from "./fileRsvpScore.js";
 import { buildReviewQueue, manifestKey, providerReviewFor, qualityLabels, readReviews, reviewFilters } from "./fileReview.mjs";
@@ -52,7 +52,7 @@ export function setupFileBenchmark() {
   const drafts = new Map();
   const recentReviews = new Set();
   let visibleClips = [], navigationIds = [], clipOrder = new Map();
-  let computed, queue, selectedProvider, overlap, audioUrl, audioClip, audioFile, reviewedClip;
+  let computed, filteredReports, queue, selectedProvider, overlap, audioUrl, audioClip, audioFile, reviewedClip;
   let correctionImpact = [];
   let controller;
   const progress = createFileProgress();
@@ -119,6 +119,7 @@ export function setupFileBenchmark() {
     };
     const normal = new Map([...results].filter(([label]) => !isTailLabel(label)));
     computed = summarizeReviews(clips, normal, cachedScore, reviews, ignoreOrder());
+    filteredReports = undefined;
     correctionImpact = referenceCorrectionImpact(computed.reports.original, computed.reports.adjudicated, reviews);
     for (const report of Object.values(computed.reports))
       report.keytermPairs = summarizeKeytermPairs(report.clips, report.details, keytermVariants);
@@ -126,13 +127,24 @@ export function setupFileBenchmark() {
     $("file-export-csv").disabled = !!controller || !normal.size;
     $("file-export-json").disabled = !hasResults && !reviews.size;
     $("file-scope-label").hidden = !normal.size;
+    $("file-s-only-label").hidden = !normal.size;
     drawReport();
     drawTailReport();
     refreshReviewQueue(navigation);
   }
 
+  function reportWithTrailingSFilter() {
+    if (!computed || !$("file-s-only").checked) return undefined;
+    return filteredReports ??= Object.fromEntries(Object.entries(computed.reports).map(([scope, report]) => {
+      const filtered = excludeTrailingSDisagreements(report, fileTranscriptWords);
+      filtered.keytermPairs = summarizeKeytermPairs(filtered.clips, filtered.details, keytermVariants);
+      return [scope, filtered];
+    }));
+  }
+
   const drawReport = () => renderFileReport($("file-summary"), computed, $("file-scope").value,
-    selectedProvider, (value) => { selectedProvider = value; }, overlap, (pair) => { overlap = pair; });
+    selectedProvider, (value) => { selectedProvider = value; }, overlap, (pair) => { overlap = pair; },
+    reportWithTrailingSFilter());
 
   function setAudio(clip) {
     const player = $("file-player");
@@ -578,6 +590,7 @@ export function setupFileBenchmark() {
       "text/csv;charset=utf-8");
   };
   $("file-scope").onchange = drawReport;
+  $("file-s-only").onchange = drawReport;
   $("file-ignore-order").onchange = () => {
     if (!manifest) return;
     clips = makeRsvpCases(manifest.clips, score());
@@ -599,7 +612,8 @@ export function setupFileBenchmark() {
   });
   $("file-export-csv").onclick = () => {
     download("rsvp-dataset-metrics.csv",
-      csvMetricRows(computed).map((row) => row.map(csvCell).join(",")).join("\r\n"), "text/csv;charset=UTF-8");
+      csvMetricRows(computed, reportWithTrailingSFilter()).map((row) => row.map(csvCell).join(",")).join("\r\n"),
+      "text/csv;charset=UTF-8");
   };
   $("file-cancel").onclick = () => controller?.abort();
 
