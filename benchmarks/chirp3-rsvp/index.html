@@ -1,0 +1,340 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>RSVP speech benchmark</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <main>
+      <header>
+        <span class="eyebrow">EASYEYES · TEST PREVIEW</span>
+        <h1>RSVP speech benchmark</h1>
+        <p>
+          Compare Google Chirp 3 with ElevenLabs Scribe v2 Realtime or
+          Deepgram Nova-3 using the same live microphone audio.
+        </p>
+      </header>
+      <nav class="actions mode-switch" aria-label="Benchmark mode">
+        <button type="button" id="show-live" aria-pressed="true">Live microphone</button>
+        <button type="button" id="show-files" aria-pressed="false">Audio files + references</button>
+      </nav>
+      <section class="results" id="file-benchmark" hidden>
+        <h2>RSVP dataset benchmark</h2>
+        <p>Compare speech providers on the same recordings. Supply both the words the child was asked to say (targets) and a human transcript of what they said to measure missed targets and false credit.</p>
+        <a id="file-template" href="#">Download an example manifest</a>
+        <fieldset class="file-fields">
+          <label>Targets and human references (.json)
+            <input id="file-manifest" type="file" accept=".json,application/json" />
+          </label>
+          <label>Matching audio files
+            <input id="file-audio" type="file" accept="audio/*,.wav,.mp3,.flac,.m4a,.ogg" multiple />
+          </label>
+          <label>Resume results and reviews (.json, optional)
+            <input id="file-results" type="file" accept=".json,application/json" />
+          </label>
+        </fieldset>
+        <p id="file-status" role="status">Load a manifest to get started.</p>
+        <fieldset id="file-cloud" class="file-fields">
+          <legend>Run the dataset</legend>
+          <label>Preview access code
+            <input id="file-code" type="password" autocomplete="off" maxlength="64" />
+          </label>
+          <div>
+            <label class="check"><input type="checkbox" id="file-ignore-order" checked /> Ignore word order in RSVP scoring</label>
+            <label>Keyterms
+              <select id="file-keyterms">
+                <option value="off">Off</option>
+                <option value="on">On</option>
+                <option value="both">Compare off and on</option>
+              </select>
+              <small>With keyterms on, providers receive the target words. Without explicit targets, the reference is used and false credit cannot be measured.</small>
+            </label>
+            <label class="check"><input type="checkbox" value="chirp3" name="file-provider" checked /> Chirp 3</label>
+            <label class="check"><input type="checkbox" value="elevenlabs" name="file-provider" checked /> ElevenLabs</label>
+            <label class="check"><input type="checkbox" value="deepgram" name="file-provider" /> Deepgram</label>
+            <label class="check"><input type="checkbox" id="file-tail-test" /> Chirp 3 diagnostic: compare 0 vs. 800 ms trailing silence</label>
+            <small>Diagnostic mode runs only Chirp 3; each file is streamed twice per keyterms setting.</small>
+          </div>
+          <div>
+            <label>Maximum runs this batch
+              <select id="file-batch-limit">
+                <option value="all">All remaining runs</option>
+                <option value="25">25 runs</option>
+                <option value="100">100 runs</option>
+              </select>
+              <small>With both keyterms settings, a clip can use two runs. Export JSON during or between batches to keep progress.</small>
+            </label>
+            <label>Clips at once
+              <select id="file-workers">
+                <option value="1">1 · sequential</option>
+                <option value="2">2 · parallel</option>
+                <option value="3">3 · parallel</option>
+              </select>
+              <small>Each clip still streams at its original speed.</small>
+            </label>
+            <label class="check"><input type="checkbox" id="file-consent" /> I am authorized to send the selected audio to these providers. Their retention settings apply.</label>
+            <div class="actions">
+              <button type="button" id="file-run">Run dataset</button>
+              <button type="button" id="file-cancel" disabled>Cancel</button>
+            </div>
+          </div>
+        </fieldset>
+        <p id="file-policy" class="hint"></p>
+        <section id="file-progress-panel" class="file-progress" aria-labelledby="file-progress-heading" hidden>
+          <h3 id="file-progress-heading">Dataset run progress</h3>
+          <progress id="file-progress-bar" value="0" max="1" aria-label="Finished provider jobs in this batch" aria-describedby="file-progress-counts"></progress>
+          <p id="file-progress-counts"></p>
+          <p id="file-progress-clock" class="hint"></p>
+          <p id="file-progress-activity"></p>
+          <ul id="file-progress-active" aria-label="Current file by provider"></ul>
+          <ul id="file-progress-providers" aria-label="Results by provider"></ul>
+          <details open>
+            <summary>File and provider outcomes · this batch</summary>
+            <div id="file-progress-log"></div>
+            <div class="file-progress-pagination">
+              <button id="file-progress-newer" type="button" disabled>Newer</button>
+              <span id="file-progress-page"></span>
+              <button id="file-progress-older" type="button" disabled>Older</button>
+            </div>
+          </details>
+          <p class="hint">Audio is streamed in real time. Keep this tab visible and your computer awake for large batches.</p>
+        </section>
+        <div class="actions">
+          <button id="file-export-json" type="button" disabled>Export results JSON</button>
+          <button id="file-export-csv" type="button" disabled>Export metrics CSV</button>
+        </div>
+        <label id="file-scope-label" hidden>Report view
+          <select id="file-scope">
+            <option value="original">Original · no review decisions</option>
+            <option value="adjudicated" selected>After review</option>
+            <option value="unflagged">After review · difficult but intelligible audio also excluded</option>
+          </select>
+        </label>
+        <label id="file-s-only-label" class="check" hidden>
+          <input type="checkbox" id="file-s-only">
+          Exclude trailing-s disagreements (pet / pets)
+        </label>
+        <div id="file-summary"></div>
+        <section id="file-tail-summary" class="file-chart-panel" hidden></section>
+        <details id="file-review" hidden>
+          <summary>Listen to and review individual clips</summary>
+          <p>Listen, check the transcript, and save your review. The clip leaves the pending lists; use Previous to return. Export results JSON to keep your progress.</p>
+          <div class="file-review-controls">
+            <label>Model or run setting
+              <select id="file-review-provider"><option value="">All models</option></select>
+            </label>
+            <label>Show clips
+              <select id="file-review-filter"><option value="all">All clips</option></select>
+            </label>
+            <label>Clip review status
+              <select id="file-review-mode">
+                <option value="pending">Pending only</option>
+                <option value="reviewed">Reviewed only</option>
+                <option value="all">Pending and reviewed</option>
+              </select>
+            </label>
+            <label>Clip<select id="file-clip"></select></label>
+            <div class="actions">
+              <button id="file-prev" type="button">Previous</button>
+              <button id="file-next" type="button">Next</button>
+            </div>
+          </div>
+          <p id="file-review-count" class="hint" role="status"></p>
+          <details>
+            <summary>Review coverage by model</summary>
+            <div id="file-review-coverage"></div>
+            <div id="file-reference-impact"></div>
+          </details>
+          <button id="file-export-annotations" type="button" disabled>Export review notes and deletion checks CSV</button>
+          <audio id="file-player" controls preload="none" hidden></audio>
+          <p id="file-player-status" class="hint"></p>
+          <div id="file-review-completion" class="actions" hidden>
+            <span id="file-clip-review-badge" class="file-clip-review-badge"></span>
+            <button id="file-review-toggle" type="button" hidden>Reopen review</button>
+          </div>
+          <p id="file-review-status" role="status"></p>
+          <div id="file-item-results"></div>
+        </details>
+      </section>
+      <form id="settings">
+        <fieldset id="options">
+          <legend>1. Set up a trial</legend>
+          <label
+            >Preview access code
+            <input
+              id="access-code"
+              type="password"
+              maxlength="64"
+              autocomplete="off"
+              required
+          /></label>
+          <label
+            ><code>rsvpReadingSTTProvider</code
+            ><select disabled>
+              <option>chirp3</option>
+            </select></label
+          >
+          <label>Scenario<select id="scenario"></select></label>
+          <label>
+            Compare with
+            <select id="comparison-provider">
+              <option value="">None — only Google Chirp 3</option>
+              <option value="both">Both — ElevenLabs + Deepgram</option>
+              <option value="elevenlabs">ElevenLabs Scribe v2 Realtime</option>
+              <option value="deepgram">Deepgram Nova-3</option>
+            </select>
+            <small>The selected provider also receives your test audio.</small>
+          </label>
+          <label id="wrong-word-field" hidden>
+            Intentional replacement for word 1
+            <input id="wrong-word" value="cold" maxlength="60" />
+          </label>
+          <label
+            >Target words <small>(exactly three)</small
+            ><input id="targets" value="boat, lake, morning" required
+          /></label>
+          <label
+            >readingCorpus
+            <small>Optional .txt word list; load a three-word set.</small
+            ><input id="corpus" type="file" accept=".txt,text/plain"
+          /></label>
+          <label
+            ><code>rsvpReadingSpeechFinishPhrase</code
+            ><input id="phrase" value="don't know" maxlength="80"
+          /></label>
+          <label
+            ><code>targetDurationSec</code
+            ><input
+              id="word"
+              type="number"
+              min="0.3"
+              max="3"
+              step="0.1"
+              required
+          /></label>
+          <label
+            ><code>rsvpReadingSpeechTimeoutSec</code
+            ><small>Seconds beyond the last displayed word</small
+            ><input
+              id="cap"
+              type="number"
+              min="0.2"
+              max="60"
+              step="0.1"
+              required
+          /></label>
+          <label
+            ><code>rsvpReadingSpeechSilenceSec</code
+            ><input
+              id="silence"
+              type="number"
+              min="0.2"
+              max="30"
+              step="0.1"
+              required
+          /></label>
+          <label
+            ><code>rsvpReadingSTTMaxSec</code
+            ><small>Seconds to wait for the final result</small
+            ><input
+              id="stt"
+              type="number"
+              min="0.1"
+              max="30"
+              step="0.1"
+              required
+          /></label>
+          <label
+            >Min. cross wait (s)<input
+              id="crossWait"
+              type="number"
+              min="0"
+              max="60"
+              step="1"
+              required
+          /></label>
+          <label
+            ><code>rsvpReadingSTTUseKeytermsBool</code
+            ><select id="keyterms">
+              <option>TRUE</option>
+              <option>FALSE</option>
+            </select></label
+          >
+          <label
+            ><code>rsvpReadingSTTIgnoreOrderBool</code
+            ><select id="ignoreOrder">
+              <option>TRUE</option>
+              <option>FALSE</option>
+            </select></label
+          >
+          <label
+            ><code>thresholdParameter</code
+            ><select id="adaptive">
+              <option value="FALSE">Fixed duration · no QUEST</option>
+              <option value="TRUE">targetDurationSec · use QUEST</option>
+            </select></label
+          >
+          <label
+            ><code>thresholdGuess</code
+            ><input
+              id="quest-guess"
+              type="number"
+              value="0.7"
+              min="0.3"
+              max="3"
+              step="0.1"
+              required
+          /></label>
+        </fieldset>
+        <p class="hint" id="availability">
+          Use your own test voice, not participant audio. ElevenLabs may retain
+          test audio if zero retention is unavailable. Exports contain text
+          and measurements, not audio.
+        </p>
+        <aside>
+          <strong id="cue"></strong>
+          <p id="script"></p>
+        </aside>
+        <div class="actions">
+          <button id="prepare">Prepare trial</button
+          ><button id="cancel" type="button" disabled>Cancel</button>
+          <button id="next-set" type="button">Load next word set</button>
+        </div>
+      </form>
+      <section id="arena" aria-label="Trial display">
+        <h2>2. Run the trial</h2>
+        <p id="arena-cue" class="hint"></p>
+        <p id="stage" role="status">Choose a scenario, then prepare.</p>
+        <output id="clock">0.00 s · not started</output>
+        <div id="word-display"></div>
+        <button
+          type="button"
+          id="cross"
+          aria-label="Start showing words"
+          hidden
+        >
+          +
+        </button>
+      </section>
+      <section class="results" id="live-results">
+        <h2>3. Compare the results</h2>
+        <div class="actions">
+          <button id="export" type="button" disabled>Export JSON</button>
+          <button id="export-csv" type="button" disabled>
+            Export summary CSV
+          </button>
+        </div>
+        <p id="aggregate" class="hint"></p>
+        <div id="paired-aggregate"></div>
+        <div id="report"></div>
+        <details>
+          <summary>Current relative timeline</summary>
+          <pre id="trace"></pre>
+        </details>
+      </section>
+    </main>
+    <script type="module" src="./main.js"></script>
+  </body>
+</html>
